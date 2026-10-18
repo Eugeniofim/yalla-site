@@ -40,6 +40,7 @@ function supaFetch(path, opts = {}) {
          o cliente via "Esta reservado" e o guia nunca recebia.
          Conflito de id vira 409 e e tratado como sucesso mais abaixo. */
       Prefer: 'return=minimal',
+      ...(typeof salaHeaders === 'function' ? salaHeaders(opts.method) : {}),
       ...(opts.headers || {}),
     },
   }).finally(() => clearTimeout(corta));
@@ -47,7 +48,11 @@ function supaFetch(path, opts = {}) {
 
 /* ---------- fila offline ---------- */
 function qAll() { try { return JSON.parse(localStorage.getItem(QUEUE_KEY)) || []; } catch (e) { return []; } }
-function qPush(job) { const q = qAll(); q.push(job); localStorage.setItem(QUEUE_KEY, JSON.stringify(q)); }
+/* Sem banco não há fila: no tempo da demonstração o envio "falhava" (não
+   havia para onde mandar) e cada mexida em reserva ficava guardada aqui —
+   e seria mandada para o banco de verdade no dia em que ele fosse ligado.
+   Achado ao ligar a sala da Yalla, 18/10/2026. */
+function qPush(job) { if (!SUPA_URL) return; const q = qAll(); q.push(job); localStorage.setItem(QUEUE_KEY, JSON.stringify(q)); }
 async function qFlush() {
   const q = qAll(); if (!q.length) return;
   const rest = [];
@@ -117,6 +122,12 @@ function cloudPushState() {
   /* Modo prototipo: nao existe nuvem. Sem esta saida, cada edicao do prospect
      cairia no catch e empilharia um item na fila do localStorage, para sempre. */
   if (!SUPA_URL) return;
+  /* So o dono escreve o catalogo (a RLS recusa qualquer outro). Sem esta
+     saida, o visitante que fechava o tutorial guardava na fila um envio do
+     catalogo inteiro que falhava para sempre — e, se depois o PROPRIO dono
+     entrasse naquele aparelho, a fila mandava essa copia velha por cima do
+     que ele tinha mudado em outro aparelho. 06/10/2026. */
+  if (typeof isLoggedIn === 'function' && !isLoggedIn()) return;
   /* TRAVA CONTRA PERDA TOTAL
      Aparelho sem passeio nenhum + nuvem ainda nao lida = navegador recem
      limpo, nao "ela apagou tudo". Publicar isso apagaria o catalogo dela.

@@ -163,19 +163,30 @@ async function authSetPassword(pass) {
   } catch (e) { return { ok: false, error: String(e) }; }
 }
 
+/* --------- a sala do banco ---------
+   Varios apps podem morar num projeto Supabase so, cada um no seu schema
+   (config.js -> sala). O PostgREST escolhe o schema por estes cabecalhos:
+   Accept-Profile para ler, Content-Profile para escrever. Sem sala, nada
+   muda: o app fala com o schema public, como sempre. */
+function salaHeaders(metodo) {
+  const s = (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.sala) || '';
+  if (!s) return {};
+  return /^(GET|HEAD)$/i.test(metodo || 'GET') ? { 'Accept-Profile': s } : { 'Content-Profile': s };
+}
+
 /* --------- posse do app: a primeira conta vira a dona --------- */
 async function claimOwnership() {
   if (!isLoggedIn()) return { ok: false };
   const h = { apikey: SUPA_KEY, Authorization: 'Bearer ' + authToken(), 'Content-Type': 'application/json' };
   try {
-    const cur = await comPrazo(SUPA_URL + '/rest/v1/app_config?id=eq.1&select=owner_uid', { headers: h })
+    const cur = await comPrazo(SUPA_URL + '/rest/v1/app_config?id=eq.1&select=owner_uid', { headers: { ...h, ...salaHeaders('GET') } })
       .then(r => r.ok ? r.json() : null);
     if (!cur) return { ok: false, noTable: true };           // SQL ainda não aplicado
     const owner = cur[0] && cur[0].owner_uid;
     if (owner && owner !== authUser().id) return { ok: false, taken: true };
     if (owner === authUser().id) return { ok: true, already: true };
     const r = await comPrazo(SUPA_URL + '/rest/v1/app_config?id=eq.1', {
-      method: 'PATCH', headers: { ...h, Prefer: 'return=minimal' },
+      method: 'PATCH', headers: { ...h, ...salaHeaders('PATCH'), Prefer: 'return=minimal' },
       body: JSON.stringify({ owner_uid: authUser().id }),
     });
     return { ok: r.ok };

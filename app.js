@@ -262,6 +262,11 @@ const Coach = {
     this.hide();
     if (this.keyFlag) { DB.settings[this.keyFlag] = false; save(); }
     if (done) toast(t('tutDone'));
+    /* Enquanto o tutorial esta aberto a nuvem nao redesenha a tela (seria
+       por cima dele). Na PRIMEIRA visita de um cliente e exatamente quando o
+       catalogo chega: fechar o tutorial deixava a capa generica ate ele
+       trocar de tela. 06/10/2026. */
+    if (pendingSync && !isBusyEditing()) { pendingSync = false; setTimeout(route, 60); }
   },
 };
 
@@ -1009,7 +1014,19 @@ function cancelaTxt(x) {
 
 function viewTour(id) {
   const x = Tours.get(id);
-  if (!x) return go('/tours');
+  if (!x) {
+    /* Link direto de um passeio na PRIMEIRA visita: o catalogo ainda vem
+       a caminho da nuvem. Mandar para a lista perdia justamente o link que o
+       guia compartilhou. Espera a nuvem (o cloudStart redesenha esta tela
+       quando ela chega); se ela nao vier em 8s, ai sim vai para a lista. */
+    if (typeof temNuvem === 'function' && temNuvem() && !nuvemJaCarregada) {
+      app.innerHTML = `<p class="empty" style="margin-top:40vh">${LANG === 'en' ? 'Loading…' : 'Carregando…'}</p>`;
+      const h = location.hash;
+      setTimeout(() => { if (location.hash === h && !Tours.get(id)) go('/tours'); }, 8000);
+      return;
+    }
+    return go('/tours');
+  }
   const S = viewTour._s = { tour: x, date: null, time: null, cap: 0, pax: x.priceMode === 'session' ? 1 : 2, adultos: x.priceMode === 'session' ? 1 : 2, criancas: 0, idades: [], opcao: 0, noCentro: null, step: 1, coupon: null, discount: 0, policy: x.payPolicy === 'split' ? 'split' : 'full' };
 
   /* quantas vezes abriram este passeio (o relatorio de cliques e conversao).

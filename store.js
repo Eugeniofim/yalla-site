@@ -520,6 +520,21 @@ const SEED_VER = 5;   /* 5: ingressos por idade (18/09/2026) */
 
 function load() {
   try { DB = JSON.parse(localStorage.getItem(DB_KEY)) || null; } catch (e) { DB = null; }
+  /* ARMADILHA PAGA NO MARIO (14/10/2026), trazida para a Yalla ao ligar a
+     sala (18/10/2026): o aparelho que abriu a DEMONSTRACAO guarda clientes,
+     reservas e guias de exemplo. Com o banco ligado, a sincronia mandaria
+     esse exemplo por cima dos dados de verdade no primeiro login dela.
+     Com nuvem, demonstracao guardada vira app vazio (so o idioma fica) e
+     recebe o que esta no banco. */
+  if (DB && DB.demo && temNuvem()) {
+    const lang = DB.settings && DB.settings.lang;
+    /* a fila de envios do tempo da demonstração também vai embora: senão as
+       reservas de exemplo subiriam para o banco de verdade (18/10/2026) */
+    try { localStorage.removeItem(typeof QUEUE_KEY !== 'undefined' ? QUEUE_KEY : 'yalla_queue_v1'); } catch (e) {}
+    DB = _blank();
+    if (lang) DB.settings = { ...(DB.settings || {}), lang };
+    localStorage.setItem(DB_KEY, JSON.stringify(DB));
+  }
   if (DB && DB.demo && !temNuvem() && (+DB.seedVer || 1) < SEED_VER) {
     const pedidos = DB.pedidos || [];
     DB = _seed();

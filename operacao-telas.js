@@ -340,7 +340,8 @@ function hjPainel(hoje) {
   /* 5. pedidos esperando resposta (orçamento, "Monte seu roteiro" e os recados do atendimento) */
   const orcs = Orc.all().filter(o => o.status === 'novo' || o.status === 'rascunho');
   const rots = Roteiros.all().filter(p => !p.respondido && !(DB.orcamentos || []).some(o => o.pedidoId === p.id));
-  const recs = (typeof conversas === 'function' && typeof CLIENTES !== 'undefined') ? conversas().filter(v => v.estado === 'pendente').map(v => ({ v, c: CLIENTES.find(c => c.id === v.id) })).filter(x => x.c) : [];
+  /* as conversas da aba Atendimento são de EXEMPLO até o robô dela gravar no banco: no app de verdade não entram */
+  const recs = (typeof conversas === 'function' && typeof CLIENTES !== 'undefined' && !(typeof temNuvem === 'function' && temNuvem())) ? conversas().filter(v => v.estado === 'pendente').map(v => ({ v, c: CLIENTES.find(c => c.id === v.id) })).filter(x => x.c) : [];
   if (orcs.length || rots.length || recs.length) B.push(bloco(HJ.msg, 'Pedidos esperando resposta', orcs.length + rots.length + recs.length,
     recs.slice(0, 3).map(({ v, c }) => it(HJ.msg, `${esc(c.nome)} · ${c.canal === 'whats' ? 'WhatsApp' : 'Instagram'}`, esc(String(c.msg || '').slice(0, 90)), lnk('#/adm/inbox/' + v.id, 'Responder'))).join('') +
     orcs.slice(0, 4).map(o => it(HJ.orc, `${esc(o.cliente.nome || 'Cliente')} · ${esc(o.num)}`, `${o.status === 'novo' ? 'pedido novo' : 'em montagem'}${o.origem ? ' · veio pelo ' + esc(o.origem === 'whats' ? 'WhatsApp' : o.origem) : ''}${Orc.total(o) ? ' · ' + eur(Orc.total(o)) : ''}`,
@@ -2554,7 +2555,7 @@ function admTarefas(arg) {
   const G = Object.fromEntries(Object.entries(G0).map(([k, l]) => [k, filtra(l)]));
   const mostra = (k) => S.f === 'feitas' ? k === 'feitas' : S.f === 'hoje' ? ['atrasadas', 'hoje'].includes(k) : S.f === 'semana' ? ['atrasadas', 'hoje', 'semana'].includes(k) : k !== 'feitas';
   /* recados do atendimento (robô do WhatsApp/Instagram) que esperam por ela */
-  const recados = (typeof conversas === 'function' && typeof CLIENTES !== 'undefined') ? conversas().filter(v => v.estado === 'pendente').map(v => ({ v, c: CLIENTES.find(c => c.id === v.id) })).filter(x => x.c) : [];
+  const recados = (typeof conversas === 'function' && typeof CLIENTES !== 'undefined' && !(typeof temNuvem === 'function' && temNuvem())) ? conversas().filter(v => v.estado === 'pendente').map(v => ({ v, c: CLIENTES.find(c => c.id === v.id) })).filter(x => x.c) : [];
   const abertas = G.atrasadas.length + G.hoje.length + G.semana.length + G.depois.length + G.semData.length;
   const notas = Tarefas.notas(S.busca);
   const clientes = Clients.all().filter(c => !c.acompanhante);
