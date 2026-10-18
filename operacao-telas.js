@@ -3237,8 +3237,11 @@ function visualAplica(noPainel) {
     r.setAttribute('data-painel', '1');
     if (v.tema === 'auto') doSite(); else r.setAttribute('data-theme', v.tema === 'escuro' ? 'dark' : 'light');
     r.setAttribute('data-skin', v.cor); r.setAttribute('data-conforto', v.conforto ? '1' : '0');
-  } else if (r.hasAttribute('data-painel')) {
-    ['data-painel', 'data-skin', 'data-conforto'].forEach(a => r.removeAttribute(a)); doSite();
+  } else {
+    /* no site, o tema é o que ELA escolheu (vale para todos): reaplica em toda
+       tela — o do aparelho é só para a primeira pintura (18/10/2026) */
+    if (r.hasAttribute('data-painel')) ['data-painel', 'data-skin', 'data-conforto'].forEach(a => r.removeAttribute(a));
+    doSite();
   }
 }
 function visualHtml() {

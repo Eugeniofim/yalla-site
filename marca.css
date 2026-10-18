@@ -278,3 +278,7 @@
 :root[data-theme="light"] .tourcard .cgo{color:#8A6D1E;border-color:rgba(138,109,30,.45)}
 :root[data-theme="light"] .tourcard .pr{color:#7A5A12}
 :root[data-theme="light"] .tourcard{box-shadow:0 12px 30px -22px rgba(60,45,10,.45)}
+/* no ESCURO a foto também aparece: a vinheta da capa antiga escurecia a
+   foto inteira; agora ela só pega embaixo, onde está o padrão dourado */
+:root:not([data-theme="light"]) .hub.yl::after{background:linear-gradient(180deg,transparent 0%,transparent 55%,rgba(0,0,0,.55) 100%)}
+:root:not([data-theme="light"]) .ylHero::after{background:linear-gradient(180deg,rgba(0,0,0,.25) 0%,rgba(0,0,0,.05) 30%,rgba(0,0,0,.15) 60%,var(--paper) 99%)}

@@ -991,17 +991,20 @@ function linhaReais(eur) {
 }
 
 /* texto bilingue: {pt,en}. Existia solto dentro de duas funcoes; agora e um so. */
-/* Claro, escuro, ou seguindo o aparelho. Guardado no proprio aparelho:
-   e preferencia de quem olha, nao dado do negocio. */
+/* O VISUAL DO SITE (18/10/2026): claro (marfim e foto) ou escuro (preto e
+   dourado). É escolha DO NEGÓCIO, salva no catálogo (DB.settings.temaSite):
+   vale para todos os clientes. Sem escolha, claro. O tema guardado no
+   aparelho ('yalla_tema', da Aparência antiga) deixou de valer. O último
+   tema visto fica em 'yalla_tema_site' só para a primeira pintura não piscar. */
 function temaAtual() {
-  /* sem escolha, o site abre claro (18/10/2026: "preto demais") */
-  try { return localStorage.getItem('yalla_tema') || 'light'; } catch (e) { return 'light'; }
+  const v = (typeof DB !== 'undefined' && DB && DB.settings && DB.settings.temaSite) === 'escuro' ? 'dark' : 'light';
+  try { localStorage.setItem('yalla_tema_site', v); localStorage.removeItem('yalla_tema'); } catch (e) {}
+  return v;
 }
 function aplicaTema(v) {
-  try { if (v === 'auto') localStorage.removeItem('yalla_tema'); else localStorage.setItem('yalla_tema', v); } catch (e) {}
-  const raiz = document.documentElement;
-  if (v === 'auto') raiz.removeAttribute('data-theme');
-  else raiz.setAttribute('data-theme', v);
+  DB.settings.temaSite = v === 'dark' ? 'escuro' : 'claro';
+  save();
+  try { localStorage.setItem('yalla_tema_site', v === 'dark' ? 'dark' : 'light'); } catch (e) {}
 }
 
 function noIdioma(a) {
@@ -2501,7 +2504,6 @@ function admAparencia() {
     <p class="why">${t('temaHelp')}</p>
     <section class="card">
       <div class="lookgrid">
-        ${opcao('auto',  'temaAuto',   t('temaAutoSub'))}
         ${opcao('light', 'temaClaro',  t('temaClaroSub'))}
         ${opcao('dark',  'temaEscuro', t('temaEscuroSub'))}
       </div>

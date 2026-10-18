@@ -26,18 +26,18 @@
 <script>
 /* Antes de qualquer pintura: se ela escolheu um tema, aplica agora.
    Sem isto o app abre claro e pisca para escuro depois do JS carregar. */
-(function(){try{var t=localStorage.getItem('yalla_tema'),r=document.documentElement;
-if(t==='dark'||t==='light')r.setAttribute('data-theme',t);
-/* 18/10/2026: o site do cliente abre CLARO (marfim e dourado) — o escuro ficou "preto demais" */
-else if(!t)r.setAttribute('data-theme','light');
+(function(){try{var t,r=document.documentElement;
+/* o visual do site é escolha dela (Aparência), vale para todos; sem escolha, claro.
+   Aqui só a primeira pintura, com o último tema visto neste aparelho. */
+t=localStorage.getItem('yalla_tema_site');r.setAttribute('data-theme',t==='dark'?'dark':'light');
 /* o painel tem o visual dele (Ajustes > Visual do painel): claro por padrao */
 if(location.hash.indexOf('#/adm')===0){var v=JSON.parse(localStorage.getItem('yalla_visual')||'{}');
 if(v.tema!=='auto')r.setAttribute('data-theme',v.tema==='escuro'?'dark':'light');
 r.setAttribute('data-skin',v.cor||'ouro');r.setAttribute('data-conforto',v.conforto===false?'0':'1');r.setAttribute('data-painel','1');}}catch(e){}})();
 </script>
-<link rel="stylesheet" href="tokens.css?v=1.1.3">
-<link rel="stylesheet" href="operacao.css?v=1.1.3">
-<link rel="stylesheet" href="marca.css?v=1.1.3">
+<link rel="stylesheet" href="tokens.css?v=1.1.4">
+<link rel="stylesheet" href="operacao.css?v=1.1.4">
+<link rel="stylesheet" href="marca.css?v=1.1.4">
 <link rel="icon" href="icon-192.png">
 <style>
 /* ============ base ============ */
@@ -1242,27 +1242,27 @@ body.em-adm #demoFaixa{display:none}
 </div>
 
 <div id="app"></div>
-<script src="config.js?v=1.1.3"></script>
-<script src="auth.js?v=1.1.3"></script>
-<script src="logo.js?v=1.1.3"></script>
-<script src="fx.js?v=1.1.3"></script>
-<script src="qrcode.js?v=1.1.3"></script>
-<script src="qr.js?v=1.1.3"></script>
-<script src="pix.js?v=1.1.3"></script>
-<script src="traduz.js?v=1.1.3"></script>
-<script src="store.js?v=1.1.3"></script>
-<script src="cloud.js?v=1.1.3"></script>
-<script src="nuvem-itens.js?v=1.1.3"></script>
-<script src="i18n.js?v=1.1.3"></script>
-<script src="conteudo.js?v=1.1.3"></script>
-<script src="operacao.js?v=1.1.3"></script>
-<script src="precos.js?v=1.1.3"></script>
-<script src="operacao-telas.js?v=1.1.3"></script>
-<script src="app.js?v=1.1.3"></script>
-<script src="assistente.js?v=1.1.3"></script>
-<script src="assistente-ingrid.js?v=1.1.3"></script>
-<script src="es.js?v=1.1.3"></script>
-<script src="guia-link.js?v=1.1.3"></script>
+<script src="config.js?v=1.1.4"></script>
+<script src="auth.js?v=1.1.4"></script>
+<script src="logo.js?v=1.1.4"></script>
+<script src="fx.js?v=1.1.4"></script>
+<script src="qrcode.js?v=1.1.4"></script>
+<script src="qr.js?v=1.1.4"></script>
+<script src="pix.js?v=1.1.4"></script>
+<script src="traduz.js?v=1.1.4"></script>
+<script src="store.js?v=1.1.4"></script>
+<script src="cloud.js?v=1.1.4"></script>
+<script src="nuvem-itens.js?v=1.1.4"></script>
+<script src="i18n.js?v=1.1.4"></script>
+<script src="conteudo.js?v=1.1.4"></script>
+<script src="operacao.js?v=1.1.4"></script>
+<script src="precos.js?v=1.1.4"></script>
+<script src="operacao-telas.js?v=1.1.4"></script>
+<script src="app.js?v=1.1.4"></script>
+<script src="assistente.js?v=1.1.4"></script>
+<script src="assistente-ingrid.js?v=1.1.4"></script>
+<script src="es.js?v=1.1.4"></script>
+<script src="guia-link.js?v=1.1.4"></script>
 <script>
 /* PWA — como a versão nova chega no celular dela.
 
