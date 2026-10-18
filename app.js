@@ -412,7 +412,9 @@ function viewHub() {
 
   app.innerHTML = `
   <div class="hub yl">
-    <div class="hub-bg" style="background-image:url(${esc(st.homePhoto || 'home.jpg')})"></div>
+    <div class="hub-bg"></div>
+    <!-- a foto do topo (18/10/2026: "preto demais"): a do Ajustes, ou a mesquita pelo arco, do kit dela -->
+    <div class="ylHero" role="img" aria-label="${esc(L3('Os Emirados com a ' + marca, 'The Emirates with ' + marca, 'Los Emiratos con ' + marca))}" style="background-image:url(${esc(st.homePhoto || 'arte/capa-arco.jpg')})"></div>
     <div class="hub-in">
       <div class="vcard">
         <div class="hub-brand">${logoFull({ mark: 46, sub: esc(guiaBase()) })}</div>
@@ -988,7 +990,8 @@ function linhaReais(eur) {
 /* Claro, escuro, ou seguindo o aparelho. Guardado no proprio aparelho:
    e preferencia de quem olha, nao dado do negocio. */
 function temaAtual() {
-  try { return localStorage.getItem('yalla_tema') || 'auto'; } catch (e) { return 'auto'; }
+  /* sem escolha, o site abre claro (18/10/2026: "preto demais") */
+  try { return localStorage.getItem('yalla_tema') || 'light'; } catch (e) { return 'light'; }
 }
 function aplicaTema(v) {
   try { if (v === 'auto') localStorage.removeItem('yalla_tema'); else localStorage.setItem('yalla_tema', v); } catch (e) {}
