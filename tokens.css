@@ -1,0 +1,151 @@
+/* =========================================================
+   APP-GUIA — Design tokens
+   Contrastes medidos (WCAG AA). Não usar hex solto no código.
+   ========================================================= */
+
+:root{
+  /* ---------- MARCA (brand kit Yalla Experiences, set/2026) ----------
+     60% preto, 25% dourado, 10% neutro, 5% branco. O dourado #D4AF37 tem
+     8.6:1 sobre o preto: serve para texto e para preenchimento com tinta
+     escura por cima. No claro (painel), o dourado vira bronze para texto. */
+  --brand-primaria:   #D4AF37;   /* LUXURY GOLD */
+  --brand-assinatura: #D4AF37;
+  --brand-oro:        #F3E0A2;   /* CHAMPAGNE GOLD */
+  --brand-destaque:   #E7CF7A;
+  --brand-neutro:     #A99F8B;
+  --brand-preto:      #000000;   /* MIDNIGHT BLACK */
+  --brand-offwhite:   #F5F5F3;   /* IVORY WHITE */
+  --brand-sand:       #D9C7A3;   /* SAND BEIGE */
+  /* nomes antigos do app-guia: o código ainda chama por eles */
+  --brand-verde:   var(--brand-primaria);
+  --brand-amarelo: var(--brand-assinatura);
+
+  /* ---------- FUNDOS (tema escuro, a cara da marca) ---------- */
+  --paper:     #0B0B0B;
+  --surface:   #141414;
+  --surface-2: #1D1D1D;
+  --surface-3: #262626;
+  --line:      #2E2A22;
+  --line-2:    #3C3527;
+  --rail:      #080808;
+
+  /* ---------- TEXTO ---------- */
+  --ink:    #F5F5F3;   /* IVORY · 17:1 sobre o preto */
+  --ink-2:  #DCD6C8;   /* corpo secundário · 12:1 */
+  --ink-3:  #A99F8B;   /* legendas · 6.4:1 */
+
+  /* ---------- AÇÃO ---------- */
+  --accent:       var(--brand-primaria);
+  --accent-ink:   #0B0B0B;          /* texto sobre o dourado · 9.6:1 */
+  --accent-wash:  #2A2314;
+  --accent-line:  #57492A;
+
+  /* Dourado claro é assinatura: preenchimento com tinta preta */
+  --highlight:      var(--brand-oro);
+  --highlight-ink:  #0B0B0B;
+  --highlight-wash: #2E2818;
+  --highlight-text: #E7CF7A;        /* dourado claro para texto · 11:1 */
+
+  /* ---------- ESTADOS (separados da paleta de marca) ---------- */
+  --ok:        #7FC8A9;  --ok-wash:    #12291F;   /* pago, confirmado */
+  --warn:      #E7CF7A;  --warn-wash:  #2E2818;   /* pendente, vence */
+  --danger:    #E8836F;  --danger-wash:#301A16;   /* vencido, cancelado */
+  --neutral:   #A99F8B;  --neutral-wash:#22201B;
+
+  /* ---------- TIPOGRAFIA ---------- */
+  /* O brand kit: Montserrat Bold nos títulos, Montserrat Medium em subtítulos
+     e menus, Playfair Display só nas frases institucionais. Mono = números. */
+  --f-display: "Montserrat", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --f-ui:      "Montserrat", -apple-system, "Segoe UI", Roboto, system-ui, sans-serif;
+  --f-serif:   "Playfair Display", Georgia, "Times New Roman", serif;
+  --f-mono:    "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  --t-display: 700;   /* títulos: peso do logo */
+  --t-strong:  600;
+  --t-body:    400;
+
+  /* escala (1.25) */
+  --fs-9:  44px;  --lh-9: 1.04;
+  --fs-8:  34px;  --lh-8: 1.08;
+  --fs-7:  27px;  --lh-7: 1.14;
+  --fs-6:  22px;  --lh-6: 1.22;
+  --fs-5:  18px;  --lh-5: 1.35;
+  --fs-4:  15px;  --lh-4: 1.55;   /* corpo */
+  --fs-3:  13px;  --lh-3: 1.5;
+  --fs-2:  11.5px;--lh-2: 1.45;
+  --fs-1:  10px;  --lh-1: 1.4;    /* etiquetas mono, maiúsculas, tracking .14em */
+
+  --track-display: -0.025em;
+  --track-label:    0.14em;
+
+  /* ---------- ESPAÇO ----------
+     Escala de passo 2 até 16px (a interface é densa), depois passo 8.
+     Regra: use o token mais próximo; não invente valores intermediários. */
+  --s-0:2px;  --s-1:4px;  --s-2:6px;  --s-3:8px;   --s-4:10px;
+  --s-5:12px; --s-6:14px; --s-7:16px; --s-8:20px;  --s-9:24px;
+  --s-10:32px; --s-11:40px; --s-12:48px; --s-14:64px;
+
+  /* ---------- FORMA ---------- */
+  --r-sm:8px; --r:12px; --r-lg:18px; --r-xl:26px; --r-pill:999px;
+
+  /* ---------- ELEVAÇÃO ---------- */
+  --sh-1: 0 1px 2px rgba(17,17,17,.04), 0 8px 22px -16px rgba(17,17,17,.28);
+  --sh-2: 0 2px 6px rgba(17,17,17,.05), 0 20px 44px -24px rgba(17,17,17,.34);
+  --sh-3: 0 28px 64px -30px rgba(17,17,17,.42);
+
+  /* ---------- MOVIMENTO ---------- */
+  --ease:   cubic-bezier(.22,1,.36,1);
+  --spring: cubic-bezier(.34,1.4,.5,1);
+  --d-fast: 180ms; --d-base: 260ms; --d-slow: 480ms;
+}
+
+/* O site da cliente é escuro (a marca). O painel tem o visual dele
+   (Ajustes → Visual do painel), claro por padrão: no claro o dourado vira
+   bronze para ter contraste em texto e botão. */
+:root[data-theme="light"]{
+  --paper:#F5F5F3; --surface:#FFFFFF; --surface-2:#EFEBE2; --surface-3:#E4DDCF;
+  --line:#E2DCCF; --line-2:#CFC6B4; --rail:#EDE7DA;
+  --ink:#0B0B0B; --ink-2:#3D372C; --ink-3:#6B6250;
+  --accent:#8A6D1E; --accent-ink:#FFFFFF; --accent-wash:#F3ECDA; --accent-line:#DCCB9E;
+  --highlight:#D4AF37; --highlight-ink:#0B0B0B; --highlight-wash:#F7EFD6; --highlight-text:#7A5A12;
+  --ok:#2E6B4F; --ok-wash:#E3EDE6;
+  --warn:#7e6308; --warn-wash:#f6edd3;
+  --danger:#a3053f; --danger-wash:#f2e0e1;
+  --neutral:#4A4045; --neutral-wash:#ece6e4;
+  --sh-1: 0 1px 2px rgba(17,17,17,.04), 0 8px 22px -16px rgba(17,17,17,.28);
+  --sh-2: 0 2px 6px rgba(17,17,17,.05), 0 20px 44px -24px rgba(17,17,17,.34);
+  --sh-3: 0 28px 64px -30px rgba(17,17,17,.42);
+}
+
+/* Tema escuro — igual à marca */
+:root[data-theme="dark"]{
+  --paper:#0B0B0B; --surface:#141414; --surface-2:#1D1D1D; --surface-3:#262626;
+  --line:#2E2A22; --line-2:#3C3527; --rail:#080808;
+  --ink:#F5F5F3; --ink-2:#DCD6C8; --ink-3:#A99F8B;
+  --accent:#D4AF37; --accent-ink:#0B0B0B; --accent-wash:#2A2314; --accent-line:#57492A;
+  --highlight:#F3E0A2; --highlight-ink:#0B0B0B; --highlight-wash:#2E2818; --highlight-text:#E7CF7A;
+  --ok:#7FC8A9;  --ok-wash:#12291F;
+  --warn:#E7CF7A; --warn-wash:#2E2818;
+  --danger:#E8836F; --danger-wash:#301A16;
+  --neutral:#A99F8B; --neutral-wash:#22201B;
+  --sh-1:0 1px 2px rgba(0,0,0,.5), 0 10px 26px -18px rgba(0,0,0,.9);
+  --sh-2:0 2px 8px rgba(0,0,0,.5), 0 24px 50px -26px rgba(0,0,0,.95);
+  --sh-3:0 32px 70px -32px rgba(0,0,0,.95);
+}
+:root{ --sh-1:0 1px 2px rgba(0,0,0,.5), 0 10px 26px -18px rgba(0,0,0,.9);
+  --sh-2:0 2px 8px rgba(0,0,0,.5), 0 24px 50px -26px rgba(0,0,0,.95);
+  --sh-3:0 32px 70px -32px rgba(0,0,0,.95); }
+
+/* =========================================================
+   REGRAS QUE NÃO SE QUEBRAM
+   1. Amarelo nunca é texto sobre fundo claro. Use --highlight-text.
+   2. Verde é a ação principal. Um botão verde por tela.
+   3. Vinho é urgência (vencido, últimas vagas). Não decora.
+   4. Cinza é legenda, nunca título.
+   5. Números sempre em --f-mono com font-variant-numeric: tabular-nums.
+   6. Toda cor sai daqui. Hex solto no componente = bug.
+      Exceção única: #fff sobre preenchimento de marca (verde/vinho).
+   7. Espaçamento sai de --s-*. Valor cru em px = dívida a pagar.
+   8. Todo controle clicável precisa de :focus-visible próprio ou herdado.
+   9. Botão só com ícone precisa de aria-label; ícone decorativo, aria-hidden.
+   ========================================================= */

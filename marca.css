@@ -1,0 +1,218 @@
+/* =========================================================
+   YALLA EXPERIENCES — acabamento da marca
+   Luxury minimalism do brand kit dela: preto, fio dourado,
+   Playfair nos títulos e o losango como assinatura.
+   Este arquivo só ACRESCENTA — o app-guia continua igual.
+   ========================================================= */
+
+/* ---- títulos: Playfair com respiro ---- */
+.pageh, .vcard .vi-word b, .sobcons b, h1, h2 { letter-spacing: .01em; }
+.pageh { font-weight: 600; }
+
+/* ---- cartão da capa: fio dourado e assinatura da marca ---- */
+.vcard{ border:1px solid color-mix(in srgb, var(--brand-primaria) 30%, transparent);
+  background:linear-gradient(180deg, color-mix(in srgb, var(--brand-primaria) 6%, var(--surface)), var(--surface)); }
+.vcard .vi-word b{ font-family:var(--f-display); font-size:27px; letter-spacing:.02em; }
+.vcard .vi-word small{ font-family:var(--f-ui); font-size:11px; letter-spacing:.22em; text-transform:uppercase;
+  color:var(--highlight-text); }
+/* a linha da marca: — TRAVEL. CONNECT. ASCEND. — */
+.vcard .hub-brand::after{ content:"— TRAVEL. CONNECT. ASCEND. —"; display:block; margin-top:10px;
+  font:600 9.5px var(--f-ui); letter-spacing:.24em; color:var(--brand-primaria); opacity:.85; }
+.tagline{ font-family:var(--f-display); font-size:16.5px; line-height:1.55; color:var(--ink-2); }
+/* losango de separação, como no material dela */
+.vcard .tagline::before{ content:"◆"; display:block; margin:0 auto 12px; width:1em;
+  font-size:9px; color:var(--brand-primaria); }
+
+/* ---- botões da capa: fio dourado, fundo fumê ---- */
+.lk{ border:1px solid color-mix(in srgb, var(--brand-primaria) 22%, transparent);
+  background:color-mix(in srgb, var(--brand-primaria) 4%, var(--surface)); transition:border-color .15s, transform .15s; }
+.lk:hover{ border-color:color-mix(in srgb, var(--brand-primaria) 55%, transparent); transform:translateY(-1px); }
+.lk.main{ background:linear-gradient(120deg, var(--brand-primaria), #E6C55C); color:#0B0B0B; border:0; }
+.lk.main small{ color:rgba(11,11,11,.72); }
+.lk.main .ic{ background:rgba(0,0,0,.14); }
+
+/* ---- cartões de experiência ---- */
+.tourcard{ border:1px solid color-mix(in srgb, var(--brand-primaria) 18%, transparent); background:var(--surface);
+  transition:border-color .18s, transform .18s; }
+.tourcard:hover{ border-color:color-mix(in srgb, var(--brand-primaria) 50%, transparent); transform:translateY(-2px); }
+.tourcard .ph{ position:relative; }
+.tourcard .ph::after{ content:""; position:absolute; inset:0;
+  background:linear-gradient(180deg, rgba(0,0,0,.05) 40%, rgba(0,0,0,.65)); }
+.tourcard .tbadge{ position:relative; z-index:1; background:rgba(11,11,11,.72); color:var(--brand-primaria);
+  border:1px solid color-mix(in srgb, var(--brand-primaria) 45%, transparent);
+  font:700 10px var(--f-ui); letter-spacing:.14em; text-transform:uppercase; }
+.tourcard .bd b{ font-family:var(--f-display); font-size:18px; font-weight:600; }
+.tourcard .pr{ font:700 12px var(--f-ui); letter-spacing:.16em; text-transform:uppercase; color:var(--highlight-text); }
+.tourcard .cgo{ border:1px solid color-mix(in srgb, var(--brand-primaria) 40%, transparent); border-radius:50%;
+  width:34px; height:34px; display:grid; place-items:center; color:var(--brand-primaria); }
+
+/* ---- filtros ---- */
+.chip{ border:1px solid color-mix(in srgb, var(--brand-primaria) 20%, transparent); letter-spacing:.04em; }
+.chip.on{ background:var(--brand-primaria); color:#0B0B0B; border-color:transparent; font-weight:700; }
+
+/* ---- página da experiência ---- */
+.pricebox{ border:1px solid color-mix(in srgb, var(--brand-primaria) 25%, transparent);
+  background:linear-gradient(180deg, color-mix(in srgb, var(--brand-primaria) 7%, var(--surface)), var(--surface)); }
+.pbmain b{ font-family:var(--f-display); letter-spacing:.02em; }
+.seclabel{ letter-spacing:.2em; color:var(--highlight-text); }
+.sobcons{ border-color:color-mix(in srgb, var(--brand-primaria) 30%, transparent);
+  background:linear-gradient(180deg, color-mix(in srgb, var(--brand-primaria) 7%, var(--surface)), var(--surface)); }
+.sobcons b::before{ content:"◆"; display:block; margin:0 auto 10px; font-size:9px; color:var(--brand-primaria); }
+.sobcons .cta{ background:linear-gradient(120deg, var(--brand-primaria), #E6C55C); color:#0B0B0B; font-weight:700;
+  letter-spacing:.04em; }
+
+/* ---- o convite discreto para o painel ---- */
+.adm-dica{ letter-spacing:.01em; }
+.adm-entry.demo{ background:linear-gradient(120deg, var(--brand-primaria), #E6C55C); color:#0B0B0B; letter-spacing:.03em; }
+
+/* ---- fundo da capa: geometria da marca, não foto ----
+   A foto do PDF dela era um recorte de página: pixelizava e trazia texto
+   junto. A textura vetorial do manual (linhas douradas, geometria islâmica)
+   fica nítida em qualquer tela. (24/09/2026) */
+.hub{ position:relative; min-height:100dvh; }
+.hub-bg{
+  background-color:#050505 !important;
+  background-image:
+    url("arte/fundo.svg"),
+    radial-gradient(70% 45% at 50% 0%, rgba(243,224,162,.16), transparent 70%),
+    radial-gradient(100% 70% at 50% 120%, rgba(212,175,55,.10), transparent 70%) !important;
+  background-size:170px 170px, auto, auto !important;
+  background-repeat:repeat, no-repeat, no-repeat !important;
+  background-position:center, center, center !important;
+  opacity:1 !important; filter:none !important;
+}
+/* o skyline dos Emirados, em fio dourado, na base da capa */
+.hub::before{ content:""; position:absolute; left:0; right:0; bottom:0; height:min(36vh,300px);
+  background:url("arte/skyline.svg") center bottom / cover no-repeat; opacity:.5; pointer-events:none;
+  -webkit-mask-image:linear-gradient(180deg, transparent, #000 45%); mask-image:linear-gradient(180deg, transparent, #000 45%); }
+
+/* vinheta: escurece as bordas e faz o cartão flutuar */
+.hub::after{ content:""; position:absolute; inset:0; pointer-events:none;
+  background:radial-gradient(75% 55% at 50% 45%, transparent 35%, rgba(0,0,0,.72) 100%); }
+.hub-in{ position:relative; z-index:1; }
+.vcard{ backdrop-filter:blur(3px); }
+
+/* ---- o link do guia (guia-link.js) ---- */
+.gp .gpNav{display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:12px}
+.gpGrade{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.gpDia{text-align:center;font:600 11px var(--f-ui);color:var(--ink-3);text-transform:uppercase;letter-spacing:.06em;padding-bottom:4px}
+.gpCel{aspect-ratio:1;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);color:var(--ink);font:600 14px var(--f-ui);cursor:pointer;position:relative}
+.gpCel.on{background:var(--brand-primaria);color:#0B0B0B;border-color:transparent}
+.gpCel.parte{background:linear-gradient(135deg,var(--brand-primaria) 50%,var(--surface-2) 50%);color:#0B0B0B}
+.gpCel.gsvc{background:var(--surface-3);border-color:var(--brand-primaria);color:var(--brand-primaria)}
+.gpCel.gsvc::after{content:"";position:absolute;left:50%;bottom:5px;width:5px;height:5px;margin-left:-2.5px;border-radius:50%;background:var(--brand-primaria)}
+.gpCel.gocup{background:var(--surface-3);color:var(--ink-3);text-decoration:line-through}
+.gpCel.sel{outline:2px solid var(--brand-oro);outline-offset:2px}
+.gpCel.off{opacity:.3;cursor:default}
+.gpLeg{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin-top:10px;font-size:12px;color:var(--ink-3)}
+.gpLeg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px;border:1px solid var(--line-2)}
+.gpLeg i.gl-on{background:var(--brand-primaria);border-color:transparent}
+.gpLeg i.gl-svc{background:var(--surface-3);border-color:var(--brand-primaria)}
+.gpLeg i.gl-ocup{background:var(--surface-3)}
+.gpTurnos{margin-top:14px;padding-top:12px;border-top:1px solid var(--line);display:grid;gap:10px}
+.gpTurnos .chip.gsvc{opacity:.75;cursor:default}
+.gpTurnos .chip.gocup{text-decoration:line-through;opacity:.8}
+.gpCard{border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin:10px 0;background:var(--surface-2)}
+.gpCardTop{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.gpCardTop b{font-size:15px}
+.gpTag{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;border-radius:999px;background:rgba(212,175,55,.2);color:var(--brand-primaria)}
+.gpMeta{font-size:13px;opacity:.85;margin-top:5px}
+.gpCli{font-size:14px;margin-top:8px}
+.gpContatos{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.gpBtn{display:inline-block;padding:7px 14px;border-radius:999px;font-size:13px;font-weight:600;text-decoration:none;border:1px solid var(--line-2)}
+.gpBtn.wa{background:#25D366;color:#063;border-color:transparent}
+.gpBtn.ig{background:linear-gradient(45deg,#F58529,#DD2A7B,#8134AF);color:#fff;border-color:transparent}
+.gpBtn.em{background:var(--surface-3);color:inherit}
+
+/* a base da EmRoma tinge a capa de vinho: aqui é preto e dourado */
+.hub-bg::after{ background:linear-gradient(165deg, rgba(5,5,5,.35), rgba(20,16,8,.30)) !important; }
+/* a página do guia é de celular: no computador, uma coluna estreita */
+.wrap.gp{max-width:560px;margin-left:auto;margin-right:auto}
+.gpCel{padding:0 !important;min-width:0}
+
+/* documentos: o logo completo do brand kit */
+.doc-cab .doc-logo{height:64px;width:auto;display:block}
+/* o brand kit: Playfair só nas frases institucionais (a frase da capa, o "sobre") */
+.tagline, .vcard .tagline, .about-bio p:first-child{font-family:var(--f-serif)}
+
+/* ---- a capa como o Linktree dela (01/10/2026) ---- */
+.rede.tt{background:#000;color:#fff;border:1px solid rgba(255,255,255,.18)}
+.lk.destaque .ic.play{background:linear-gradient(135deg,var(--brand-primaria),#E6C55C);color:#0B0B0B}
+.lk.destaque .ic.play svg{width:18px;height:18px}
+.lk .ic svg{width:20px;height:20px}
+/* "Quem já foi": os depoimentos de verdade, em trilho que desliza (como a Dulcineia) */
+.depos{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;padding:2px 2px 6px;scrollbar-width:none}
+.depos::-webkit-scrollbar{display:none}
+.depo{flex:0 0 82%;max-width:320px;scroll-snap-align:start;margin:0;padding:16px 16px 14px;border-radius:18px;
+  border:1px solid color-mix(in srgb, var(--brand-primaria) 25%, transparent);
+  background:linear-gradient(180deg, color-mix(in srgb, var(--brand-primaria) 7%, var(--surface)), var(--surface));
+  display:flex;flex-direction:column;gap:10px}
+.depo blockquote{margin:0;flex:1;font:italic 400 16px/1.4 var(--f-serif);color:var(--ink)}
+.depo figcaption{display:flex;align-items:baseline;gap:8px;font-size:13px;color:var(--ink-2)}
+.depo figcaption small{color:var(--ink-3)}
+
+/* documentos: ingressos, links e parceiros */
+.doc-extras{margin:14px 0;padding:12px 14px;border:1px solid var(--line);border-radius:12px}
+.doc-extras p{margin:4px 0}
+
+/* =====================================================
+   A CAPA NO FORMATO DA CAROL/BIA (16/10/2026)
+   Seções com rótulo e fio dourado, ícones de traço (sem emoji), um único
+   botão cheio de dourado (o caminho principal do cliente) e o cartão de
+   indicações agrupado. Contraste: legendas em --ink-3 (6.4:1 no preto).
+   ===================================================== */
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.hub.yl .hub-in{gap:10px}
+.hub.yl .hubRot{display:flex;align-items:center;gap:12px;margin:18px 4px 2px;
+  font:600 var(--fs-1)/1 var(--f-ui);letter-spacing:var(--track-label);text-transform:uppercase;color:var(--highlight-text)}
+.hub.yl .hubRot::before{content:"";width:6px;height:6px;flex:none;transform:rotate(45deg);background:var(--brand-primaria);opacity:.9}
+.hub.yl .hubRot::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,color-mix(in srgb,var(--brand-primaria) 55%,transparent),transparent)}
+/* o selo de credencial, como o "Blue Badge" da Carol — com as palavras dela */
+.ylBadge{display:inline-flex;align-items:center;gap:8px;margin:12px auto 2px;padding:7px 14px 7px 9px;border-radius:var(--r-pill);
+  background:color-mix(in srgb,var(--brand-primaria) 9%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--brand-primaria) 40%,transparent);
+  color:var(--highlight-text);font:600 var(--fs-2)/1.3 var(--f-ui);letter-spacing:.02em;text-align:left}
+.ylBadgeIc{width:20px;height:20px;flex:none;color:var(--brand-primaria)}
+.ylBadgeIc svg{width:20px;height:20px;display:block}
+/* os itens: vidro escuro, ícone em quadradinho dourado, seta que anda no hover */
+.hub.yl .lk{min-height:64px;background:rgba(14,14,14,.78);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:var(--ink);cursor:pointer;
+  border:1px solid color-mix(in srgb,var(--brand-primaria) 20%,transparent);box-shadow:none}
+.hub.yl .lk:hover{border-color:color-mix(in srgb,var(--brand-primaria) 55%,transparent);background:rgba(22,20,15,.86)}
+.hub.yl .lk:focus-visible{outline:2px solid var(--brand-oro);outline-offset:3px}
+.hub.yl .lk .ic{width:40px;height:40px;border-radius:12px;background:color-mix(in srgb,var(--brand-primaria) 12%,transparent);color:var(--brand-destaque)}
+.hub.yl .lk .ic svg{width:21px;height:21px}
+.hub.yl .lk .ic.foto img{width:40px;height:40px;border-radius:12px;object-fit:cover;object-position:center 20%;display:block}
+.hub.yl .lk .ic.wa{background:#25D366;color:#fff}
+.hub.yl .lk .ic.ig{background:radial-gradient(circle at 30% 107%,#fdf497 0%,#fdf497 5%,#fd5949 45%,#d6249f 60%,#285AEB 90%);color:#fff}
+.hub.yl .lk small{color:var(--ink-3);margin-top:2px}
+.hub.yl .lk .go{width:20px;height:20px;color:var(--brand-primaria);transition:transform var(--d-fast) var(--ease)}
+.hub.yl .lk .go svg{width:18px;height:18px;display:block}
+.hub.yl .lk:hover .go{transform:translateX(3px)}
+.hub.yl .lk.main{background:linear-gradient(120deg,var(--brand-primaria),#E6C55C);color:#0B0B0B;border:0;
+  box-shadow:0 16px 34px -16px rgba(212,175,55,.6)}
+.hub.yl .lk.main small{color:rgba(11,11,11,.74)}
+.hub.yl .lk.main .ic{background:rgba(0,0,0,.12);color:#0B0B0B}
+.hub.yl .lk.main .go{color:#0B0B0B}
+.oss-sub{margin:2px 4px 0;font-size:var(--fs-2);color:var(--ink-3)}
+/* indicações: um cartão só, agrupado (como o "Para a sua viagem" da Bia) */
+.hub.yl .viagem{margin-top:18px;border-radius:var(--r-lg);overflow:hidden;background:rgba(14,14,14,.84);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  border:1px solid color-mix(in srgb,var(--brand-primaria) 28%,transparent)}
+.vgTopo{display:flex;flex-direction:column;gap:6px;padding:18px 18px 12px;border-bottom:1px solid color-mix(in srgb,var(--brand-primaria) 18%,transparent)}
+.vgTopo small{font:600 var(--fs-1)/1.2 var(--f-ui);letter-spacing:var(--track-label);text-transform:uppercase;color:var(--highlight-text)}
+.vgTopo h2{margin:0;font:500 var(--fs-6)/1.15 var(--f-serif);color:var(--ink)}
+.vg{display:flex;align-items:center;gap:14px;min-height:64px;padding:12px 18px;color:var(--ink);text-decoration:none;
+  border-top:1px solid color-mix(in srgb,var(--brand-primaria) 10%,transparent);transition:background var(--d-fast) var(--ease)}
+.vgTopo + .vg{border-top:0}
+.vg:hover{background:rgba(212,175,55,.06)}
+.vg:focus-visible{outline:2px solid var(--brand-oro);outline-offset:-2px}
+.vgIc{flex:none;width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:color-mix(in srgb,var(--brand-primaria) 14%,transparent);color:var(--brand-destaque)}
+.vgIc svg{width:21px;height:21px;display:block}
+.vgEmo{font-size:18px;line-height:1}
+.vgTx{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.vgTx b{font:600 var(--fs-4)/1.25 var(--f-ui)}
+.vgTx small{font-size:var(--fs-2);color:var(--ink-3);line-height:1.35}
+.vgVai{flex:none;width:32px;height:32px;border-radius:50%;display:grid;place-items:center;background:color-mix(in srgb,var(--brand-primaria) 12%,transparent);color:var(--brand-destaque)}
+.vgVai svg{width:16px;height:16px;display:block}
+@media (prefers-reduced-motion:reduce){.hub.yl .lk,.hub.yl .lk .go,.vg{transition:none}.hub.yl .lk:hover .go{transform:none}}
+
+/* a descrição curta no cartão do passeio (como na Bia): duas linhas no máximo */
+.tourcard .cdesc{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin:4px 0 2px;font-size:var(--fs-3);line-height:1.45;color:var(--ink-2)}

@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 260" preserveAspectRatio="xMidYMax slice">
+  <!-- Skyline dos Emirados em fio dourado (Burj Khalifa ao centro, torres,
+       vela do Burj Al Arab e a cúpula da mesquita). Vetor: sempre nítido. -->
+  <g fill="none" stroke="#D4AF37" stroke-width="2" stroke-linejoin="round" opacity=".55">
+    <path d="M0 260 V200 h34 v-26 h30 v26 h26 V150 h40 v110"/>
+    <path d="M130 260 V132 h54 v-22 h20 v22 h26 v128"/>
+    <path d="M250 260 V176 h28 v-30 h34 v30 h26 v84"/>
+    <!-- Burj Khalifa -->
+    <path d="M556 260 V120 h26 V78 h18 V30 l14-30 14 30 v48 h18 v42 h26 v140"/>
+    <path d="M600 30 v-28"/>
+    <!-- torres gêmeas -->
+    <path d="M700 260 V128 h40 v-24 h18 v24 h40 v132"/>
+    <path d="M818 260 V168 h30 v-34 h26 v34 h30 v92"/>
+    <!-- vela (Burj Al Arab) -->
+    <path d="M940 260 V150 c0-42 26-80 66-104 -18 34 -26 70 -26 104 v110"/>
+    <!-- mesquita -->
+    <path d="M1040 260 v-58 h12 M1180 260 v-58 h12"/>
+    <path d="M1052 202 h128 M1070 202 c0-44 28-66 46-66 s46 22 46 66"/>
+    <path d="M1116 136 v-16"/>
+  </g>
+</svg>

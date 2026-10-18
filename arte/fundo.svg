@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180" viewBox="0 0 180 180">
+  <!-- Geometria de inspiração islâmica, fio dourado: a "brand texture" do manual
+       da Yalla Experiences. Vetor: nunca pixeliza, em nenhuma tela. -->
+  <g fill="none" stroke="#D4AF37" stroke-width="1" opacity="0.13">
+    <path d="M90 0 L180 90 L90 180 L0 90 Z"/>
+    <path d="M90 22 L158 90 L90 158 L22 90 Z"/>
+    <path d="M45 45 L135 45 L135 135 L45 135 Z"/>
+    <path d="M0 0 L45 45 M180 0 L135 45 M0 180 L45 135 M180 180 L135 135"/>
+    <circle cx="90" cy="90" r="13"/>
+    <path d="M90 77 L103 90 L90 103 L77 90 Z"/>
+  </g>
+</svg>
