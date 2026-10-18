@@ -198,6 +198,10 @@ const Coach = {
   steps: [], i: 0, el: null, keyFlag: '', voz: false, som: null,
   start(steps, flag) {
     if (!DB.settings[flag]) return;
+    /* o tutorial da capa fala com a GUIA ("seu cliente começa aqui… esta é a
+       SUA porta"). No app de verdade, o visitante é o cliente dela: não vê
+       (18/10/2026). Na demonstração e para a dona logada, continua. */
+    if (flag === 'tutorialClient' && typeof temNuvem === 'function' && temNuvem() && !(typeof isLoggedIn === 'function' && isLoggedIn())) return;
     this.steps = steps.filter(s => $(s.sel)); this.i = 0; this.keyFlag = flag;
     if (this.steps.length) this.show();
   },
