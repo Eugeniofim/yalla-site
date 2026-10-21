@@ -536,3 +536,5 @@ html.vt-trava{overflow:hidden}
 /* o ícone do WhatsApp dentro dos botões (vinha sem tamanho e ocupava o botão inteiro) */
 .wa-ic{width:20px;height:20px;flex:none;display:inline-block;vertical-align:-4px}
 .cta .wa-ic{margin-right:8px}
+/* o "Experiences" da marca herda a cor do cabeçalho (a base pinta todo small de cinza) */
+.vt-marca small{color:inherit}
