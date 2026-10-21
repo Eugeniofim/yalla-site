@@ -483,8 +483,14 @@ function _seed() {
 
 /* apaga tudo — o guia começa do zero */
 function clearAll() {
+  /* "apagar tudo" é de propósito: o aparelho continua "em dia" com a nuvem
+     (nuvem-itens.js), então o que é privado também some de lá. Os outros
+     caminhos que trocam o DB (aparelho limpo, Sincronizar de novo) perdem a
+     marca e releem a nuvem — nunca apagam. */
+  const emDia = DB && DB._itensEmDia;
   DB = _blank();
   DB.demo = false;
+  if (emDia) DB._itensEmDia = true;
   save();
 }
 function restoreDemo() { DB = _seed(); save(); }
@@ -877,7 +883,7 @@ const Roteiros = {
     const ped = {
       id: uid(), criado: new Date().toISOString(), respondido: false,
       nome: limpa(r.nome), whats: limpa(r.whats), email: limpa(r.email),
-      ini: limpa(r.ini), fim: limpa(r.fim),
+      ini: limpa(r.ini), fim: limpa(r.fim), datasAbertas: !!r.datasAbertas, faixa: limpa(r.faixa),
       adultos: Math.max(1, +r.adultos || 1), criancas: Math.max(0, +r.criancas || 0), idades: limpa(r.idades),
       onde: [...(r.onde || [])], ondeOutro: limpa(r.ondeOutro),
       gosto: [...(r.gosto || [])], precisa: [...(r.precisa || [])], ritmo: r.ritmo || '',

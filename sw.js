@@ -4,7 +4,7 @@
    Para publicar uma atualização: subir os arquivos novos e trocar a VERSION. */
 'use strict';
 
-const VERSION = 'yalla-v1.1.4';
+const VERSION = 'yalla-v1.2.0';
 const CORE = [
   './', './index.html', './config.js', './app.js', './fx.js', './pix.js', './qr.js', './qrcode.js', './traduz.js', './store.js', './auth.js', './logo.js', './cloud.js', './nuvem-itens.js', './i18n.js', './es.js', './conteudo.js', './operacao.js', './operacao-telas.js', './precos.js', './assistente.js', './assistente-ingrid.js', './guia-link.js', './tokens.css', './operacao.css', './marca.css', './manifest.webmanifest', './capa.jpg', './home.jpg', './og.jpg', './guia.jpg', './arte/capa-arco.jpg', './arte/marmore.jpg',
   /* a arte da Yalla: o selo, o fundo da marca e as capas. Vao para o cache
@@ -12,6 +12,9 @@ const CORE = [
   './arte/coroa.png', './arte/coroa-escura.png', './arte/logo-yalla.png', './arte/logo-yalla-escuro.png',
   './arte/fundo.svg', './arte/skyline.svg', './arte/skyline.jpg', './arte/reuniao.jpg', './arte/networking.jpg',
   './arte/deserto.jpg', './arte/iate.jpg', './arte/louvre.jpg', './arte/milla-rosto.jpg',
+  /* a vitrine (v1.2.0): a foto do topo, a da Milla e as das categorias */
+  './arte/home-dubai.jpg', './arte/home-dubai-cel.jpg', './arte/milla.jpg',
+  './arte/cat-cultura.jpg', './arte/cat-deserto.jpg', './arte/cat-atracoes.jpg', './arte/cat-parques.jpg', './arte/cat-iate.jpg', './arte/cat-aventura.jpg', './arte/cat-gastronomia.jpg',
 ];
 
 self.addEventListener('install', (e) => {

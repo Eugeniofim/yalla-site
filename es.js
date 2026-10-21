@@ -614,6 +614,31 @@ const STR_YALLA = {
   "pt": "Aeroporto e hotel — veja o valor na hora",
   "en": "Airport and hotel — see the price right away"
  },
+ "chooseTour": { "pt": "Experiências", "en": "Experiences", "es": "Experiencias" },
+ "noDatesYet": {
+  "pt": "Esta experiência é organizada sob consulta. Conte a data e quem vem, e a {negocio} confirma a disponibilidade com você.",
+  "en": "This experience is arranged on request. Tell us the date and who is coming, and {negocio} will confirm availability with you.",
+  "es": "Esta experiencia se organiza a consulta. Cuéntanos la fecha y quién viene, y {negocio} confirma la disponibilidad contigo."
+ },
+ "askDatesBtn": { "pt": "Consultar disponibilidade", "en": "Check availability", "es": "Consultar disponibilidad" },
+ "waAskDates": {
+  "pt": "Olá! Vi a experiência {tour} no site da {negocio} e gostaria de consultar a disponibilidade.",
+  "en": "Hi! I saw the {tour} experience on the {negocio} website and would like to check availability.",
+  "es": "¡Hola! Vi la experiencia {tour} en el sitio de {negocio} y quisiera consultar la disponibilidad."
+ },
+ "rtTit": { "pt": "Planejar minha viagem", "en": "Plan my trip", "es": "Planificar mi viaje" },
+ "rtIntro": {
+  "pt": "Conte quando você vem, com quem vai viajar e o que gostaria de viver. A {negocio} monta uma proposta personalizada e responde pelo WhatsApp.",
+  "en": "Tell us when you are coming, who you are travelling with and what you would like to experience. {negocio} prepares a tailor-made proposal and replies on WhatsApp.",
+  "es": "Cuéntanos cuándo vienes, con quién viajas y qué te gustaría vivir. {negocio} prepara una propuesta personalizada y responde por WhatsApp."
+ },
+ "rtEnviar": { "pt": "Solicitar proposta personalizada", "en": "Request a tailor-made proposal", "es": "Solicitar propuesta personalizada" },
+ "rtFine": {
+  "pt": "Este é um pedido de proposta: o envio não confirma disponibilidade nem reserva. A {negocio} responde com as opções pelo WhatsApp.",
+  "en": "This is a proposal request: sending it does not confirm availability or a booking. {negocio} replies with the options on WhatsApp.",
+  "es": "Esto es una solicitud de propuesta: el envío no confirma disponibilidad ni reserva. {negocio} responde con las opciones por WhatsApp."
+ },
+ "rtConte": { "pt": "Conte mais", "en": "Tell us more", "es": "Cuéntanos más" },
  "orcForaCentro": {
   "pt": "O hotel é fora da área central (ou tem mais de uma parada).",
   "en": "The hotel is outside the central area (or there is more than one stop)."

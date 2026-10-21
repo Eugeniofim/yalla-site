@@ -1273,6 +1273,9 @@ function restauraBackup(txt) {
   novo.settings = fillSettings(p.configuracoes || {});
   /* voltou dado de verdade: nao e mais demonstracao, e as sementes nao voltam */
   novo.demo = false; novo.opSeed = OP_SEED; novo.tarefasSeed = 1; novo.seedVer = typeof SEED_VER !== 'undefined' ? SEED_VER : 1;
+  /* restaurar é de propósito, como o "apagar tudo": quem estava em dia com a
+     nuvem continua, e o backup é o que vale (nuvem-itens.js) */
+  if (DB && DB._itensEmDia) novo._itensEmDia = true;
   DB = novo;
   try { if (typeof Mkt !== 'undefined' && Array.isArray(p.memoriaAssistente)) { const m = Mkt.get(); m.memoria = p.memoriaAssistente; Mkt.salva(); } } catch (e) {}
   opGarante();

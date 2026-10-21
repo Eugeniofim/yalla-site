@@ -74,16 +74,18 @@ const CONTEUDO = {
       ['sharjah', 'Sharjah', 'Sharjah', 'Sharjah'], ['deserto', 'Deserto', 'Desert', 'Desierto'],
       ['rak', 'Ras Al Khaimah', 'Ras Al Khaimah', 'Ras Al Khaimah'], ['oma', 'Omã (Musandam)', 'Oman (Musandam)', 'Omán (Musandam)'],
     ],
+    /* interesses = as 7 categorias do documento dela (18/10/2026) + 3 do jeito de viajar */
     gosto: [
-      ['deserto',     'Deserto e safári',         'Desert & safari',          'Desierto y safari'],
-      ['arquitetura', 'Arquitetura e skyline',    'Architecture & skyline',   'Arquitectura y skyline'],
-      ['cultura',     'Cultura e história local', 'Culture & local history',  'Cultura e historia local'],
-      ['gastronomia', 'Gastronomia',              'Food & dining',            'Gastronomía'],
-      ['iate',        'Iate e praia',             'Yacht & beach',            'Yate y playa'],
-      ['compras',     'Compras',                  'Shopping',                 'Compras'],
-      ['negocios',    'Negócios e networking',    'Business & networking',    'Negocios y networking'],
-      ['criancas',    'Programas com crianças',   'Kid-friendly',             'Con niños'],
-      ['fotos',       'Lugares para fotos',       'Photo spots',              'Lugares para fotos'],
+      ['cultura',     'City tours e cultura',          'City tours & culture',          'City tours y cultura'],
+      ['deserto',     'Experiências no deserto',       'Desert experiences',            'Experiencias en el desierto'],
+      ['atracoes',    'Atrações e espetáculos',        'Attractions & shows',           'Atracciones y espectáculos'],
+      ['parques',     'Parques e diversão',            'Theme parks & fun',             'Parques y diversión'],
+      ['iate',        'Iates e experiências no mar',   'Yachts & sea experiences',      'Yates y experiencias en el mar'],
+      ['aventura',    'Aventura e vistas do alto',     'Adventure & views from above',  'Aventura y vistas desde lo alto'],
+      ['gastronomia', 'Gastronomia e vida noturna',    'Dining & nightlife',            'Gastronomía y vida nocturna'],
+      ['compras',     'Compras',                       'Shopping',                      'Compras'],
+      ['negocios',    'Negócios e networking',         'Business & networking',         'Negocios y networking'],
+      ['criancas',    'Programas com crianças',        'Kid-friendly',                  'Con niños'],
     ],
     precisa: [
       ['transfer',  'Transfer (aeroporto e hotel)',        'Transfers (airport & hotel)',   'Traslados (aeropuerto y hotel)'],
@@ -93,21 +95,75 @@ const CONTEUDO = {
       ['visto',     'Orientação de visto e chegada',       'Visa & arrival guidance',       'Orientación de visado y llegada'],
       ['evento',    'Evento ou reunião de negócios',       'Event or business meeting',     'Evento o reunión de negocios'],
     ],
+    /* faixa de investimento do pedido de proposta (opcional para o cliente).
+       Sugestão de 20/10/2026 — a Yalla confirma as faixas e a moeda. */
+    faixas: [
+      ['ate2',   'Até 2 mil AED',        'Up to AED 2,000',       'Hasta 2.000 AED'],
+      ['2a5',    'De 2 a 5 mil AED',     'AED 2,000 to 5,000',    'De 2.000 a 5.000 AED'],
+      ['5a10',   'De 5 a 10 mil AED',    'AED 5,000 to 10,000',   'De 5.000 a 10.000 AED'],
+      ['mais10', 'Acima de 10 mil AED',  'Over AED 10,000',       'Más de 10.000 AED'],
+    ],
     modo: [
       ['guia',        'Com guia particular',                                 'With a private guide',                              'Con guía privado'],
       ['consultoria', 'Sozinho, com roteiro de especialista (consultoria)',  'On my own, with a specialist route (consulting)',   'Por mi cuenta, con ruta de especialista (consultoría)'],
       ['nao-sei',     'Ainda não sei',                                       'Not sure yet',                                      'Aún no lo sé'],
     ],
     /* o que ela ofereceria para quem gosta de cada coisa (passeio fixo) */
-    sugestao: { deserto: 'safari-deserto', arquitetura: 'city-tour-dubai', compras: 'city-tour-dubai',
-                cultura: 'abu-dhabi-dia', iate: 'iate-marina', fotos: 'city-tour-dubai' },
+    sugestao: { deserto: 'safari-deserto', cultura: 'city-tour-dubai', atracoes: 'city-tour-dubai', compras: 'city-tour-dubai',
+                iate: 'iate-marina' },
     /* lugar escolhido → passeio fixo; sem passeio → item livre para ela pôr o valor */
     ondeServico: { abudhabi: 'abu-dhabi-dia', deserto: 'safari-deserto' },
     ondeSemTabela: { sharjah: 'Sharjah', rak: 'Ras Al Khaimah', oma: 'Omã (Musandam)' },
     padrao: 'city-tour-dubai',
     /* gostos que pedem item livre (ela monta) */
-    gostoLivre: { negocios: 'Agenda de negócios / visitas técnicas', gastronomia: 'Experiência gastronômica' },
+    gostoLivre: { negocios: 'Agenda de negócios / visitas técnicas', gastronomia: 'Gastronomia e vida noturna',
+                  parques: 'Ingressos de parques', aventura: 'Aventura (helicóptero, skydive, balão, jetski…)' },
   },
+
+  /* ---------- AS CATEGORIAS DA VITRINE (documento dela, 18/10/2026) ----------
+     "Como você quer viver os Emirados?" — o id é o mesmo do interesse do
+     "Planejar minha viagem". Com produto no ar naquela categoria, o cartão
+     abre a lista dela; sem produto, abre o pedido de proposta já marcado
+     (categoria vazia NUNCA vira página vazia). Fotos do material dela —
+     as de 220px pedem a foto real e autorizada. */
+  categorias: [
+    { id: 'cultura',     foto: 'arte/cat-cultura.jpg',
+      nome: { pt: 'City tours e cultura', en: 'City tours & culture', es: 'City tours y cultura' },
+      desc: { pt: 'Conheça os ícones, a história e os diferentes lados dos Emirados.', en: 'Discover the icons, the history and the many sides of the Emirates.', es: 'Conoce los íconos, la historia y los distintos lados de los Emiratos.' } },
+    { id: 'deserto',     foto: 'arte/cat-deserto.jpg',
+      nome: { pt: 'Experiências no deserto', en: 'Desert experiences', es: 'Experiencias en el desierto' },
+      desc: { pt: 'Dunas, pôr do sol e diferentes formas de viver o deserto.', en: 'Dunes, sunsets and different ways to live the desert.', es: 'Dunas, atardeceres y distintas formas de vivir el desierto.' } },
+    { id: 'atracoes',    foto: 'arte/cat-atracoes.jpg',
+      nome: { pt: 'Atrações e espetáculos', en: 'Attractions & shows', es: 'Atracciones y espectáculos' },
+      desc: { pt: 'Reserve atrações e espetáculos para completar sua viagem.', en: 'Book attractions and shows to complete your trip.', es: 'Reserva atracciones y espectáculos para completar tu viaje.' } },
+    { id: 'parques',     foto: 'arte/cat-parques.jpg',
+      nome: { pt: 'Parques e diversão', en: 'Theme parks & fun', es: 'Parques y diversión' },
+      desc: { pt: 'Experiências para se divertir em casal, com amigos ou em família.', en: 'Fun for couples, friends and families.', es: 'Diversión en pareja, con amigos o en familia.' } },
+    { id: 'iate',        foto: 'arte/cat-iate.jpg',
+      nome: { pt: 'Iates e experiências no mar', en: 'Yachts & sea experiences', es: 'Yates y experiencias en el mar' },
+      desc: { pt: 'Escolha entre navegar em um iate privativo ou aproveitar uma experiência compartilhada.', en: 'Sail on a private yacht or enjoy a shared experience.', es: 'Navega en un yate privado o disfruta de una experiencia compartida.' } },
+    { id: 'aventura',    foto: 'arte/cat-aventura.jpg',
+      nome: { pt: 'Aventura e vistas do alto', en: 'Adventure & views from above', es: 'Aventura y vistas desde lo alto' },
+      desc: { pt: 'Veja os Emirados de novos ângulos e acrescente aventura à sua viagem.', en: 'See the Emirates from new angles and add adventure to your trip.', es: 'Mira los Emiratos desde nuevos ángulos y suma aventura a tu viaje.' } },
+    { id: 'gastronomia', foto: 'arte/cat-gastronomia.jpg',
+      nome: { pt: 'Gastronomia e vida noturna', en: 'Dining & nightlife', es: 'Gastronomía y vida nocturna' },
+      desc: { pt: 'Descubra lugares para jantar, celebrar e aproveitar a noite.', en: 'Find places to dine, celebrate and enjoy the night.', es: 'Descubre lugares para cenar, celebrar y disfrutar la noche.' } },
+  ],
+  /* modalidade e transfer de cada produto (campos do cadastro, documento dela) */
+  /* as perguntas frequentes do documento dela (20/10/2026). As RESPOSTAS são
+     dela (Ajustes → Aparência): pergunta sem resposta não aparece no site. */
+  faq: [
+    ['Como faço para reservar?', 'How do I book?', '¿Cómo reservo?'],
+    ['Qual a diferença entre privativo e compartilhado?', 'What is the difference between private and shared?', '¿Cuál es la diferencia entre privado y compartido?'],
+    ['Em que idioma é o passeio?', 'What language is the tour in?', '¿En qué idioma es el paseo?'],
+    ['O transfer está incluído?', 'Is the transfer included?', '¿El traslado está incluido?'],
+    ['Quais são as regras para crianças?', 'What are the rules for children?', '¿Cuáles son las reglas para niños?'],
+    ['Como funcionam o pagamento e o parcelamento?', 'How do payment and instalments work?', '¿Cómo funcionan el pago y las cuotas?'],
+    ['E se eu precisar cancelar?', 'What if I need to cancel?', '¿Y si necesito cancelar?'],
+    ['Quando recebo a confirmação e o voucher?', 'When do I get the confirmation and the voucher?', '¿Cuándo recibo la confirmación y el voucher?'],
+  ],
+  modalidades: [['privativo', 'Privativo', 'Private', 'Privado'], ['compartilhado', 'Compartilhado', 'Shared', 'Compartido'], ['ingresso', 'Ingresso', 'Ticket', 'Entrada']],
+  transfers: [['incluido', 'Transfer incluído', 'Transfer included', 'Traslado incluido'], ['opcional', 'Transfer opcional', 'Optional transfer', 'Traslado opcional'], ['nao', 'Sem transfer', 'No transfer', 'Sin traslado']],
 
   /* ---------- o Pipeline: o passo a passo de cada cliente ----------
      Pedido dela (01/10/2026): "pipeline com status do andamento com cliente…

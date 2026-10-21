@@ -287,6 +287,7 @@ function go(h) {
 }
 function route() {
   Coach.hide();
+  document.documentElement.classList.remove('vt-trava');
   const h = location.hash.slice(2) || '';
   const p = h.split('/');
   if (p[0] !== 'adm' && typeof visualAplica === 'function') visualAplica(false);
@@ -374,119 +375,332 @@ const YL = {
   fora:      YL_IC('<path d="M7 17 17 7M9 7h8v8"/>'),
 };
 
+/* A VITRINE (20/10/2026) — a estrutura do documento da Milla
+   ("Yalla_Estrutura_Site_Desenvolvedor", 18/10): cabeçalho com menu, foto e
+   chamada, diferenciais, categorias, experiências em destaque, viagem sob
+   medida, avaliações, sobre, empresas e eventos, apoio à viagem, dúvidas,
+   chamada final e rodapé. Nada inventado: categoria sem produto leva ao
+   pedido de proposta, avaliação só de verdade, dúvida só com resposta dela.
+   Sem porta para o painel na página: ela entra por /#/adm. */
+YL.fala   = YL_IC('<path d="M4 5h16v11H9l-5 4z"/><path d="M8 9.5h8M8 12.5h5"/>');
+YL.cartao = YL_IC('<rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="M3 10h18M7 15h4"/>');
+YL.sino   = YL_IC('<path d="M4 18h16M6 18a6 6 0 0 1 12 0"/><path d="M12 9V7M10.5 7h3"/>');
+YL.menu   = YL_IC('<path d="M4 7h16M4 12h16M4 17h16"/>');
+YL.fecha  = YL_IC('<path d="M6 6l12 12M18 6 6 18"/>');
+
+/* o estado do "Monte seu roteiro": a capa abre o pedido já marcado */
+function roteiroEstado() {
+  return viewRoteiro._s = viewRoteiro._s || { onde: [], gosto: [], precisa: [], ritmo: 'medio', adultos: 2, criancas: 0 };
+}
+/* +5511951971111 → +55 11 95197-1111 */
+function foneBonito(n) {
+  const d = String(n || '').replace(/\D/g, '');
+  if (d.length === 13 && d.startsWith('55')) return `+55 ${d.slice(2, 4)} ${d.slice(4, 9)}-${d.slice(9)}`;
+  return n ? '+' + d : '';
+}
+/* o cabeçalho fica sólido quando a foto passa */
+addEventListener('scroll', () => { const t = document.querySelector('.vt-top'); if (t) t.classList.toggle('solido', scrollY > 40); }, { passive: true });
+
 function viewHub() {
   const st = DB.settings;
   const txt = (o) => (o && (o[LANG] || o.pt)) || '';
-  const redes = [
-    st.insta    ? { u: 'https://instagram.com/' + st.insta.replace(/^@/, ''), ic: ICONE_IG, n: 'Instagram', c: 'ig' } : null,
-    st.insta2   ? { u: 'https://instagram.com/' + st.insta2.replace(/^@/, ''), ic: ICONE_IG, n: 'Instagram @' + st.insta2.replace(/^@/, ''), c: 'ig' } : null,
-    linkExterno(st.tiktok)   ? { u: st.tiktok,   ic: ICONE_TT,   n: 'TikTok',   c: 'tt' } : null,
-    linkExterno(st.youtube)  ? { u: st.youtube,  ic: ICONE_YT,   n: 'YouTube',  c: 'yt' } : null,
-    linkExterno(st.blog)     ? { u: st.blog,     ic: ICONE_BLOG, n: 'Blog',     c: 'bl' } : null,
-    linkExterno(st.facebook) ? { u: st.facebook, ic: ICONE_FB,   n: 'Facebook', c: 'fb' } : null,
-  ].filter(Boolean);
-  const temTransfer = Tours.live().some(x => x.type === 'transfer');
-  const links = (st.links || []).filter(l => linkExterno(l.url) && txt(l.titulo));
-  /* o vídeo em destaque do Linktree dela */
-  const dest = st.destaque && linkExterno(st.destaque.url) && txt(st.destaque.titulo) ? st.destaque : null;
-  /* "Quem já foi": só depoimento de verdade que ela colou, e o destaque de
-     feedback do Instagram. Nada inventado: sem os dois, o bloco não aparece. */
-  const depo = (typeof Avaliacoes !== 'undefined') ? Avaliacoes.all().slice(0, 4) : [];
-  const fbIg = linkExterno(st.feedbackIg) ? st.feedbackIg : '';
-  const mesAno = (iso) => { try { return new Date(iso + 'T12:00:00').toLocaleDateString(locale ? locale() : 'pt-BR', { month: 'short', year: 'numeric' }); } catch (e) { return ''; } };
-  /* ONE STOP SHOP (pedido da Milla, 01/10/2026): cada item abre o "Monte seu
-     roteiro" já marcado com o que a pessoa precisa (o transfer, se houver
-     catálogo no ar, abre a tabela de transfer) */
-  const precisaIds = ((typeof CONTEUDO !== 'undefined' && CONTEUDO.roteiro && CONTEUDO.roteiro.precisa) || []).map(x => x[0]);
-  const tem = (k) => precisaIds.includes(k);
   const marca = guiaNegocio().split(' ')[0];
-  const lk = (id, ic, tit, sub, cls = '', attrs = '') => `<button class="lk ${cls}" id="${id}" ${attrs}><span class="ic">${ic}</span><span><b>${tit}</b>${sub ? `<small>${sub}</small>` : ''}</span><span class="go" aria-hidden="true">${YL.seta}</span></button>`;
-  /* as indicações: sem link de parceira, abrem o WhatsApp dela já pedindo
-     (ninguém fica sem resposta e nenhum desconto é prometido) */
-  const indica = [
-    ['hotel', YL.hotel, L3('Onde ficar em Dubai', 'Where to stay in Dubai', 'Dónde alojarse en Dubái'), L3('Hotel por bairro, do jeito da sua viagem', 'Hotels by area, to suit your trip', 'Hoteles por barrio, a tu medida'),
-      L3(`Olá, ${guiaNome()}! Pode me indicar um hotel em Dubai?`, `Hi ${guiaNome()}! Could you recommend a hotel in Dubai?`, `¡Hola, ${guiaNome()}! ¿Me recomiendas un hotel en Dubái?`)],
-    ['chip', YL.chip, L3('Chip de viagem (eSIM)', 'Travel eSIM', 'eSIM de viaje'), L3('Chegue em Dubai já conectado', 'Land in Dubai already connected', 'Llega a Dubái ya conectado'),
-      L3(`Olá, ${guiaNome()}! Quero uma indicação de chip (eSIM) para Dubai.`, `Hi ${guiaNome()}! Can you recommend an eSIM for Dubai?`, `¡Hola, ${guiaNome()}! ¿Me recomiendas una eSIM para Dubái?`)],
-    ['seguro', YL.seguro, L3('Seguro viagem', 'Travel insurance', 'Seguro de viaje'), L3('Viaje tranquilo, do embarque à volta', 'Travel with peace of mind', 'Viaja tranquilo, de ida y vuelta'),
-      L3(`Olá, ${guiaNome()}! Quero uma indicação de seguro viagem.`, `Hi ${guiaNome()}! Can you recommend travel insurance?`, `¡Hola, ${guiaNome()}! ¿Me recomiendas un seguro de viaje?`)],
-    tem('visto') ? ['visto', YL.passaporte, L3('Visto e chegada', 'Visa & arrival', 'Visado y llegada'), L3('O que levar e como é a imigração', 'What to bring and how arrival works', 'Qué llevar y cómo es la llegada'),
-      L3(`Olá, ${guiaNome()}! Tenho uma dúvida sobre visto e chegada em Dubai.`, `Hi ${guiaNome()}! I have a question about visa and arrival in Dubai.`, `¡Hola, ${guiaNome()}! Tengo una duda sobre visado y llegada a Dubái.`)] : null,
-  ].filter(Boolean);
+  const live = Tours.live();
+  const cats = (typeof CONTEUDO !== 'undefined' && CONTEUDO.categorias) || [];
+  const catNome = (id) => { const c = cats.find(z => z.id === id); return c ? txt(c.nome) : ''; };
+  const modNome = (id) => { const o = ((typeof CONTEUDO !== 'undefined' && CONTEUDO.modalidades) || []).find(z => z[0] === id); return o ? opcaoNome(o) : ''; };
+  const temCat = (id) => live.some(x => x.categoria === id);
+  const temTransfer = live.some(x => x.type === 'transfer');
+  const destaques = live.filter(x => x.type !== 'transfer').slice(0, 8);
+  const depo = (typeof Avaliacoes !== 'undefined') ? Avaliacoes.all().slice(0, 3) : [];
+  const fbIg = linkExterno(st.feedbackIg) ? st.feedbackIg : '';
+  const faq = (Array.isArray(st.faq) ? st.faq : []).filter(f => txt(f.p) && txt(f.r));
+  const links = (st.links || []).filter(l => linkExterno(l.url) && txt(l.titulo));
+  const email = st.emailPublico || GUIA_CFG.email || '';
+  const insta = (st.insta || GUIA_CFG.insta || '').replace(/^@/, '');
+  const foto = st.homePhoto || '';
+  const mesAno = (iso) => { try { return new Date(iso + 'T12:00:00').toLocaleDateString(LANG === 'en' ? 'en-GB' : LANG === 'es' ? 'es-ES' : 'pt-BR', { month: 'short', year: 'numeric' }); } catch (e) { return ''; } };
+  const resumo = (x) => String(txt(x.desc)).split(/(?<=[.!?])\s/)[0].slice(0, 170);
+
+  const MENU = [
+    ['experiencias', L3('Experiências', 'Experiences', 'Experiencias')],
+    ['sob-medida', L3('Viagem sob medida', 'Tailor-made trips', 'Viaje a medida')],
+    ['empresas', L3('Empresas e eventos', 'Business & events', 'Empresas y eventos')],
+    ['sobre', L3('Sobre a ' + marca, 'About ' + marca, 'Sobre ' + marca)],
+    ['contato', L3('Contato', 'Contact', 'Contacto')],
+  ];
+  const planejar = L3('Planejar minha viagem', 'Plan my trip', 'Planificar mi viaje');
+  const idiomas = (cls) => `<div class="vt-idiomas ${cls || ''}" role="group" aria-label="${L3('Idioma', 'Language', 'Idioma')}">${linguasCliente().map(c =>
+    `<button type="button" data-lang="${c}" lang="${c}" class="${LANG === c ? 'on' : ''}" aria-pressed="${LANG === c}">${c.toUpperCase()}</button>`).join('')}</div>`;
+  const rot = (s) => `<span class="vt-rot">${s}</span>`;
+  const DIFS = [
+    [YL.fala, L3('Atendimento em português', 'Service in Portuguese', 'Atención en portugués'), L3('do primeiro contato à volta', 'from first contact to your return', 'del primer contacto al regreso')],
+    [YL.selo, L3('Guias e parceiros licenciados', 'Licensed guides and partners', 'Guías y socios con licencia'), L3('nos Emirados', 'in the Emirates', 'en los Emiratos')],
+    [YL.roteiro, L3('Experiências personalizadas', 'Tailor-made experiences', 'Experiencias a medida'), L3('no seu tempo e ritmo', 'at your own pace', 'a tu tiempo y ritmo')],
+    [YL.cartao, L3('Pagamento em até 12x no cartão', 'Up to 12 card instalments', 'Hasta 12 cuotas con tarjeta'), L3('condições em cada oferta', 'terms shown with each offer', 'condiciones en cada oferta')],
+  ];
+  const APOIO = [
+    [YL.carro, L3('Transfers', 'Transfers', 'Traslados'), L3('Aeroporto e deslocamentos entre cidades, com motorista.', 'Airport and intercity transfers, with a driver.', 'Aeropuerto y traslados entre ciudades, con chofer.'),
+      L3('Pedir transfer', 'Request a transfer', 'Pedir traslado'), temTransfer ? 'data-transfer="1"' : 'data-rt-precisa="transfer"'],
+    [YL.volante, L3('Carro com motorista', 'Car with driver', 'Auto con chofer'), L3('Um carro à sua disposição por período, para circular no seu ritmo.', 'A car at your disposal for a set time, to get around at your pace.', 'Un auto a tu disposición por un período, para moverte a tu ritmo.'),
+      L3('Consultar', 'Enquire', 'Consultar'), 'data-rt-precisa="motorista"'],
+    [YL.sino, L3('Concierge e reservas', 'Concierge & bookings', 'Concierge y reservas'), L3('Restaurantes, beach clubs, fotógrafo, videomaker e outras solicitações.', 'Restaurants, beach clubs, photographer, videographer and other requests.', 'Restaurantes, beach clubs, fotógrafo, videomaker y otras solicitudes.'),
+      L3('Fazer um pedido', 'Make a request', 'Hacer un pedido'), 'data-rt-precisa="ingressos"'],
+  ];
+  const hotelMsg = L3(`Olá, ${guiaNome()}! Pode me indicar um hotel em Dubai?`, `Hi ${guiaNome()}! Could you recommend a hotel in Dubai?`, `¡Hola, ${guiaNome()}! ¿Me recomiendas un hotel en Dubái?`);
+
+  const card = (x) => {
+    const sel = catNome(x.categoria) || tipoLabel(x.type);
+    const meta = [regiaoLabel(x.region), modNome(x.modalidade), x.duration && x.duration !== '—' ? x.duration : '',
+      x.transferInc === 'incluido' ? L3('Transfer incluído', 'Transfer included', 'Traslado incluido') : ''].filter(Boolean);
+    const preco = ehSobConsulta(x)
+      ? `<small>${L3('Investimento', 'Price', 'Inversión')}</small><b>${t('sobConsulta')}</b>`
+      : `<small>${L3('Investimento', 'Price', 'Inversión')} ${esc(unidadePreco(x))}</small><b>${x.priceMode === 'tabela' || x.priceMode === 'transfer' ? t('fromPrice') + ' ' : ''}${eur(precoVitrine(x))}</b>`;
+    return `<a class="vt-prod" href="#/tour/${esc(x.id)}">
+      <span class="vt-prod-foto"><img src="${esc(x.photo)}" alt="" loading="lazy"><span class="vt-selo">${esc(sel)}</span></span>
+      <span class="vt-prod-corpo">
+        <b class="vt-prod-nome">${esc(txt(x.name))}${txt(x.tagline) ? `<small>${esc(txt(x.tagline))}</small>` : ''}</b>
+        ${meta.length ? `<span class="vt-meta">${meta.map(m => `<span>${esc(m)}</span>`).join('')}</span>` : ''}
+        ${resumo(x) ? `<span class="vt-prod-txt">${esc(resumo(x))}</span>` : ''}
+        <span class="vt-invest"><span>${preco}</span><span class="vt-btn vt-btn-preto">${L3('Ver experiência', 'See experience', 'Ver experiencia')}</span></span>
+      </span></a>`;
+  };
 
   app.innerHTML = `
-  <div class="hub yl">
-    <div class="hub-bg"></div>
-    <!-- a foto do topo (18/10/2026: "preto demais"): a do Ajustes, ou a mesquita pelo arco, do kit dela -->
-    <div class="ylHero" role="img" aria-label="${esc(L3('Os Emirados com a ' + marca, 'The Emirates with ' + marca, 'Los Emiratos con ' + marca))}" style="background-image:url(${esc(st.homePhoto || 'arte/capa-arco.jpg')})"></div>
-    <div class="hub-in">
-      <div class="vcard">
-        <div class="hub-brand">${logoFull({ mark: 46, sub: esc(guiaBase()) })}</div>
-        <p class="tagline">${esc(noIdioma(st.homeText) || t('tagline'))}</p>
-        ${GUIA_CFG.badge ? `<p class="ylBadge"><span class="ylBadgeIc">${YL.selo}</span><span>${esc(String(GUIA_CFG.badge).split('·')[0].trim())}</span></p>` : ''}
-        ${redes.length ? `<nav class="redes" aria-label="${t('hubRedes')}">${redes.map(r =>
-          `<a class="rede ${r.c}" href="${esc(r.u)}" target="_blank" rel="noopener" aria-label="${r.n}" title="${r.n}">${r.ic}</a>`).join('')}</nav>` : ''}
-        ${langBar('center')}
-      </div>
-
-      <p class="hubRot">${L3('Com a ' + marca, 'With ' + marca, 'Con ' + marca)}</p>
-      ${lk('goTours', YL.pin, t('seeTours'), t('seeToursSub'), 'main')}
-      ${lk('goRoteiro', YL.roteiro, t('hubRoteiro'), t('hubRoteiroSub'))}
-
-      ${tem('transfer') || temTransfer || tem('ingressos') || tem('motorista') ? `<p class="hubRot">${L3('Planeje a sua viagem', 'Plan your trip', 'Planifica tu viaje')}</p>
-      ${temTransfer ? lk('goTransfer', YL.carro, t('hubTransfer'), t('hubTransferSub'), '', 'data-oss="transfer"')
-        : tem('transfer') ? lk('goTransfer', YL.carro, L3('Transfer', 'Transfer', 'Traslado'), L3('Aeroporto e hotel, na chegada e na partida', 'Airport and hotel, on arrival and departure', 'Aeropuerto y hotel, a la llegada y la salida'), '', 'data-oss="transfer"') : ''}
-      ${tem('ingressos') ? lk('goIngressos', YL.ingresso, L3('Ingressos e reservas', 'Tickets & bookings', 'Entradas y reservas'), L3('Atrações, restaurantes e experiências sem fila', 'Attractions, restaurants and skip-the-line', 'Atracciones, restaurantes y sin filas'), '', 'data-oss="ingressos"') : ''}
-      ${tem('motorista') ? lk('goMotorista', YL.volante, L3('Carro com motorista', 'Private driver', 'Auto con chofer'), L3('Para o dia todo ou para um passeio', 'For a full day or a single trip', 'Por el día o para un paseo'), '', 'data-oss="motorista"') : ''}
-      <p class="oss-sub">${t('hubOssSub')}</p>` : ''}
-
-      <p class="hubRot">${L3('Conheça', 'Get to know us', 'Conócenos')}</p>
-      <button class="lk" id="goAbout">
-        <span class="ic foto"><img id="hubFace" src="${esc(st.photo || 'guia.jpg')}" alt=""></span><span><b>${t('aboutLink')}</b><small>${t('aboutLinkSub')}</small></span><span class="go" aria-hidden="true">${YL.seta}</span>
-      </button>
-      ${dest ? `<a class="lk destaque" href="${esc(dest.url)}" target="_blank" rel="noopener">
-        <span class="ic play">${ICONE_PLAY}</span><span><b>${esc(txt(dest.titulo))}</b>${txt(dest.sub) ? `<small>${esc(txt(dest.sub))}</small>` : ''}</span><span class="go" aria-hidden="true">${YL.fora}</span></a>` : ''}
-      ${typeof Avaliacoes !== 'undefined' && (Avaliacoes.all().length > 4 || linkExterno(st.linkAvaliacao)) ? lk('goAval', YL.estrela, t('hubAval'),
-        Avaliacoes.media() ? `${String(Avaliacoes.media()).replace('.', ',')} ★ · ${Avaliacoes.all().length} ${Avaliacoes.all().length === 1 ? L3('avaliação', 'review', 'reseña') : L3('avaliações', 'reviews', 'reseñas')}` : t('hubAvalSub')) : ''}
-      <a class="lk" href="${waLink(t('waHello'))}" target="_blank" rel="noopener"><span class="ic wa">${ICONE_WA}</span><span><b>${t('whatsapp')}</b><small>${t('hubWhatsSub')}</small></span><span class="go" aria-hidden="true">${YL.seta}</span></a>
-
-      ${depo.length || fbIg ? `<p class="hubRot">${t('hubQuemFoi')}</p>
-      ${depo.length ? `<div class="depos">${depo.map(a => `<figure class="depo"><blockquote>“${esc(a.texto)}”</blockquote>
-        <figcaption><b>${esc(a.nome)}</b>${a.data ? ` <small>${esc(mesAno(a.data))}</small>` : ''}</figcaption></figure>`).join('')}</div>` : ''}
-      ${fbIg ? `<a class="lk" href="${esc(fbIg)}" target="_blank" rel="noopener">
-        <span class="ic ig">${ICONE_IG}</span><span><b>${t('hubFbIg')}</b><small>${t('hubFbIgSub')}</small></span><span class="go" aria-hidden="true">${YL.fora}</span></a>` : ''}` : ''}
-
-      <section class="viagem" aria-labelledby="vgTit">
-        <header class="vgTopo"><small>${L3('Indicações da ' + marca, marca + ' recommends', 'Recomendaciones de ' + marca)}</small><h2 id="vgTit">${t('hubViagem')}</h2></header>
-        ${indica.map(([k, ic, tit, sub, msg]) => `<a class="vg" href="${esc(waLink(msg))}" target="_blank" rel="noopener">
-          <span class="vgIc">${ic}</span><span class="vgTx"><b>${esc(tit)}</b><small>${esc(sub)}</small></span>
-          <span class="vgVai" aria-hidden="true">${ICONE_WA}</span><span class="sr-only">${L3('(abre o WhatsApp)', '(opens WhatsApp)', '(abre WhatsApp)')}</span></a>`).join('')}
-        ${links.map(l => `<a class="vg" href="${esc(l.url)}" target="_blank" rel="noopener sponsored">
-          <span class="vgIc">${l.icone ? `<span class="vgEmo">${esc(l.icone)}</span>` : YL.link}</span><span class="vgTx"><b>${esc(txt(l.titulo))}</b>${txt(l.sub) ? `<small>${esc(txt(l.sub))}</small>` : ''}</span>
-          <span class="vgVai" aria-hidden="true">${YL.fora}</span><span class="sr-only">${L3('(abre em outra aba)', '(opens in a new tab)', '(abre en otra pestaña)')}</span></a>`).join('')}
-      </section>
-
-      <button class="adm-entry" id="admEntry">🔒 ${t('admEntry')}</button>
+  <div class="vt">
+  <header class="vt-top${scrollY > 40 ? ' solido' : ''}">
+    <div class="vt-wrap">
+      <a class="vt-marca" href="#/" aria-label="${esc(guiaNegocio())} — ${L3('início', 'home', 'inicio')}">
+        <img class="vt-coroa-clara" src="${esc(GUIA_CFG.logo || '')}" alt=""><img class="vt-coroa-escura" src="${esc(GUIA_CFG.logoEscuro || GUIA_CFG.logo || '')}" alt="">
+        <span><b>${esc(marca)}</b><small>${esc(guiaNegocio().split(' ').slice(1).join(' '))}</small></span>
+      </a>
+      <nav class="vt-menu" aria-label="${L3('Menu principal', 'Main menu', 'Menú principal')}">${MENU.map(([id, n]) => `<button type="button" data-vai="${id}">${n}</button>`).join('')}</nav>
+      ${idiomas('vt-so-grande')}
+      <a class="vt-btn vt-btn-ouro vt-cta-top" href="#/roteiro">${planejar}</a>
+      <button type="button" class="vt-burger" id="vtAbre" aria-label="${L3('Abrir o menu', 'Open menu', 'Abrir el menú')}" aria-expanded="false" aria-controls="vtGaveta">${YL.menu}</button>
     </div>
+  </header>
+  <div class="vt-gaveta" id="vtGaveta" hidden>
+    <nav aria-label="${L3('Menu', 'Menu', 'Menú')}">
+      <button type="button" class="vt-fecha" id="vtFecha" aria-label="${L3('Fechar o menu', 'Close menu', 'Cerrar el menú')}">${YL.fecha}</button>
+      ${MENU.map(([id, n]) => `<button type="button" data-vai="${id}">${n}</button>`).join('')}
+      ${idiomas()}
+      <a class="vt-btn vt-btn-ouro" href="#/roteiro">${planejar}</a>
+    </nav>
+  </div>
+
+  <main>
+  <section class="vt-hero" aria-labelledby="vtTit">
+    <picture>${foto ? '' : '<source media="(max-width:700px)" srcset="arte/home-dubai-cel.jpg">'}
+      <img src="${esc(foto || 'arte/home-dubai.jpg')}" alt="${L3('O skyline de Dubai com o Burj Khalifa no pôr do sol', 'The Dubai skyline with the Burj Khalifa at sunset', 'El skyline de Dubái con el Burj Khalifa al atardecer')}" fetchpriority="high"></picture>
+    <div class="vt-wrap">
+      <span class="vt-olho">${L3('Dubai · Abu Dhabi · Emirados', 'Dubai · Abu Dhabi · Emirates', 'Dubái · Abu Dabi · Emiratos')}</span>
+      <h1 id="vtTit">${L3('Dubai e Emirados Árabes Unidos, do seu jeito.', 'Dubai and the United Arab Emirates, your way.', 'Dubái y los Emiratos Árabes Unidos, a tu manera.')}</h1>
+      <p class="vt-sub">${L3('Passeios privativos, atrações e experiências selecionadas, com atendimento em português e cuidado em cada detalhe da sua viagem.',
+        'Private tours, attractions and hand-picked experiences, with Portuguese-speaking service and care in every detail of your trip.',
+        'Paseos privados, atracciones y experiencias seleccionadas, con atención en portugués y cuidado en cada detalle de tu viaje.')}</p>
+      <div class="vt-acoes">
+        <button type="button" class="vt-btn vt-btn-ouro" data-vai="experiencias">${L3('Explorar experiências', 'Explore experiences', 'Explorar experiencias')}</button>
+        <a class="vt-btn vt-btn-claro" href="#/roteiro">${planejar}</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="vt-difs" aria-label="${L3('Diferenciais', 'Why us', 'Por qué nosotros')}">
+    <div class="vt-wrap">${DIFS.map(([ic, b, s]) => `<div class="vt-dif"><span class="vt-ic">${ic}</span><span><b>${b}</b><small>${s}</small></span></div>`).join('')}</div>
+  </section>
+
+  ${cats.length ? `<section class="vt-sec" id="experiencias" aria-labelledby="vtCat">
+    <div class="vt-wrap">
+      <div class="vt-cab">${rot(L3('Experiências', 'Experiences', 'Experiencias'))}
+        <h2 id="vtCat">${L3('Como você quer viver os Emirados?', 'How do you want to experience the Emirates?', '¿Cómo quieres vivir los Emiratos?')}</h2>
+        <p>${L3('Dos lugares que você sonha conhecer às experiências que ainda vai descobrir. Encontre o que combina com a sua viagem.',
+          'From the places you dream of seeing to the experiences you have yet to discover. Find what suits your trip.',
+          'De los lugares que sueñas conocer a las experiencias que aún vas a descubrir. Encuentra lo que va con tu viaje.')}</p></div>
+      <div class="vt-cats">${cats.map(c => `<button type="button" class="vt-cat" data-cat="${esc(c.id)}">
+        <img src="${esc(c.foto)}" alt="" loading="lazy">
+        <span><b>${esc(txt(c.nome))}</b><small>${esc(txt(c.desc))}</small>
+        <span class="vt-seta">${temCat(c.id) ? L3('Ver experiências', 'See experiences', 'Ver experiencias') : L3('Pedir uma proposta', 'Request a proposal', 'Pedir una propuesta')} →</span></span></button>`).join('')}</div>
+    </div>
+  </section>` : ''}
+
+  ${destaques.length ? `<section class="vt-sec vt-branca" id="destaques" aria-labelledby="vtDest">
+    <div class="vt-wrap">
+      <div class="vt-cab">${rot(L3('Em destaque', 'Featured', 'Destacados'))}
+        <h2 id="vtDest">${L3('Experiências para fazer parte da sua viagem', 'Experiences to make part of your trip', 'Experiencias para formar parte de tu viaje')}</h2>
+        <p>${L3(`Conheça algumas das experiências selecionadas pela ${marca} em Dubai e em todos os Emirados Árabes Unidos.`,
+          `Discover some of the experiences selected by ${marca} in Dubai and across the United Arab Emirates.`,
+          `Conoce algunas de las experiencias seleccionadas por ${marca} en Dubái y en todos los Emiratos Árabes Unidos.`)}</p></div>
+      <div class="vt-prods">${destaques.map(card).join('')}</div>
+      ${live.length > destaques.length || live.length > 4 ? `<p class="vt-mais"><a class="vt-btn vt-btn-linha" href="#/tours">${L3('Ver todas as experiências', 'See all experiences', 'Ver todas las experiencias')}</a></p>` : ''}
+    </div>
+  </section>` : ''}
+
+  <section class="vt-sec" id="sob-medida" aria-labelledby="vtSob">
+    <div class="vt-wrap vt-sob">
+      <div>
+        ${rot(L3('Viagem sob medida', 'Tailor-made trips', 'Viaje a medida'))}
+        <h2 id="vtSob">${L3('Você conta como quer viajar. A gente cuida dos detalhes.', 'Tell us how you want to travel. We take care of the details.', 'Cuéntanos cómo quieres viajar. Nosotros cuidamos los detalles.')}</h2>
+        <p class="vt-lead">${L3('Uma escala de algumas horas ou de poucos dias, férias em família ou uma viagem para celebrar. Organizamos passeios, deslocamentos e reservas de acordo com o seu tempo, seus interesses e seu ritmo.',
+          'A stopover of a few hours or a few days, a family holiday or a trip to celebrate. We arrange tours, transport and bookings around your time, your interests and your pace.',
+          'Una escala de unas horas o de pocos días, vacaciones en familia o un viaje para celebrar. Organizamos paseos, traslados y reservas según tu tiempo, tus intereses y tu ritmo.')}</p>
+        <ol class="vt-passos">
+          <li><b>1</b>${L3('Você conta datas, quem vem e o que gostaria de viver.', 'You tell us your dates, who is coming and what you would like to experience.', 'Nos cuentas fechas, quién viene y qué te gustaría vivir.')}</li>
+          <li><b>2</b>${L3(`A ${marca} monta uma proposta com as melhores opções.`, `${marca} puts together a proposal with the best options.`, `${marca} prepara una propuesta con las mejores opciones.`)}</li>
+          <li><b>3</b>${L3('Você aprova, e cuidamos das reservas e dos detalhes.', 'You approve, and we handle the bookings and the details.', 'Tú apruebas y nos ocupamos de las reservas y los detalles.')}</li>
+        </ol>
+        <a class="vt-btn vt-btn-ouro" href="#/roteiro">${L3('Solicitar proposta personalizada', 'Request a tailor-made proposal', 'Solicitar propuesta personalizada')}</a>
+      </div>
+      <div class="vt-sob-img"><img src="arte/skyline.jpg" alt="${L3('O Burj Khalifa visto por um arco em Dubai', 'The Burj Khalifa seen through an arch in Dubai', 'El Burj Khalifa visto a través de un arco en Dubái')}" loading="lazy"></div>
+    </div>
+  </section>
+
+  ${depo.length || fbIg ? `<section class="vt-sec vt-branca" aria-labelledby="vtAval">
+    <div class="vt-wrap">
+      <div class="vt-cab">${rot(L3('Avaliações', 'Reviews', 'Opiniones'))}<h2 id="vtAval">${L3('Quem viveu, conta.', 'Those who lived it, tell it.', 'Quien lo vivió, lo cuenta.')}</h2></div>
+      ${depo.length ? `<div class="vt-avals">${depo.map(a => `<figure class="vt-aval">
+        ${+a.nota ? `<span class="vt-estrelas" aria-label="${a.nota} ${L3('de 5 estrelas', 'of 5 stars', 'de 5 estrellas')}">${'★'.repeat(+a.nota)}</span>` : ''}
+        <blockquote>“${esc(a.texto)}”</blockquote>
+        <figcaption>${esc(a.nome)}${a.data ? ` · ${esc(mesAno(a.data))}` : ''}</figcaption></figure>`).join('')}</div>` : ''}
+      ${Avaliacoes.all().length > depo.length ? `<p class="vt-mais"><a class="vt-btn vt-btn-linha" href="#/avaliacoes">${L3('Ver todas as avaliações', 'See all reviews', 'Ver todas las opiniones')}</a></p>` : ''}
+      ${fbIg ? `<div class="vt-indica"><a href="${esc(fbIg)}" target="_blank" rel="noopener"><span class="vt-ic vt-ig">${ICONE_IG}</span>
+        <span><b>${L3('Relatos de quem viajou com a ' + marca, 'Stories from people who travelled with ' + marca, 'Relatos de quienes viajaron con ' + marca)}</b><small>${L3('Nos destaques do Instagram', 'In our Instagram highlights', 'En los destacados de Instagram')}${insta ? ' @' + esc(insta) : ''}</small></span>
+        <span class="vt-ir" aria-hidden="true">${YL.fora}</span><span class="sr-only">${L3('(abre em outra aba)', '(opens in a new tab)', '(abre en otra pestaña)')}</span></a></div>` : ''}
+    </div>
+  </section>` : ''}
+
+  <section class="vt-sec" id="sobre" aria-labelledby="vtSobre">
+    <div class="vt-wrap vt-sobre">
+      <div class="vt-sobre-foto"><img src="arte/milla.jpg" alt="${L3(guiaNome() + ', fundadora da ' + guiaNegocio(), guiaNome() + ', founder of ' + guiaNegocio(), guiaNome() + ', fundadora de ' + guiaNegocio())}" loading="lazy"></div>
+      <div>
+        ${rot(L3('Sobre a ' + marca, 'About ' + marca, 'Sobre ' + marca))}
+        <h2 id="vtSobre" class="vt-serif">${L3('Conhecimento local. Cuidado brasileiro.', 'Local knowledge. Brazilian care.', 'Conocimiento local. Cuidado brasileño.')}</h2>
+        <p class="vt-lead">${L3(`A ${guiaNegocio()} nasceu da trajetória de ${guiaNome()}, brasileira que vive nos Emirados desde 2010 e atua como guia de turismo licenciada. Unimos conhecimento local, atendimento próximo e parceiros selecionados para cuidar da sua experiência em Dubai e em todos os Emirados Árabes Unidos.`,
+          `${guiaNegocio()} was born from the journey of ${guiaNome()}, a Brazilian who has lived in the Emirates since 2010 and works as a licensed tour guide. We bring together local knowledge, close personal service and selected partners to take care of your experience in Dubai and across the United Arab Emirates.`,
+          `${guiaNegocio()} nació de la trayectoria de ${guiaNome()}, brasileña que vive en los Emiratos desde 2010 y trabaja como guía de turismo con licencia. Unimos conocimiento local, atención cercana y socios seleccionados para cuidar tu experiencia en Dubái y en todos los Emiratos Árabes Unidos.`)}</p>
+        <div class="vt-fatos">
+          <div><b>2010</b><small>${L3(guiaNome() + ' nos Emirados', guiaNome() + ' in the Emirates', guiaNome() + ' en los Emiratos')}</small></div>
+          <div><b>${L3('Licenciada', 'Licensed', 'Con licencia')}</b><small>${L3('guia de turismo', 'tour guide', 'guía de turismo')}</small></div>
+          <div><b>7</b><small>${L3('Emirados, um atendimento', 'Emirates, one team', 'Emiratos, una atención')}</small></div>
+        </div>
+        <a class="vt-btn vt-btn-linha" href="#/about">${L3('Conheça a ' + marca, 'Meet ' + marca, 'Conoce ' + marca)}</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="vt-sec vt-branca" id="empresas" aria-labelledby="vtEmp">
+    <div class="vt-wrap">
+      <div class="vt-emp">
+        <img src="arte/reuniao.jpg" alt="" loading="lazy">
+        <div class="vt-emp-txt">
+          ${rot(L3('Empresas e eventos', 'Business & events', 'Empresas y eventos'))}
+          <h2 id="vtEmp">${L3('Conexões que vão além da viagem.', 'Connections that go beyond the trip.', 'Conexiones que van más allá del viaje.')}</h2>
+          <p>${L3('Imersões de negócios, viagens de incentivo e eventos nos Emirados, com planejamento personalizado para empresas e grupos.',
+            'Business immersions, incentive trips and events in the Emirates, with tailored planning for companies and groups.',
+            'Inmersiones de negocios, viajes de incentivo y eventos en los Emiratos, con planificación personalizada para empresas y grupos.')}</p>
+          <ul>${[L3('Imersões de negócios', 'Business immersions', 'Inmersiones de negocios'), L3('Viagens de incentivo', 'Incentive trips', 'Viajes de incentivo'),
+            L3('Encontros', 'Meetings', 'Encuentros'), L3('Eventos corporativos', 'Corporate events', 'Eventos corporativos')].map(s => `<li>${s}</li>`).join('')}</ul>
+          <button type="button" class="vt-btn vt-btn-ouro" data-rt-precisa="evento" data-rt-gosto="negocios">${L3('Planejar uma experiência corporativa', 'Plan a corporate experience', 'Planificar una experiencia corporativa')}</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="vt-sec" aria-labelledby="vtApoio">
+    <div class="vt-wrap">
+      <div class="vt-cab">${rot(L3('Apoio à viagem', 'Travel support', 'Apoyo al viaje'))}
+        <h2 id="vtApoio">${L3('Sua viagem, com os detalhes resolvidos.', 'Your trip, with the details taken care of.', 'Tu viaje, con los detalles resueltos.')}</h2>
+        <p>${L3('Transfers, carro com motorista e reservas para complementar sua estadia com mais praticidade.',
+          'Transfers, a car with driver and bookings to make your stay easier.',
+          'Traslados, auto con chofer y reservas para completar tu estancia con más comodidad.')}</p></div>
+      <div class="vt-apoio">${APOIO.map(([ic, b, p, a, attr]) => `<button type="button" class="vt-ap" ${attr}>
+        <span class="vt-ic">${ic}</span><b>${b}</b><span class="vt-ap-txt">${p}</span><span class="vt-ap-link">${a} →</span></button>`).join('')}</div>
+      <div class="vt-indica">
+        <a href="${esc(waLink(hotelMsg))}" target="_blank" rel="noopener"><span class="vt-ic">${YL.hotel}</span>
+          <span><b>${L3('Onde ficar em Dubai', 'Where to stay in Dubai', 'Dónde alojarse en Dubái')}</b><small>${L3('Indicação de hotel por bairro, do jeito da sua viagem', 'Hotel recommendations by area, to suit your trip', 'Recomendación de hotel por barrio, a tu medida')}</small></span>
+          <span class="vt-ir" aria-hidden="true">${ICONE_WA}</span><span class="sr-only">${L3('(abre o WhatsApp)', '(opens WhatsApp)', '(abre WhatsApp)')}</span></a>
+        ${links.map(l => `<a href="${esc(l.url)}" target="_blank" rel="noopener sponsored"><span class="vt-ic">${YL.link}</span>
+          <span><b>${esc(txt(l.titulo))}</b>${txt(l.sub) ? `<small>${esc(txt(l.sub))}</small>` : ''}</span>
+          <span class="vt-ir" aria-hidden="true">${YL.fora}</span><span class="sr-only">${L3('(abre em outra aba)', '(opens in a new tab)', '(abre en otra pestaña)')}</span></a>`).join('')}
+      </div>
+    </div>
+  </section>
+
+  ${faq.length ? `<section class="vt-sec vt-branca" aria-labelledby="vtFaq">
+    <div class="vt-wrap">
+      <div class="vt-cab">${rot(L3('Dúvidas', 'Questions', 'Dudas'))}<h2 id="vtFaq">${L3('Perguntas frequentes', 'Frequently asked questions', 'Preguntas frecuentes')}</h2></div>
+      <div class="vt-faq">${faq.map(f => `<details><summary>${esc(txt(f.p))}</summary><p>${esc(txt(f.r)).replace(/\n/g, '<br>')}</p></details>`).join('')}</div>
+    </div>
+  </section>` : ''}
+
+  <section class="vt-final" id="contato" aria-labelledby="vtFinal">
+    <img src="arte/home-dubai.jpg" alt="" loading="lazy">
+    <div class="vt-wrap">
+      <h2 id="vtFinal">${L3('Vamos planejar sua experiência nos Emirados?', 'Shall we plan your experience in the Emirates?', '¿Planificamos tu experiencia en los Emiratos?')}</h2>
+      <p>${L3(`Conte quando você vem, com quem vai viajar e o que gostaria de viver. A ${marca} ajuda a encontrar as melhores opções para você.`,
+        `Tell us when you are coming, who you are travelling with and what you would like to experience. ${marca} helps you find the best options.`,
+        `Cuéntanos cuándo vienes, con quién viajas y qué te gustaría vivir. ${marca} te ayuda a encontrar las mejores opciones.`)}</p>
+      <a class="vt-btn vt-btn-ouro" href="${esc(waLink(t('waHello')))}" target="_blank" rel="noopener">${ICONE_WA} ${L3('Conversar com a ' + marca, 'Talk to ' + marca, 'Hablar con ' + marca)}</a>
+    </div>
+  </section>
+  </main>
+
+  <footer class="vt-rodape">
+    <div class="vt-wrap">
+      <div>
+        <a class="vt-marca" href="#/"><img src="${esc(GUIA_CFG.logo || '')}" alt=""><span><b>${esc(marca)}</b><small>${esc(guiaNegocio().split(' ').slice(1).join(' '))}</small></span></a>
+        <p>${L3('Experiências em Dubai, Abu Dhabi e em todos os Emirados Árabes Unidos.', 'Experiences in Dubai, Abu Dhabi and across the United Arab Emirates.', 'Experiencias en Dubái, Abu Dabi y en todos los Emiratos Árabes Unidos.')}</p>
+        ${st.razaoSocial || st.licenca ? `<p class="vt-legal">${esc([st.razaoSocial, st.licenca].filter(Boolean).join(' · '))}</p>` : ''}
+      </div>
+      <div><h3>${L3('Experiências', 'Experiences', 'Experiencias')}</h3>${cats.slice(0, 4).map(c => `<button type="button" data-cat="${esc(c.id)}">${esc(txt(c.nome))}</button>`).join('')}</div>
+      <div><h3>${marca}</h3>
+        <button type="button" data-vai="sobre">${L3('Sobre a ' + marca, 'About ' + marca, 'Sobre ' + marca)}</button>
+        <a href="#/roteiro">${L3('Viagem sob medida', 'Tailor-made trips', 'Viaje a medida')}</a>
+        <button type="button" data-vai="empresas">${L3('Empresas e eventos', 'Business & events', 'Empresas y eventos')}</button></div>
+      <div><h3>${L3('Contato', 'Contact', 'Contacto')}</h3>
+        <a href="${esc(waLink(t('waHello')))}" target="_blank" rel="noopener">WhatsApp ${esc(foneBonito(waNum()))}</a>
+        ${email ? `<a href="mailto:${esc(email)}">${esc(email)}</a>` : ''}
+        ${insta ? `<a href="https://instagram.com/${esc(insta)}" target="_blank" rel="noopener">@${esc(insta)}</a>` : ''}</div>
+      <div class="vt-base"><span>© ${new Date().getFullYear()} ${esc(guiaNegocio())}</span><a href="privacidade.html">${L3('Privacidade', 'Privacy', 'Privacidad')}</a></div>
+    </div>
+  </footer>
+  <a class="vt-zap" href="${esc(waLink(t('waHello')))}" target="_blank" rel="noopener" aria-label="${L3('Falar com a ' + marca + ' no WhatsApp', 'Chat with ' + marca + ' on WhatsApp', 'Hablar con ' + marca + ' por WhatsApp')}">${ICONE_WA}</a>
   </div>`;
+
   bindLang(app);
-  $('#goTours').onclick = () => { viewShowcase._f = 'all'; go('/tours'); };
-  $('#goRoteiro').onclick = () => go('/roteiro');
-  $$('[data-oss]').forEach(b => b.onclick = () => {
-    const k = b.dataset.oss;
-    if (k === 'transfer' && temTransfer) { viewShowcase._f = 'transfer'; go('/tours'); return; }
-    const R = viewRoteiro._s = viewRoteiro._s || { onde: [], gosto: [], precisa: [], ritmo: 'medio', adultos: 2, criancas: 0 };
-    if (!R.precisa.includes(k)) R.precisa.push(k);
+  const gav = $('#vtGaveta'), abre = $('#vtAbre');
+  const gaveta = (on) => {
+    gav.hidden = !on; abre.setAttribute('aria-expanded', on);
+    document.documentElement.classList.toggle('vt-trava', on);
+    if (on) $('#vtFecha').focus(); else abre.focus({ preventScroll: true });
+  };
+  abre.onclick = () => gaveta(true);
+  $('#vtFecha').onclick = () => gaveta(false);
+  gav.onclick = (e) => { if (e.target === gav || e.target.closest('a')) gaveta(false); };
+  gav.onkeydown = (e) => { if (e.key === 'Escape') gaveta(false); };
+  const suave = () => matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+  $$('[data-vai]', app).forEach(b => b.onclick = () => {
+    if (!gav.hidden) gaveta(false);
+    const el = document.getElementById(b.dataset.vai);
+    if (el) el.scrollIntoView({ behavior: suave(), block: 'start' });
+  });
+  /* categoria com produto no ar abre a lista filtrada; sem produto, o pedido
+     de proposta já marcado com aquele gosto (nada de página vazia) */
+  $$('[data-cat]', app).forEach(b => b.onclick = () => {
+    const id = b.dataset.cat;
+    if (temCat(id)) { viewShowcase._c = id; viewShowcase._f = 'all'; go('/tours'); return; }
+    const R = roteiroEstado();
+    if (!R.gosto.includes(id)) R.gosto.push(id);
     go('/roteiro');
   });
-  fallbackPhoto($('#hubFace'), '☺');
-  $('#goAbout').onclick = () => go('/about');
-  if ($('#goAval')) $('#goAval').onclick = () => go('/avaliacoes');
-  $('#admEntry').onclick = () => go('/adm/today');
-  Coach.start([
-    { sel: '#goTours',  audio: 'hub-1', txt: { pt: 'Seu cliente começa aqui: toca e vê todos os passeios com datas reais.', en: 'Your guest starts here: all tours with live dates.' } },
-    { sel: '#admEntry', audio: 'hub-2', txt: { pt: 'E esta é a SUA porta, ' + guiaNome() + ' — o painel onde você controla tudo.', en: 'And this is YOUR door, ' + guiaNome() + ' — the panel where you control everything.' } },
-  ], 'tutorialClient');
+  $$('[data-rt-precisa],[data-rt-gosto]', app).forEach(b => b.onclick = () => {
+    const R = roteiroEstado();
+    const p = b.dataset.rtPrecisa, g = b.dataset.rtGosto;
+    if (p && !R.precisa.includes(p)) R.precisa.push(p);
+    if (g && !R.gosto.includes(g)) R.gosto.push(g);
+    go('/roteiro');
+  });
+  $$('[data-transfer]', app).forEach(b => b.onclick = () => { viewShowcase._c = ''; viewShowcase._f = 'transfer'; go('/tours'); });
 }
 
 /* MONTE SEU ROTEIRO — o passeio personalizado.
@@ -505,6 +719,7 @@ const ROTEIRO_ONDE = _RT.onde || [];
 const ROTEIRO_GOSTO = _RT.gosto || [];
 const ROTEIRO_PRECISA = _RT.precisa || [];
 const ROTEIRO_MODO = _RT.modo || [];
+const ROTEIRO_FAIXAS = _RT.faixas || [];
 const ROTEIRO_RITMO = [['calmo', 'Tranquilo', 'Relaxed', 'Tranquilo'], ['medio', 'Equilibrado', 'Balanced', 'Equilibrado'], ['intenso', 'Ver tudo que der', 'See as much as possible', 'Ver todo lo posible']];
 /* o rotulo da opcao no idioma: [codigo, pt, en, es] */
 const opcaoNome = (o, l) => (l || LANG) === 'en' ? o[2] : (l || LANG) === 'es' ? (o[3] || o[2]) : o[1];
@@ -520,7 +735,9 @@ function msgRoteiro(ped) {
   L.push(T('Olá, ' + guiaNome() + '! Quero montar uma experiência sob medida:', 'Hi ' + guiaNome() + '! I would like a tailor-made experience:', '¡Hola, ' + guiaNome() + '! Quiero armar una experiencia a medida:'));
   L.push('');
   if (ped.modo) L.push(T('🧭 Como: ', '🧭 How: ', '🧭 Cómo: ') + nome(ROTEIRO_MODO, ped.modo));
-  if (ped.ini || ped.fim) L.push(T('🗓 Datas: ', '🗓 Dates: ', '🗓 Fechas: ') + [d(ped.ini), d(ped.fim)].filter(Boolean).join(' → '));
+  if (ped.ini || ped.fim) L.push(T('🗓 Datas: ', '🗓 Dates: ', '🗓 Fechas: ') + [d(ped.ini), d(ped.fim)].filter(Boolean).join(' → ')
+    + (ped.datasAbertas ? T(' (a confirmar)', ' (to be confirmed)', ' (por confirmar)') : ''));
+  else if (ped.datasAbertas) L.push(T('🗓 Datas: em definição', '🗓 Dates: not set yet', '🗓 Fechas: por definir'));
   const plural = (n, um, varios) => n + ' ' + (n === 1 ? um : varios);
   L.push(T('👥 Grupo: ', '👥 Group: ', '👥 Grupo: ')
     + plural(ped.adultos, T('adulto', 'adult', 'adulto'), T('adultos', 'adults', 'adultos'))
@@ -531,6 +748,7 @@ function msgRoteiro(ped) {
   if (ped.gosto.length) L.push(T('❤️ Gosta de: ', '❤️ Likes: ', '❤️ Le gusta: ') + ped.gosto.map(v => nome(ROTEIRO_GOSTO, v)).join(', '));
   if (ped.ritmo) L.push(T('⏱ Ritmo: ', '⏱ Pace: ', '⏱ Ritmo: ') + nome(ROTEIRO_RITMO, ped.ritmo));
   if (ped.precisa.length) L.push(T('🧳 Precisa de: ', '🧳 Needs: ', '🧳 Necesita: ') + ped.precisa.map(v => nome(ROTEIRO_PRECISA, v)).join(', '));
+  if (ped.faixa) L.push(T('💰 Investimento previsto: ', '💰 Expected budget: ', '💰 Inversión prevista: ') + nome(ROTEIRO_FAIXAS, ped.faixa));
   if (ped.obs) { L.push(''); L.push(ped.obs); }
   L.push('');
   L.push('— ' + ped.nome + (ped.email ? ' · ' + ped.email : '') + (ped.whats ? ' · ' + ped.whats : ''));
@@ -538,7 +756,7 @@ function msgRoteiro(ped) {
 }
 
 function viewRoteiro() {
-  const R = viewRoteiro._s = viewRoteiro._s || { onde: [], gosto: [], precisa: [], ritmo: 'medio', adultos: 2, criancas: 0 };
+  const R = roteiroEstado();
   const nm = (o) => opcaoNome(o);
   const chips = (grupo, lista) => lista.map(o =>
     `<button type="button" class="chip ${R[grupo].includes(o[0]) ? 'on' : ''}" data-g="${grupo}" data-v="${o[0]}">${esc(nm(o))}</button>`).join('');
@@ -562,6 +780,7 @@ function viewRoteiro() {
         <label class="fld">${t('rtChega')}<input type="date" id="rtIni" value="${esc(R.ini || '')}"></label>
         <label class="fld">${t('rtSai')}<input type="date" id="rtFim" value="${esc(R.fim || '')}"></label>
       </div>
+      <label class="rtcheck"><input type="checkbox" id="rtAberto" ${R.datasAbertas ? 'checked' : ''}> ${L3('As datas ainda estão em definição', 'My dates are not set yet', 'Las fechas aún están por definir')}</label>
     </section>
 
     <section class="rtbloco"><h3>${t('rtQuem')}</h3>
@@ -589,6 +808,13 @@ function viewRoteiro() {
       <div class="chips">${chips('precisa', ROTEIRO_PRECISA)}</div>
     </section>
 
+    ${ROTEIRO_FAIXAS.length ? `<section class="rtbloco"><h3>${L3('Investimento previsto', 'Expected budget', 'Inversión prevista')} <small class="opc">${L3('opcional', 'optional', 'opcional')}</small></h3>
+      <label class="fld"><span class="sr-only">${L3('Faixa de investimento', 'Budget range', 'Rango de inversión')}</span><select id="rtFaixa">
+        <option value="">${L3('Prefiro não dizer', 'I prefer not to say', 'Prefiero no decirlo')}</option>
+        ${ROTEIRO_FAIXAS.map(o => `<option value="${o[0]}" ${R.faixa === o[0] ? 'selected' : ''}>${esc(nm(o))}</option>`).join('')}
+      </select></label>
+    </section>` : ''}
+
     <section class="rtbloco"><h3>${t('rtConte')}</h3>
       <label class="fld"><textarea id="rtObs" rows="4" placeholder="${t('rtContePh')}">${esc(R.obs || '')}</textarea></label>
     </section>
@@ -607,6 +833,7 @@ function viewRoteiro() {
      por ter tocado num chip */
   const guarda = () => {
     R.ini = $('#rtIni').value; R.fim = $('#rtFim').value;
+    R.datasAbertas = $('#rtAberto').checked; R.faixa = $('#rtFaixa') ? $('#rtFaixa').value : '';
     R.idades = $('#rtIdades') ? $('#rtIdades').value : (R.idades || '');
     R.ondeOutro = $('#rtOndeOutro').value; R.obs = $('#rtObs').value;
     R.nome = $('#rtNome').value; R.whats = $('#rtWhats').value; R.email = $('#rtEmail').value;
@@ -919,7 +1146,12 @@ function viewShowcase() {
      cadastrou nos Ajustes; so aparecem as que tem passeio publicado. */
   const onde = viewShowcase._r || 'all';
   const regs = regioes().filter(([c]) => tours.some(x => x.region === c));
-  const list = tours.filter(x => (filter === 'all' || x.type === filter) && (onde === 'all' || x.region === onde));
+  /* as categorias do documento dela: só aparece a que tem produto no ar */
+  const cats = ((typeof CONTEUDO !== 'undefined' && CONTEUDO.categorias) || []).filter(c => tours.some(x => x.categoria === c.id));
+  const cat = cats.some(c => c.id === viewShowcase._c) ? viewShowcase._c : '';
+  const catNome = (id) => { const c = ((typeof CONTEUDO !== 'undefined' && CONTEUDO.categorias) || []).find(z => z.id === id); return c ? tl(c.nome) : ''; };
+  const modNome = (id) => { const o = ((typeof CONTEUDO !== 'undefined' && CONTEUDO.modalidades) || []).find(z => z[0] === id); return o ? opcaoNome(o) : ''; };
+  const list = tours.filter(x => (filter === 'all' || x.type === filter) && (onde === 'all' || x.region === onde) && (!cat || x.categoria === cat));
   app.innerHTML = `
   <header class="topbar">
     <button class="backbtn" id="bk" aria-label="${t('back')}">←</button>
@@ -932,25 +1164,28 @@ function viewShowcase() {
       <button class="chip ${onde === 'all' ? 'on' : ''}" data-r="all">${t('ondeTodos')}</button>
       ${regs.map(([c]) => `<button class="chip ${onde === c ? 'on' : ''}" data-r="${esc(c)}">📍 ${esc(regiaoLabel(c))}</button>`).join('')}
     </div>` : ''}
-    <div class="chips" id="filters">
+    ${cats.length ? `<div class="chips" id="catF">
+      <button class="chip ${!cat ? 'on' : ''}" data-c="">${t('fAll')}</button>
+      ${cats.map(c => `<button class="chip ${cat === c.id ? 'on' : ''}" data-c="${esc(c.id)}">${esc(tl(c.nome))}</button>`).join('')}
+    </div>` : `<div class="chips" id="filters">
       ${['all', ...ORDEM_TIPOS.filter(f => tours.some(x => x.type === f))].map(f =>
         `<button class="chip ${filter === f ? 'on' : ''}" data-f="${f}">${f === 'all' ? t('fAll') : tipoLabel(f)}</button>`).join('')}
-    </div>
+    </div>`}
     <div class="cards" id="tourCards">
       ${list.length ? list.map(x => `
         <button class="tourcard" data-id="${x.id}">
           <span class="ph" style="background-image:url(${esc(x.photo)})">
-            <span class="tbadge">${esc(tipoLabel(x.type))}</span>
+            <span class="tbadge">${esc(catNome(x.categoria) || tipoLabel(x.type))}</span>
           </span>
           <span class="bd">
             <b>${esc(x.name[LANG] || x.name.pt)}</b>
             ${x.tagline && (x.tagline[LANG] || x.tagline.pt) ? `<small class="ctag">${esc(x.tagline[LANG] || x.tagline.pt)}</small>`
               : x.desc && (x.desc[LANG] || x.desc.pt) ? `<small class="cdesc">${esc(String(x.desc[LANG] || x.desc.pt).split(/(?<=[.!?])\s/)[0].slice(0, 160))}</small>` : ''}
-            <small class="meta">${regiaoLabel(x.region)}${x.duration && x.duration !== '—' ? ' · ' + esc(x.duration) : ''}${(x.stops || []).length ? ' · ' + t('nParadas', { n: x.stops.length }) : ''}</small>
+            <small class="meta">${regiaoLabel(x.region)}${modNome(x.modalidade) ? ' · ' + esc(modNome(x.modalidade)) : ''}${x.duration && x.duration !== '—' ? ' · ' + esc(x.duration) : ''}${(x.stops || []).length ? ' · ' + t('nParadas', { n: x.stops.length }) : ''}</small>
             <span class="cardfoot">
               ${ehSobConsulta(x) ? `<span class="pr">${t('sobConsulta')}</span>` : `<span class="pr">${x.priceMode === 'tabela' || x.priceMode === 'transfer' || (x.priceLate && x.earlySeats && x.priceMode !== 'session') ? `<u>${t('fromPrice')}</u> ` : ''}${eur(precoVitrine(x))}
                 <i>${unidadePreco(x)}</i></span>`}
-              <span class="cgo" aria-hidden="true">→</span>
+              <span class="cver">${L3('Ver experiência', 'See experience', 'Ver experiencia')}</span>
             </span>
           </span>
         </button>`).join('')
@@ -960,6 +1195,7 @@ function viewShowcase() {
   bindLang(app);
   $('#bk').onclick = () => go('/');
   $$('#filters .chip').forEach(c => c.onclick = () => { viewShowcase._f = c.dataset.f; viewShowcase(); });
+  $$('#catF .chip').forEach(c => c.onclick = () => { viewShowcase._c = c.dataset.c; viewShowcase(); });
   $$('#ondeF .chip').forEach(c => c.onclick = () => { viewShowcase._r = c.dataset.r; viewShowcase(); });
   $$('.tourcard').forEach(c => c.onclick = () => go('/tour/' + c.dataset.id));
 }
@@ -1046,6 +1282,9 @@ function viewTour(id) {
     Interesse.conta(x.id, 'visitas');
   }
   const stops = Array.isArray(x.stops) ? x.stops : [];
+  const catNome = (id) => { const c = ((typeof CONTEUDO !== 'undefined' && CONTEUDO.categorias) || []).find(z => z.id === id); return c ? tl(c.nome) : ''; };
+  const opc = (lista, id) => { const o = ((typeof CONTEUDO !== 'undefined' && CONTEUDO[lista]) || []).find(z => z[0] === id); return o ? opcaoNome(o) : ''; };
+  const modNome = (id) => opc('modalidades', id), trfNome = (id) => opc('transfers', id);
   const L = a => (a && (a[LANG] || a.pt)) || '';
   const lista = a => (Array.isArray(a) ? a : (a && (a[LANG] || a.pt)) || []);
 
@@ -1094,16 +1333,22 @@ function viewTour(id) {
       ${miniMap(stops, x)}
       ` : ''}
 
-      <!-- DATAS E HORARIOS -->
+      <!-- A FICHA (documento da Milla, 20/10/2026): destino, categoria,
+           modalidade, duração, idioma e transfer. Campo vazio não aparece:
+           o idioma deixou de ser fixo. -->
       <div class="sec">
-        <span class="seclabel">${t('secDates')}</span>
+        <span class="seclabel">${L3('Detalhes', 'Details', 'Detalles')}</span>
         <div class="factgrid">
-          <div><small>${t('fLeaves')}</small><b>${esc(noIdioma(x.meeting))}</b>
-            <a class="linkmap" href="${mapLink(noIdioma(x.meeting))}" target="_blank" rel="noopener">${t('openMap')} ↗</a></div>
-          ${x.duration ? `<div><small>${t('fHours')}</small><b>${esc(x.duration)}</b></div>` : ''}
-          <div><small>${t('fGroup')}</small><b>${t('upTo')} ${x.max} ${t('people')}</b>
-            ${x.min > 1 ? `<small class="sub">${t('minNote', { n: x.min })}</small>` : ''}</div>
-          <div><small>${t('fLang')}</small><b>PT · EN</b></div>
+          ${x.region ? `<div><small>${L3('Destino', 'Destination', 'Destino')}</small><b>${esc(regiaoLabel(x.region))}</b></div>` : ''}
+          ${catNome(x.categoria) ? `<div><small>${L3('Categoria', 'Category', 'Categoría')}</small><b>${esc(catNome(x.categoria))}</b></div>` : ''}
+          ${modNome(x.modalidade) ? `<div><small>${L3('Modalidade', 'Type', 'Modalidad')}</small><b>${esc(modNome(x.modalidade))}</b></div>` : ''}
+          ${x.duration ? `<div><small>${L3('Duração', 'Duration', 'Duración')}</small><b>${esc(x.duration)}</b></div>` : ''}
+          ${tl(x.idioma) ? `<div><small>${L3('Idioma', 'Language', 'Idioma')}</small><b>${esc(tl(x.idioma))}</b></div>` : ''}
+          ${trfNome(x.transferInc) ? `<div><small>Transfer</small><b>${esc(trfNome(x.transferInc))}</b></div>` : ''}
+          ${noIdioma(x.meeting) ? `<div><small>${t('fLeaves')}</small><b>${esc(noIdioma(x.meeting))}</b>
+            <a class="linkmap" href="${mapLink(noIdioma(x.meeting))}" target="_blank" rel="noopener">${t('openMap')} ↗</a></div>` : ''}
+          ${+x.max ? `<div><small>${t('fGroup')}</small><b>${t('upTo')} ${x.max} ${t('people')}</b>
+            ${x.min > 1 ? `<small class="sub">${t('minNote', { n: x.min })}</small>` : ''}</div>` : ''}
         </div>
       </div>
 
@@ -1135,12 +1380,23 @@ function viewTour(id) {
               ? `<span class="pbearly">${t('earlyNote', { n: x.earlySeats, v: eur(x.priceLate) })}</span>` : ''}
           </div>
           <div class="pbterms">
-            ${cancelaTxt(x) ? `<p>${esc(cancelaTxt(x))}</p>` : ''}
             ${x.priceNote && (x.priceNote[LANG] || x.priceNote.pt) && !ehSobConsulta(x)
               ? `<small>${esc(x.priceNote[LANG] || x.priceNote.pt)}</small>` : ''}
           </div>
         </div>
       </div>
+
+      ${tl(x.dicas) ? `
+      <div class="sec">
+        <span class="seclabel">${L3('Orientações', 'Good to know', 'Recomendaciones')}</span>
+        <p class="desc">${esc(tl(x.dicas)).replace(/\n/g, '<br>')}</p>
+      </div>` : ''}
+
+      ${cancelaTxt(x) ? `
+      <div class="sec">
+        <span class="seclabel">${L3('Cancelamento', 'Cancellation', 'Cancelación')}</span>
+        <p class="desc">${esc(cancelaTxt(x)).replace(/\n/g, '<br>')}</p>
+      </div>` : ''}
 
       ${x.closing && (x.closing[LANG] || x.closing.pt) ? `
       <div class="closing">
@@ -1347,6 +1603,23 @@ function renderBook() {
     const byDate = {};
     deps.forEach(d => { (byDate[d.date] = byDate[d.date] || []).push(d); });
     const dates = Object.keys(byDate).slice(0, 30);
+    /* "Reservar" só quando a confirmação é na hora; se depende do parceiro,
+       "Consultar disponibilidade" — e os três momentos ficam claros */
+    if (x.reserva === 'consulta' || !dates.length) {
+      book.innerHTML = `
+        <div class="bhead"><span class="bprice">${priceLine}</span></div>
+        <div class="nodates">
+          <p>${t('noDatesYet')}</p>
+          <a class="cta sm wide" target="_blank" rel="noopener"
+             href="${waLink(t('waAskDates', { tour: x.name[LANG] || x.name.pt }))}">${ICONE_WA_BTN} ${t('askDatesBtn')}</a>
+        </div>
+        <ol class="bpassos" aria-label="${L3('Como funciona', 'How it works', 'Cómo funciona')}">
+          <li>${L3(`Pedido recebido: a ${guiaNegocio().split(' ')[0]} confere a data com o parceiro.`, `Request received: ${guiaNegocio().split(' ')[0]} checks the date with the partner.`, `Pedido recibido: ${guiaNegocio().split(' ')[0]} confirma la fecha con el socio.`)}</li>
+          <li>${L3('Reserva confirmada: só quando houver confirmação efetiva.', 'Booking confirmed: only once it is actually confirmed.', 'Reserva confirmada: solo cuando haya confirmación efectiva.')}</li>
+          <li>${L3('Voucher enviado: com tudo o que você precisa para o dia.', 'Voucher sent: with everything you need for the day.', 'Voucher enviado: con todo lo que necesitas para el día.')}</li>
+        </ol>`;
+      return;
+    }
     book.innerHTML = `
       <div class="bhead"><span class="bprice">${priceLine}</span></div>
       <div class="bstep">${t('step1')}</div>
@@ -1775,6 +2048,26 @@ function admTourEdit(id) {
       <section class="card">
         <label class="fld">${t('tType')}<select id="fType">${selOpts([['walk','tWalk'],['day','tDay'],['transfer','tTransfer'],['papal','tPapal'],['trem','tTrem'],['conexao','tConexao'],['barco','tBarco'],['photo','tPhotoT'],['session','tSession'],['bike','tBike']], x.type)}</select></label>
         <label class="fld">${t('tRegion')}<select id="fRegion">${regiaoOpts(x.region)}</select></label>
+        ${typeof CONTEUDO !== 'undefined' && (CONTEUDO.categorias || []).length ? (() => {
+          /* a ficha do documento dela (20/10/2026): categoria, modalidade, idioma, transfer e como reserva */
+          const op = (lista, cur) => (CONTEUDO[lista] || []).map(o => `<option value="${o[0]}" ${cur === o[0] ? 'selected' : ''}>${esc(opcaoNome(o))}</option>`).join('');
+          return `<div class="frow">
+          <label class="fld">${L3('Categoria no site', 'Category on the site', 'Categoría en el sitio')}<select id="fCat"><option value="">${L3('— sem categoria —', '— none —', '— sin categoría —')}</option>
+            ${CONTEUDO.categorias.map(c => `<option value="${c.id}" ${x.categoria === c.id ? 'selected' : ''}>${esc(tl(c.nome))}</option>`).join('')}</select></label>
+          <label class="fld">${L3('Modalidade', 'Type', 'Modalidad')}<select id="fModal"><option value="">—</option>${op('modalidades', x.modalidade)}</select></label>
+        </div>
+        <div class="frow">
+          <label class="fld">${L3('Transfer', 'Transfer', 'Traslado')}<select id="fTrfInc"><option value="">—</option>${op('transfers', x.transferInc)}</select></label>
+          <label class="fld">${L3('Como reserva', 'How it is booked', 'Cómo se reserva')}<select id="fReserva">
+            <option value="imediata" ${x.reserva !== 'consulta' ? 'selected' : ''}>${L3('Na hora, pelo calendário', 'Instantly, from the calendar', 'Al instante, por el calendario')}</option>
+            <option value="consulta" ${x.reserva === 'consulta' ? 'selected' : ''}>${L3('Consultar disponibilidade', 'Check availability', 'Consultar disponibilidad')}</option></select></label>
+        </div>
+        <small class="why">${L3('Se depende do parceiro confirmar, use "Consultar disponibilidade": o botão do site muda e o cliente vê que pedido não é reserva confirmada.',
+          'If a partner has to confirm, choose "Check availability": the button changes and the guest sees a request is not a confirmed booking.',
+          'Si depende de que el socio confirme, usa "Consultar disponibilidad": el botón cambia y el cliente ve que un pedido no es una reserva confirmada.')}</small>
+        <label class="fld">${L3('Idioma do passeio', 'Tour language', 'Idioma del paseo')}<input id="fIdiomaPt" value="${esc((x.idioma && (x.idioma.pt || (typeof x.idioma === 'string' ? x.idioma : ''))) || '')}" placeholder="${L3('ex.: Português (guia brasileiro)', 'e.g. Portuguese (Brazilian guide)', 'ej.: Portugués (guía brasileña)')}"></label>
+        <label class="fld campo-en">${L3('Idioma do passeio', 'Tour language', 'Idioma del paseo')} (EN)<input id="fIdiomaEn" value="${esc((x.idioma && x.idioma.en) || '')}"></label>`;
+        })() : ''}
         <label class="fld">${t('tName')}<input id="fNamePt" value="${esc(x.name.pt)}"></label>
         <label class="optin enswitch"><input type="checkbox" id="verEn">
           <span><b>${t('enVer')}</b><small>${t('enAuto')}</small></span></label>
@@ -1865,7 +2158,7 @@ function admTourEdit(id) {
         </div>
         <label class="fld">${t('edCancel')}<input id="fCancelPt" value="${esc((x.cancel && x.cancel.pt) || '')}" placeholder="Cancelamento gratis ate 48h antes"><small class="why">${t('edCancelWhy')}</small></label>
         <label class="fld campo-en">${t('edCancel')} (EN)<input id="fCancelEn" value="${esc((x.cancel && x.cancel.en) || '')}"></label>
-        <label class="fld">${LANG === 'en' ? 'Tips for the voucher' : 'Dicas para o voucher'}<textarea id="fDicasPt" rows="3" placeholder="${LANG === 'en' ? 'What the guest needs on the day: dress code, where to meet...' : 'O que o cliente precisa saber no dia: como se vestir, onde encontrar, o que levar...'}">${esc((x.dicas && x.dicas.pt) || '')}</textarea></label>
+        <label class="fld">${LANG === 'en' ? 'Good to know (page and voucher)' : 'Orientações (na página e no voucher)'}<textarea id="fDicasPt" rows="3" placeholder="${LANG === 'en' ? 'What the guest needs on the day: dress code, where to meet...' : 'O que o cliente precisa saber no dia: como se vestir, onde encontrar, o que levar...'}">${esc((x.dicas && x.dicas.pt) || '')}</textarea></label>
         <label class="fld campo-en">${LANG === 'en' ? 'Tips for the voucher' : 'Dicas para o voucher'} (EN)<textarea id="fDicasEn" rows="3">${esc((x.dicas && x.dicas.en) || '')}</textarea></label>
         <div class="btnrow">
           <button class="cta sm" id="savePub">${t('savePub')}</button>
@@ -2057,6 +2350,8 @@ function admTourEdit(id) {
   function collect(status) {
     return {
       type: $('#fType').value, region: $('#fRegion').value,
+      ...($('#fCat') ? { categoria: $('#fCat').value, modalidade: $('#fModal').value, transferInc: $('#fTrfInc').value,
+        reserva: $('#fReserva').value, idioma: par('#fIdiomaPt', '#fIdiomaEn') } : {}),
       name: { pt: $('#fNamePt').value.trim(), en: $('#fNameEn').value.trim() || $('#fNamePt').value.trim() },
       desc: { pt: $('#fDescPt').value.trim(), en: $('#fDescEn').value.trim() || $('#fDescPt').value.trim() },
       meeting: par('#fMeetPt', '#fMeetEn'),
@@ -2106,7 +2401,8 @@ function admTourEdit(id) {
     if (data.priceMode === 'transfer') {
       if (!(data.transfer && data.transfer.linhas || []).length) problems.push(['fMode', t('vTrf')]);
     } else if (data.priceMode === 'tabela') {
-      if (!(data.tabela || []).some(v => +v > 0)) problems.push(['fMode', t('vTable')]);
+      /* tabela vazia é "Sob consulta" no site (ehSobConsulta): os pilares da
+         Yalla são assim e precisam poder ser editados e publicados de novo */
     } else if (!(data.price > 0)) problems.push(['fPrice', t('vPrice')]);
     if (data.min > data.max) problems.push(['fMin', t('vMinMax')]);
     $$('.fld .err').forEach(e => e.remove());
@@ -2134,7 +2430,7 @@ function admTourEdit(id) {
     const mapa = {
       fNamePt: 'fNameEn', fTagPt: 'fTagEn', fDescPt: 'fDescEn',
       fPNotePt: 'fPNoteEn', fCancelPt: 'fCancelEn', fIncPt: 'fIncEn', fNincPt: 'fNincEn',
-      fMeetPt: 'fMeetEn',
+      fMeetPt: 'fMeetEn', fIdiomaPt: 'fIdiomaEn', fDicasPt: 'fDicasEn',
     };
     const campos = {};
     for (const [pt, en] of Object.entries(mapa)) {
@@ -2494,6 +2790,13 @@ function regEd(r) {
 }
 
 function admAparencia() {
+  /* as perguntas do site: as do documento dela até ela salvar as suas */
+  const faqAtual = Array.isArray(DB.settings.faq) && DB.settings.faq.length ? DB.settings.faq
+    : ((typeof CONTEUDO !== 'undefined' && CONTEUDO.faq) || []).map(q => ({ p: { pt: q[0], en: q[1], es: q[2] }, r: { pt: '' } }));
+  const faqEd = (f) => `<div class="edrow faqrow" data-p="${esc(JSON.stringify(f.p || {}))}" data-r="${esc(JSON.stringify(f.r || {}))}">
+    <label class="fld">${L3('Pergunta', 'Question', 'Pregunta')}<input class="fp" value="${esc((f.p && f.p.pt) || '')}"></label>
+    <label class="fld">${L3('Resposta', 'Answer', 'Respuesta')}<textarea class="fr" rows="3" placeholder="${L3('Em branco = não aparece no site', 'Blank = not shown on the site', 'En blanco = no aparece en el sitio')}">${esc((f.r && f.r.pt) || '')}</textarea></label>
+    <button type="button" class="mini" data-del>${L3('Remover', 'Remove', 'Quitar')}</button></div>`;
   const opcao = (v, k, desc) => `
     <button class="lookcard ${temaAtual() === v ? 'on' : ''}" data-tema="${v}">
       <span class="lookprev ${v}"><i></i><i></i><i></i></span>
@@ -2531,6 +2834,25 @@ function admAparencia() {
       </div>
     </section>
 
+    ${typeof CONTEUDO !== 'undefined' && CONTEUDO.faq ? `<section class="card">
+      <h3>${L3('Perguntas frequentes do site', 'Site FAQ', 'Preguntas frecuentes del sitio')}</h3>
+      <p class="why">${L3('As perguntas já vêm do seu documento. Escreva as respostas com as condições reais: pergunta sem resposta não aparece no site.',
+        'The questions come from your brief. Write the answers with the real conditions: a question without an answer does not show on the site.',
+        'Las preguntas vienen de tu documento. Escribe las respuestas con las condiciones reales: una pregunta sin respuesta no aparece en el sitio.')}</p>
+      <div id="apFaqRows">${faqAtual.map(faqEd).join('')}</div>
+      <button type="button" class="mini" id="apFaqAdd">${L3('+ Pergunta', '+ Question', '+ Pregunta')}</button>
+    </section>
+
+    <section class="card">
+      <h3>${L3('Rodapé do site', 'Site footer', 'Pie del sitio')}</h3>
+      <p class="why">${L3('Só aparece no site o que estiver preenchido.', 'Only what is filled in shows on the site.', 'Solo aparece en el sitio lo que esté completo.')}</p>
+      <label class="fld">${L3('E-mail de contato', 'Contact e-mail', 'E-mail de contacto')}<input id="apEmailPub" type="email" value="${esc(DB.settings.emailPublico || '')}" placeholder="${esc(GUIA_CFG.email || '')}"></label>
+      <div class="frow">
+        <label class="fld">${L3('Razão social', 'Company name', 'Razón social')}<input id="apRazao" value="${esc(DB.settings.razaoSocial || '')}"></label>
+        <label class="fld">${L3('Nº da licença', 'Licence no.', 'Nº de licencia')}<input id="apLicenca" value="${esc(DB.settings.licenca || '')}"></label>
+      </div>
+    </section>` : ''}
+
     <section class="card">
       <h3>${t('apLinks')}</h3>
       <p class="why">${t('apLinksWhy')}</p>
@@ -2548,7 +2870,8 @@ function admAparencia() {
     <button class="cta" id="apSalvar">${t('apSalvar')}</button>`);
   $('#apLinkAdd').onclick = () => $('#apLinkRows').insertAdjacentHTML('beforeend', linkEd({}));
   $('#apRegAdd').onclick  = () => $('#apRegRows').insertAdjacentHTML('beforeend', regEd([]));
-  [$('#apLinkRows'), $('#apRegRows')].forEach(box => box.addEventListener('click', (e) => {
+  if ($('#apFaqAdd')) $('#apFaqAdd').onclick = () => $('#apFaqRows').insertAdjacentHTML('beforeend', faqEd({}));
+  [$('#apLinkRows'), $('#apRegRows'), $('#apFaqRows')].filter(Boolean).forEach(box => box.addEventListener('click', (e) => {
     const b = e.target.closest('[data-del]'); if (b) b.closest('.edrow').remove();
   }));
   $('#apSalvar').onclick = () => {
@@ -2575,6 +2898,16 @@ function admAparencia() {
       usados.add(c);
       return [c, pt, en || pt];
     }).filter(r => r[0] && r[1]);
+    /* a tradução da pergunta só vale enquanto o português não muda */
+    if ($('#apFaqRows')) {
+      const mesmo = (velho, pt) => velho.pt === pt ? velho : { pt };
+      st.faq = $$('#apFaqRows .faqrow').map(r => {
+        let p0 = {}, r0 = {}; try { p0 = JSON.parse(r.dataset.p || '{}'); r0 = JSON.parse(r.dataset.r || '{}'); } catch (e) {}
+        return { p: mesmo(p0, r.querySelector('.fp').value.trim()), r: mesmo(r0, r.querySelector('.fr').value.trim()) };
+      }).filter(f => f.p.pt);
+      st.emailPublico = $('#apEmailPub').value.trim();
+      st.razaoSocial = $('#apRazao').value.trim(); st.licenca = $('#apLicenca').value.trim();
+    }
     save(); toast(t('apSalvo')); admAparencia();
   };
   $$('[data-tema]').forEach(b => b.onclick = () => {

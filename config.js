@@ -49,6 +49,7 @@ var APP_CONFIG = {
     cidade: 'Dubai, Emirados Árabes Unidos',
     whats: '+5511951971111',
     insta: 'yalla_experiences',
+    email: 'info@yallaexperiences.com',   /* o e-mail profissional dela (GoDaddy), no rodapé do site */
     /* o selo dela, do brand kit oficial: a coroa dourada para fundo escuro
        e a preta para fundo claro. O logo completo vai nos PDFs. */
     logo:       'arte/coroa.png',
