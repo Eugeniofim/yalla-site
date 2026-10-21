@@ -1,34 +1,30 @@
 <!doctype html><html><head><meta charset="utf-8">
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600&family=Montserrat:wght@500;600;700&display=swap" rel="stylesheet">
+<!-- A imagem do compartilhamento (og.jpg, 1200×630), 21/10/2026: a foto do
+     topo do site e a frase do documento da Milla. Texto no centro, porque o
+     WhatsApp às vezes corta a prévia em quadrado.
+     Gerar: Chrome headless --window-size=1200,630 --screenshot (ver publicar). -->
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
  *{margin:0;box-sizing:border-box}
- body{width:1200px;height:630px;background:#070707;color:#F5F5F3;font-family:Montserrat,sans-serif;
-   display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;overflow:hidden}
- .geo{position:absolute;inset:0;opacity:.10;
-   background-image:linear-gradient(45deg,transparent 47%,#D4AF37 48%,#D4AF37 52%,transparent 53%),
-                    linear-gradient(-45deg,transparent 47%,#D4AF37 48%,#D4AF37 52%,transparent 53%);
-   background-size:80px 80px}
- .luz{position:absolute;inset:0;background:radial-gradient(60% 45% at 50% 0%,rgba(243,224,162,.22),transparent 70%)}
- .sky{position:absolute;left:0;right:0;bottom:0;height:300px;opacity:.5;
-   -webkit-mask-image:linear-gradient(180deg,transparent,#000 45%)}
- .in{position:relative;text-align:center;padding-bottom:40px}
- svg.coroa{width:96px;height:96px;display:block;margin:0 auto 18px}
- h1{font-family:"Playfair Display",serif;font-size:74px;font-weight:600;letter-spacing:.01em}
- .tag{margin-top:14px;font-size:17px;letter-spacing:.34em;color:#D4AF37;font-weight:600}
- .sub{margin-top:26px;font-size:24px;color:#DCD6C8}
- .sub b{color:#F3E0A2;font-weight:600}
+ body{width:1200px;height:630px;overflow:hidden;position:relative;font-family:Montserrat,sans-serif;color:#fff;background:#0B0B0B}
+ .foto{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:57% 42%}
+ .veu{position:absolute;inset:0;background:linear-gradient(180deg,rgba(11,11,11,.38) 0%,rgba(11,11,11,.05) 26%,rgba(11,11,11,.35) 52%,rgba(11,11,11,.88) 100%)}
+ .marca{position:absolute;top:34px;left:0;right:0;display:flex;align-items:center;justify-content:center;gap:14px}
+ .marca img{width:54px;height:54px}
+ .marca b{display:block;font:700 26px/1 Montserrat;letter-spacing:.16em}
+ .marca small{display:block;font:600 11px/1 Montserrat;letter-spacing:.42em;margin-top:6px;color:#F3E0A2}
+ .in{position:absolute;left:0;right:0;bottom:52px;text-align:center;padding:0 90px}
+ .olho{display:inline-flex;align-items:center;gap:12px;font:700 16px/1 Montserrat;letter-spacing:.26em;color:#F3E0A2;text-transform:uppercase}
+ .olho::before,.olho::after{content:"";width:8px;height:8px;background:#D4AF37;transform:rotate(45deg)}
+ h1{margin-top:18px;font:700 58px/1.08 Montserrat;letter-spacing:-.01em;text-shadow:0 2px 28px rgba(0,0,0,.45)}
+ .sub{margin-top:16px;font:500 22px/1.4 Montserrat;color:rgba(255,255,255,.92)}
 </style></head><body>
- <div class="geo"></div><div class="luz"></div>
- <img class="sky" src="skyline.svg">
+ <img class="foto" src="home-dubai.jpg" alt="">
+ <div class="veu"></div>
+ <div class="marca"><img src="coroa.png" alt=""><span><b>YALLA</b><small>EXPERIENCES</small></span></div>
  <div class="in">
-  <svg class="coroa" viewBox="0 0 100 100">
-   <g fill="none" stroke="#D4AF37" stroke-width="5.5" stroke-linejoin="round" stroke-linecap="round">
-    <path d="M14 66 L14 34 L31 47 L50 24 L69 47 L86 34 L86 66 Z"/>
-    <path d="M50 44 L61 56 L50 68 L39 56 Z" fill="#D4AF37"/><path d="M20 78 H80"/></g>
-   <circle cx="14" cy="30" r="5" fill="#D4AF37"/><circle cx="50" cy="20" r="5" fill="#D4AF37"/><circle cx="86" cy="30" r="5" fill="#D4AF37"/>
-  </svg>
-  <h1>Yalla Experiences</h1>
-  <div class="tag">TRAVEL. CONNECT. ASCEND.</div>
-  <div class="sub">Experiências privativas e corporativas nos <b>Emirados Árabes Unidos</b></div>
+  <span class="olho">Dubai · Abu Dhabi · Emirados</span>
+  <h1>Dubai e Emirados Árabes Unidos,<br>do seu jeito.</h1>
+  <p class="sub">Passeios privativos, atrações e experiências selecionadas, com atendimento em português.</p>
  </div>
 </body></html>

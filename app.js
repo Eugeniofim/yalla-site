@@ -295,7 +295,10 @@ function route() {
   if (p[0] === 'novasenha') viewNewPass();
   else if (p[0] === 'login') viewLogin();
   else if (p[0] === 'adm') {
-    if (DB.settings.authRequired && !isLoggedIn()) return viewLogin('in');
+    /* com banco, o painel é sempre da dona: sem login, a tela de entrar.
+       (21/10/2026: o "Painel da equipe" do rodapé abria o painel vazio para
+       qualquer visitante — a trava só ligava depois do 1º login dela.) */
+    if ((DB.settings.authRequired || (typeof temNuvem === 'function' && temNuvem())) && !isLoggedIn()) return viewLogin('in');
     viewAdm(p[1] || 'today', p[2]);
   }
   else if (p[0] === 'pago')  viewPago(decodeURIComponent((p[1] || '').split('?')[0]));
@@ -381,12 +384,13 @@ const YL = {
    medida, avaliações, sobre, empresas e eventos, apoio à viagem, dúvidas,
    chamada final e rodapé. Nada inventado: categoria sem produto leva ao
    pedido de proposta, avaliação só de verdade, dúvida só com resposta dela.
-   Sem porta para o painel na página: ela entra por /#/adm. */
+   O painel fica só no rodapé ("Painel da equipe"), fora do menu do cliente. */
 YL.fala   = YL_IC('<path d="M4 5h16v11H9l-5 4z"/><path d="M8 9.5h8M8 12.5h5"/>');
 YL.cartao = YL_IC('<rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="M3 10h18M7 15h4"/>');
 YL.sino   = YL_IC('<path d="M4 18h16M6 18a6 6 0 0 1 12 0"/><path d="M12 9V7M10.5 7h3"/>');
 YL.menu   = YL_IC('<path d="M4 7h16M4 12h16M4 17h16"/>');
 YL.fecha  = YL_IC('<path d="M6 6l12 12M18 6 6 18"/>');
+YL.cadeado = YL_IC('<rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/>');
 
 /* o estado do "Monte seu roteiro": a capa abre o pedido já marcado */
 function roteiroEstado() {
@@ -661,7 +665,10 @@ function viewHub() {
         <a href="${esc(waLink(t('waHello')))}" target="_blank" rel="noopener">WhatsApp ${esc(foneBonito(waNum()))}</a>
         ${email ? `<a href="mailto:${esc(email)}">${esc(email)}</a>` : ''}
         ${insta ? `<a href="https://instagram.com/${esc(insta)}" target="_blank" rel="noopener">@${esc(insta)}</a>` : ''}</div>
-      <div class="vt-base"><span>© ${new Date().getFullYear()} ${esc(guiaNegocio())}</span><a href="privacidade.html">${L3('Privacidade', 'Privacy', 'Privacidad')}</a></div>
+      <div class="vt-base"><span>© ${new Date().getFullYear()} ${esc(guiaNegocio())}</span>
+        <span class="vt-base-links"><a href="privacidade.html">${L3('Privacidade', 'Privacy', 'Privacidad')}</a>
+        <!-- 21/10/2026, pedido dele: o painel visível, mas só no rodapé (fora do menu do cliente) -->
+        <a class="vt-painel" href="#/adm">${YL.cadeado}${L3('Painel da equipe', 'Team panel', 'Panel del equipo')}</a></span></div>
     </div>
   </footer>
   <a class="vt-zap" href="${esc(waLink(t('waHello')))}" target="_blank" rel="noopener" aria-label="${L3('Falar com a ' + marca + ' no WhatsApp', 'Chat with ' + marca + ' on WhatsApp', 'Hablar con ' + marca + ' por WhatsApp')}">${ICONE_WA}</a>

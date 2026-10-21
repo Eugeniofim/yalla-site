@@ -538,3 +538,9 @@ html.vt-trava{overflow:hidden}
 .cta .wa-ic{margin-right:8px}
 /* o "Experiences" da marca herda a cor do cabeçalho (a base pinta todo small de cinza) */
 .vt-marca small{color:inherit}
+/* o painel no rodapé (21/10/2026): visível, mas fora do menu do cliente */
+.vt-base-links{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px}
+.vt-base a.vt-painel{display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:0 16px;border-radius:999px;
+  border:1px solid rgba(212,175,55,.55);color:#F3E0A2;font:600 13px/1 var(--f-ui);text-decoration:none}
+.vt-base a.vt-painel:hover{background:rgba(212,175,55,.12);color:#F5F5F3}
+.vt-painel svg{width:16px;height:16px;flex:none}
