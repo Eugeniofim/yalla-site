@@ -415,7 +415,7 @@ function viewHub() {
   const modNome = (id) => { const o = ((typeof CONTEUDO !== 'undefined' && CONTEUDO.modalidades) || []).find(z => z[0] === id); return o ? opcaoNome(o) : ''; };
   const temCat = (id) => live.some(x => x.categoria === id);
   const temTransfer = live.some(x => x.type === 'transfer');
-  const destaques = live.filter(x => x.type !== 'transfer').slice(0, 8);
+  const destaques = live.filter(x => x.type !== 'transfer').sort((a, b) => (b.categoria ? 1 : 0) - (a.categoria ? 1 : 0)).slice(0, 8);
   const depo = (typeof Avaliacoes !== 'undefined') ? Avaliacoes.all().slice(0, 3) : [];
   const fbIg = linkExterno(st.feedbackIg) ? st.feedbackIg : '';
   const faq = (Array.isArray(st.faq) ? st.faq : []).filter(f => txt(f.p) && txt(f.r));
@@ -459,7 +459,7 @@ function viewHub() {
       x.transferInc === 'incluido' ? L3('Transfer incluído', 'Transfer included', 'Traslado incluido') : ''].filter(Boolean);
     const preco = ehSobConsulta(x)
       ? `<small>${L3('Investimento', 'Price', 'Inversión')}</small><b>${t('sobConsulta')}</b>`
-      : `<small>${L3('Investimento', 'Price', 'Inversión')} ${esc(unidadePreco(x))}</small><b>${x.priceMode === 'tabela' || x.priceMode === 'transfer' ? t('fromPrice') + ' ' : ''}${eur(precoVitrine(x))}</b>`;
+      : `<small>${L3('Investimento', 'Price', 'Inversión')} ${esc(unidadePreco(x))}</small><b>${x.priceMode === 'tabela' || x.priceMode === 'transfer' ? t('fromPrice') + ' ' : ''}${valorTour(x, precoVitrine(x))}</b>`;
     return `<a class="vt-prod" href="#/tour/${esc(x.id)}">
       <span class="vt-prod-foto"><img src="${esc(x.photo)}" alt="" loading="lazy"><span class="vt-selo">${esc(sel)}</span></span>
       <span class="vt-prod-corpo">
@@ -983,12 +983,22 @@ function tipoLabel(type) {
   return c[type] ? tl(c[type]) : t(TYPE_LABEL[type] || 'fWalk');
 }
 /* "sob consulta": sem preço na tabela, o app não inventa um "a partir de 0" */
+/* o preço na moeda do passeio (21/10/2026): os tours da planilha dela são em
+   dólar, o mesmo valor do link de pagamento. Sem x.moeda, a do negócio (AED). */
+function valorTour(x, v) {
+  const m = x && x.moeda;
+  if (!m || m === moedaCodigo()) return eur(v);
+  const n = Number(v);
+  return (MOEDA_SIGLA[m] || m) + ' ' + n.toLocaleString(LANG === 'pt' ? 'pt-BR' : LANG === 'es' ? 'es-ES' : 'en-GB',
+    n % 1 === 0 ? {} : { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 function ehSobConsulta(x) { return x.priceMode !== 'session' && x.priceMode !== 'pp' && !(precoVitrine(x) > 0); }
 function precoVitrine(x) {
   if (x.priceMode === 'transfer') return transferMenor(x) || +x.price || 0;
   return x.priceMode === 'tabela' ? (tabelaMenor(x) || +x.price || 0) : +x.price || 0;
 }
 function unidadePreco(x) {
+  if (tl(x.unidade)) return tl(x.unidade);
   if (x.priceMode === 'transfer') return t('perTrip');
   if (x.priceMode === 'tabela')   return t('perGroup');
   if (x.priceMode === 'session')  return t('perSession');
@@ -1190,7 +1200,7 @@ function viewShowcase() {
               : x.desc && (x.desc[LANG] || x.desc.pt) ? `<small class="cdesc">${esc(String(x.desc[LANG] || x.desc.pt).split(/(?<=[.!?])\s/)[0].slice(0, 160))}</small>` : ''}
             <small class="meta">${regiaoLabel(x.region)}${modNome(x.modalidade) ? ' · ' + esc(modNome(x.modalidade)) : ''}${x.duration && x.duration !== '—' ? ' · ' + esc(x.duration) : ''}${(x.stops || []).length ? ' · ' + t('nParadas', { n: x.stops.length }) : ''}</small>
             <span class="cardfoot">
-              ${ehSobConsulta(x) ? `<span class="pr">${t('sobConsulta')}</span>` : `<span class="pr">${x.priceMode === 'tabela' || x.priceMode === 'transfer' || (x.priceLate && x.earlySeats && x.priceMode !== 'session') ? `<u>${t('fromPrice')}</u> ` : ''}${eur(precoVitrine(x))}
+              ${ehSobConsulta(x) ? `<span class="pr">${t('sobConsulta')}</span>` : `<span class="pr">${x.priceMode === 'tabela' || x.priceMode === 'transfer' || (x.priceLate && x.earlySeats && x.priceMode !== 'session') ? `<u>${t('fromPrice')}</u> ` : ''}${valorTour(x, precoVitrine(x))}
                 <i>${unidadePreco(x)}</i></span>`}
               <span class="cver">${L3('Ver experiência', 'See experience', 'Ver experiencia')}</span>
             </span>
@@ -1292,6 +1302,8 @@ function viewTour(id) {
   const catNome = (id) => { const c = ((typeof CONTEUDO !== 'undefined' && CONTEUDO.categorias) || []).find(z => z.id === id); return c ? tl(c.nome) : ''; };
   const opc = (lista, id) => { const o = ((typeof CONTEUDO !== 'undefined' && CONTEUDO[lista]) || []).find(z => z[0] === id); return o ? opcaoNome(o) : ''; };
   const modNome = (id) => opc('modalidades', id), trfNome = (id) => opc('transfers', id);
+  /* todas as fotos do passeio (a planilha dela manda uma pasta por tour); a capa primeiro */
+  const galeria = [...new Set([x.photo, ...(Array.isArray(x.fotos) ? x.fotos : [])].filter(f => f && typeof f === 'string'))];
   const L = a => (a && (a[LANG] || a.pt)) || '';
   const lista = a => (Array.isArray(a) ? a : (a && (a[LANG] || a.pt)) || []);
 
@@ -1312,11 +1324,21 @@ function viewTour(id) {
   <main class="wrap two-col">
     <section class="tourbody">
 
+      ${galeria.length > 1 ? `
+      <div class="tgal" aria-label="${L3('Fotos', 'Photos', 'Fotos')}">${galeria.map((f, i) => `<button type="button" class="tgal-it" data-gal="${i}" aria-label="${L3('Ver foto', 'See photo', 'Ver foto')} ${i + 1} ${L3('de', 'of', 'de')} ${galeria.length}">
+        <img src="${esc(f)}" alt="" loading="${i < 3 ? 'eager' : 'lazy'}"></button>`).join('')}</div>` : ''}
+
       <!-- O PROGRAMA -->
       <div class="sec">
         <span class="seclabel">${t('secProgram')}</span>
-        <p class="desc lead">${esc(x.desc[LANG] || x.desc.pt)}</p>
+        <p class="desc lead">${esc(x.desc[LANG] || x.desc.pt).replace(/\n/g, '<br>')}</p>
       </div>
+
+      ${tl(x.paraQuem) ? `
+      <div class="sec">
+        <span class="seclabel">${L3('Para quem é', 'Who it is for', 'Para quién es')}</span>
+        <p class="desc">${esc(tl(x.paraQuem))}</p>
+      </div>` : ''}
 
       ${stops.length ? `
       <div class="stophead">
@@ -1354,7 +1376,7 @@ function viewTour(id) {
           ${trfNome(x.transferInc) ? `<div><small>Transfer</small><b>${esc(trfNome(x.transferInc))}</b></div>` : ''}
           ${noIdioma(x.meeting) ? `<div><small>${t('fLeaves')}</small><b>${esc(noIdioma(x.meeting))}</b>
             <a class="linkmap" href="${mapLink(noIdioma(x.meeting))}" target="_blank" rel="noopener">${t('openMap')} ↗</a></div>` : ''}
-          ${+x.max ? `<div><small>${t('fGroup')}</small><b>${t('upTo')} ${x.max} ${t('people')}</b>
+          ${+x.max && x.modalidade !== 'compartilhado' ? `<div><small>${t('fGroup')}</small><b>${t('upTo')} ${x.max} ${t('people')}</b>
             ${x.min > 1 ? `<small class="sub">${t('minNote', { n: x.min })}</small>` : ''}</div>` : ''}
         </div>
       </div>
@@ -1379,9 +1401,9 @@ function viewTour(id) {
         <span class="seclabel">${t('secPrice')}</span>
         <div class="pricebox">
           <div class="pbmain">
-            ${ehSobConsulta(x) ? `<b>${t('sobConsulta')}</b>${x.priceNote ? `<small>${esc(tl(x.priceNote))}</small>` : ''}` : `<b>${x.priceMode === 'tabela' ? `<u class="fromlbl">${t('fromPrice')}</u> ` : ''}${eur(precoVitrine(x))}</b>
+            ${ehSobConsulta(x) ? `<b>${t('sobConsulta')}</b>${x.priceNote ? `<small>${esc(tl(x.priceNote))}</small>` : ''}` : `<b>${x.priceMode === 'tabela' ? `<u class="fromlbl">${t('fromPrice')}</u> ` : ''}${valorTour(x, precoVitrine(x))}</b>
             <small>${unidadePreco(x)}</small>
-            ${linhaReais(precoVitrine(x))}`}
+            ${x.moeda ? '' : linhaReais(precoVitrine(x))}`}
             ${(x.ingressos || []).length ? `<p class="pbing">🎟️ ${t('ingPagina')}</p>` : ''}
             ${x.priceLate && x.earlySeats && x.priceMode !== 'session'
               ? `<span class="pbearly">${t('earlyNote', { n: x.earlySeats, v: eur(x.priceLate) })}</span>` : ''}
@@ -1414,7 +1436,34 @@ function viewTour(id) {
   </main>`;
   bindLang(app);
   $('#bk').onclick = () => go('/tours');
+  $$('[data-gal]').forEach(b => b.onclick = () => abreGaleria(galeria, +b.dataset.gal));
   renderBook();
+}
+
+/* a foto em tela cheia: setas, deslizar, Esc fecha */
+function abreGaleria(fotos, i) {
+  const el = document.createElement('div');
+  el.className = 'gal-tela'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true');
+  const pinta = () => {
+    el.innerHTML = `<img src="${esc(fotos[i])}" alt="">
+      <span class="gal-n">${i + 1} / ${fotos.length}</span>
+      <button type="button" class="gal-x" aria-label="${L3('Fechar', 'Close', 'Cerrar')}">${YL.fecha}</button>
+      ${fotos.length > 1 ? `<button type="button" class="gal-ant" aria-label="${L3('Anterior', 'Previous', 'Anterior')}">‹</button>
+      <button type="button" class="gal-prox" aria-label="${L3('Próxima', 'Next', 'Siguiente')}">›</button>` : ''}`;
+    el.querySelector('.gal-x').onclick = fecha;
+    if (el.querySelector('.gal-ant')) { el.querySelector('.gal-ant').onclick = () => anda(-1); el.querySelector('.gal-prox').onclick = () => anda(1); }
+    el.querySelector('.gal-x').focus();
+  };
+  const anda = (d) => { i = (i + d + fotos.length) % fotos.length; pinta(); };
+  const tecla = (e) => { if (e.key === 'Escape') fecha(); else if (e.key === 'ArrowLeft') anda(-1); else if (e.key === 'ArrowRight') anda(1); };
+  let x0 = null;
+  el.addEventListener('touchstart', (e) => { x0 = e.touches[0].clientX; }, { passive: true });
+  el.addEventListener('touchend', (e) => { if (x0 == null) return; const dx = e.changedTouches[0].clientX - x0; if (Math.abs(dx) > 40) anda(dx < 0 ? 1 : -1); x0 = null; });
+  el.addEventListener('click', (e) => { if (e.target === el) fecha(); });
+  function fecha() { removeEventListener('keydown', tecla); el.remove(); document.documentElement.classList.remove('vt-trava'); }
+  addEventListener('keydown', tecla);
+  document.documentElement.classList.add('vt-trava');
+  document.body.appendChild(el); pinta();
 }
 
 /* ---- o trajeto ----
@@ -1594,11 +1643,11 @@ function renderBook() {
     : x.priceMode === 'tabela'
     ? `<u class="fromlbl">${t('fromPrice')}</u> ${eur(precoVitrine(x))} <small>${t('perGroup')}</small>`
     : x.priceMode === 'session'
-    ? `${eur(x.price)} <small>${t('perSession')}</small>`
-    : `${eur(valorEmDestaque)} <small>${t('perPerson')}</small>`
+    ? `${valorTour(x, x.price)} <small>${unidadePreco(x)}</small>`
+    : `${valorTour(x, valorEmDestaque)} <small>${unidadePreco(x)}</small>`
       + (escalonado && sobramBaratas
           ? `<em class="pearly">${t('earlyNote', { n: x.earlySeats, v: eur(x.priceLate) })}</em>` : '')
-      + linhaReais(valorEmDestaque);
+      + (x.moeda ? '' : linhaReais(valorEmDestaque));
   const base = pr.total;
   /* ingressos por idade, somados — e ela quem compra, com antecedencia */
   const ing = ingressosDe(x, S.adultos, S.idades);
@@ -1619,9 +1668,13 @@ function renderBook() {
           <p>${t('noDatesYet')}</p>
           <a class="cta sm wide" target="_blank" rel="noopener"
              href="${waLink(t('waAskDates', { tour: x.name[LANG] || x.name.pt }))}">${ICONE_WA_BTN} ${t('askDatesBtn')}</a>
+          ${linkExterno(x.linkPagamento) ? `<div class="bpagar">
+            <small>${L3('Já combinou a data com a ' + guiaNegocio().split(' ')[0] + '?', 'Already agreed the date with ' + guiaNegocio().split(' ')[0] + '?', '¿Ya acordaste la fecha con ' + guiaNegocio().split(' ')[0] + '?')}</small>
+            <a class="cta soft sm wide" href="${esc(x.linkPagamento)}" target="_blank" rel="noopener">${YL.cartao} ${L3('Pagar pelo link seguro', 'Pay with the secure link', 'Pagar con el enlace seguro')}</a>
+          </div>` : ''}
         </div>
         <ol class="bpassos" aria-label="${L3('Como funciona', 'How it works', 'Cómo funciona')}">
-          <li>${L3(`Pedido recebido: a ${guiaNegocio().split(' ')[0]} confere a data com o parceiro.`, `Request received: ${guiaNegocio().split(' ')[0]} checks the date with the partner.`, `Pedido recibido: ${guiaNegocio().split(' ')[0]} confirma la fecha con el socio.`)}</li>
+          <li>${L3(`Pedido recebido: a ${guiaNegocio().split(' ')[0]} confere a disponibilidade da data.`, `Request received: ${guiaNegocio().split(' ')[0]} checks availability for the date.`, `Pedido recibido: ${guiaNegocio().split(' ')[0]} confirma la disponibilidad de la fecha.`)}</li>
           <li>${L3('Reserva confirmada: só quando houver confirmação efetiva.', 'Booking confirmed: only once it is actually confirmed.', 'Reserva confirmada: solo cuando haya confirmación efectiva.')}</li>
           <li>${L3('Voucher enviado: com tudo o que você precisa para o dia.', 'Voucher sent: with everything you need for the day.', 'Voucher enviado: con todo lo que necesitas para el día.')}</li>
         </ol>`;
@@ -2073,7 +2126,18 @@ function admTourEdit(id) {
           'If a partner has to confirm, choose "Check availability": the button changes and the guest sees a request is not a confirmed booking.',
           'Si depende de que el socio confirme, usa "Consultar disponibilidad": el botón cambia y el cliente ve que un pedido no es una reserva confirmada.')}</small>
         <label class="fld">${L3('Idioma do passeio', 'Tour language', 'Idioma del paseo')}<input id="fIdiomaPt" value="${esc((x.idioma && (x.idioma.pt || (typeof x.idioma === 'string' ? x.idioma : ''))) || '')}" placeholder="${L3('ex.: Português (guia brasileiro)', 'e.g. Portuguese (Brazilian guide)', 'ej.: Portugués (guía brasileña)')}"></label>
-        <label class="fld campo-en">${L3('Idioma do passeio', 'Tour language', 'Idioma del paseo')} (EN)<input id="fIdiomaEn" value="${esc((x.idioma && x.idioma.en) || '')}"></label>`;
+        <label class="fld campo-en">${L3('Idioma do passeio', 'Tour language', 'Idioma del paseo')} (EN)<input id="fIdiomaEn" value="${esc((x.idioma && x.idioma.en) || '')}"></label>
+        <div class="frow">
+          <label class="fld">${L3('Moeda do preço', 'Price currency', 'Moneda del precio')}<select id="fMoeda">
+            <option value="">${moedaCodigo()}</option>
+            ${['USD', 'EUR', 'BRL'].filter(m => m !== moedaCodigo()).map(m => `<option value="${m}" ${x.moeda === m ? 'selected' : ''}>${m}</option>`).join('')}</select></label>
+          <label class="fld">${L3('O preço vale', 'The price is', 'El precio es')}<input id="fUnidPt" value="${esc((x.unidade && x.unidade.pt) || '')}" placeholder="${L3('ex.: por veículo (até 5 pessoas)', 'e.g. per vehicle (up to 5 people)', 'ej.: por vehículo (hasta 5 personas)')}"></label>
+        </div>
+        <label class="fld campo-en">${L3('O preço vale', 'The price is', 'El precio es')} (EN)<input id="fUnidEn" value="${esc((x.unidade && x.unidade.en) || '')}"></label>
+        <label class="fld">${L3('Link de pagamento', 'Payment link', 'Enlace de pago')}<input id="fLinkPag" type="url" inputmode="url" value="${esc(x.linkPagamento || '')}" placeholder="https://glinpay.me/…">
+          <small class="why">${L3('Aparece como "Pagar pelo link seguro", para quem já combinou a data.', 'Shown as "Pay with the secure link", for guests who already agreed the date.', 'Aparece como "Pagar con el enlace seguro", para quien ya acordó la fecha.')}</small></label>
+        <label class="fld">${L3('Para quem é', 'Who it is for', 'Para quién es')}<textarea id="fQuemPt" rows="2">${esc((x.paraQuem && x.paraQuem.pt) || '')}</textarea></label>
+        <label class="fld campo-en">${L3('Para quem é', 'Who it is for', 'Para quién es')} (EN)<textarea id="fQuemEn" rows="2">${esc((x.paraQuem && x.paraQuem.en) || '')}</textarea></label>`;
         })() : ''}
         <label class="fld">${t('tName')}<input id="fNamePt" value="${esc(x.name.pt)}"></label>
         <label class="optin enswitch"><input type="checkbox" id="verEn">
@@ -2097,6 +2161,10 @@ function admTourEdit(id) {
             </div>
           </div>
         </div>
+        ${(x.fotos || []).length ? `<div class="fld">${L3('Galeria', 'Gallery', 'Galería')} <small class="why">${L3('Todas aparecem na página do passeio. × tira a foto; "Capa" põe no topo.', 'All of them show on the tour page. × removes a photo; "Cover" puts it on top.', 'Todas aparecen en la página del paseo. × quita la foto; "Portada" la pone arriba.')}</small>
+          <div class="galed" id="galEd">${x.fotos.map(f => `<span class="galed-it ${f === x.photo ? 'capa' : ''}" data-f="${esc(f)}"><img src="${esc(f)}" alt="">
+            <button type="button" class="galed-x" data-galdel aria-label="${L3('Tirar foto', 'Remove photo', 'Quitar foto')}">×</button>
+            <button type="button" class="galed-capa" data-galcapa>${L3('Capa', 'Cover', 'Portada')}</button></span>`).join('')}</div></div>` : ''}
       </section>
       <section class="card">
         <h3>${t('edMoney')}</h3>
@@ -2351,6 +2419,11 @@ function admTourEdit(id) {
   $('#verEn')?.addEventListener('change', aplicaEn);
   aplicaEn();
 
+  if ($('#galEd')) $('#galEd').addEventListener('click', (e) => {
+    const it = e.target.closest('.galed-it'); if (!it) return;
+    if (e.target.closest('[data-galdel]')) it.remove();
+    else if (e.target.closest('[data-galcapa]')) { $$('#galEd .galed-it').forEach(z => z.classList.toggle('capa', z === it)); $('#galEd').prepend(it); }
+  });
   $('#savePub2').onclick   = () => $('#savePub').click();
   $('#saveDraft2').onclick = () => $('#saveDraft').click();
 
@@ -2358,7 +2431,10 @@ function admTourEdit(id) {
     return {
       type: $('#fType').value, region: $('#fRegion').value,
       ...($('#fCat') ? { categoria: $('#fCat').value, modalidade: $('#fModal').value, transferInc: $('#fTrfInc').value,
-        reserva: $('#fReserva').value, idioma: par('#fIdiomaPt', '#fIdiomaEn') } : {}),
+        reserva: $('#fReserva').value, idioma: par('#fIdiomaPt', '#fIdiomaEn'),
+        moeda: $('#fMoeda').value, unidade: par('#fUnidPt', '#fUnidEn'), paraQuem: par('#fQuemPt', '#fQuemEn'),
+        linkPagamento: linkExterno($('#fLinkPag').value.trim()) } : {}),
+      ...($('#galEd') ? { fotos: $$('#galEd .galed-it').map(el => el.dataset.f) } : {}),
       name: { pt: $('#fNamePt').value.trim(), en: $('#fNameEn').value.trim() || $('#fNamePt').value.trim() },
       desc: { pt: $('#fDescPt').value.trim(), en: $('#fDescEn').value.trim() || $('#fDescPt').value.trim() },
       meeting: par('#fMeetPt', '#fMeetEn'),
@@ -2374,7 +2450,7 @@ function admTourEdit(id) {
       /* guarda qual portugues gerou o ingles atual: se nao mudar,
          nao traduz de novo e o ajuste manual dela sobrevive */
       trSig: x.trSig || {},
-      photo: newPhoto || x.photo, status,
+      photo: newPhoto || (($('#galEd .galed-it.capa') || {}).dataset || {}).f || x.photo, status,
       duration: $('#fDur').value.trim(), distance: $('#fDist').value.trim(),
       tagline:   par('#fTagPt', '#fTagEn'),
       priceNote: par('#fPNotePt', '#fPNoteEn'),
@@ -2404,7 +2480,8 @@ function admTourEdit(id) {
     const problems = [];
     if (!data.name.pt) problems.push(['fNamePt', t('vName')]);
     if (!data.desc.pt) problems.push(['fDescPt', t('vDesc')]);
-    if (!data.meeting.pt) problems.push(['fMeetPt', t('vMeet')]);
+    /* sob consulta o ponto de encontro se combina na conversa (os tours da planilha dela) */
+    if (!data.meeting.pt && data.reserva !== 'consulta') problems.push(['fMeetPt', t('vMeet')]);
     if (data.priceMode === 'transfer') {
       if (!(data.transfer && data.transfer.linhas || []).length) problems.push(['fMode', t('vTrf')]);
     } else if (data.priceMode === 'tabela') {
@@ -2437,7 +2514,7 @@ function admTourEdit(id) {
     const mapa = {
       fNamePt: 'fNameEn', fTagPt: 'fTagEn', fDescPt: 'fDescEn',
       fPNotePt: 'fPNoteEn', fCancelPt: 'fCancelEn', fIncPt: 'fIncEn', fNincPt: 'fNincEn',
-      fMeetPt: 'fMeetEn', fIdiomaPt: 'fIdiomaEn', fDicasPt: 'fDicasEn',
+      fMeetPt: 'fMeetEn', fIdiomaPt: 'fIdiomaEn', fDicasPt: 'fDicasEn', fUnidPt: 'fUnidEn', fQuemPt: 'fQuemEn',
     };
     const campos = {};
     for (const [pt, en] of Object.entries(mapa)) {
