@@ -150,6 +150,12 @@ const CONTEUDO = {
       desc: { pt: 'Descubra lugares para jantar, celebrar e aproveitar a noite.', en: 'Find places to dine, celebrate and enjoy the night.', es: 'Descubre lugares para cenar, celebrar y disfrutar la noche.' } },
   ],
   /* modalidade e transfer de cada produto (campos do cadastro, documento dela) */
+  /* a página "Conheça a Milla" (22/10/2026): a foto do Museu do Futuro que ela
+     mandou e as fotos dela pelos Emirados (das pastas dos tours, são dela) */
+  sobre: {
+    foto: 'arte/milla.jpg',
+    momentos: ['arte/tours/img-3621.jpg', 'arte/tours/img-3669.jpg', 'arte/tours/auh-qaw-2.jpg', 'arte/tours/img-3500.jpg', 'arte/tours/img-5620.jpg'],
+  },
   /* as perguntas frequentes do documento dela (20/10/2026). As RESPOSTAS são
      dela (Ajustes → Aparência): pergunta sem resposta não aparece no site. */
   faq: [

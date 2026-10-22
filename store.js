@@ -626,6 +626,17 @@ const Cal = {
         d = addDays(d, 1);
       }
     }
+    /* os horários de início do próprio passeio (22/10/2026, a Milla: "colocaria
+       só as opções de horário de iniciar o tour"): todo dia, a partir de amanhã,
+       sem regra de saída. Sob consulta não entra; regra de saída, se houver, manda. */
+    const tour = Tours.get(tourId);
+    if (tour && Array.isArray(tour.horarios) && tour.horarios.length && tour.reserva !== 'consulta' && !Cal.rulesFor(tourId).length) {
+      let d = addDays(isoToday(), 1); if (d < fromIso) d = fromIso;
+      while (d <= toIso) {
+        if (!Cal.blocked(d)) for (const h of tour.horarios) out.push({ tourId, date: d, time: h, capacity: +tour.vagasHorario || 50, livre: true });
+        d = addDays(d, 1);
+      }
+    }
     for (const dep of DB.departures.filter(x => x.tourId === tourId)) {
       if (dep.date >= fromIso && dep.date <= toIso && !Cal.blocked(dep.date)) out.push(dep);
     }
@@ -694,6 +705,8 @@ const Bookings = {
     const b = {
       id: uid(), code: bookCode(), tourId, date, time,
       name, email, whats, insta: insta || '', pax, total,
+      /* a moeda do passeio (os tours da planilha dela são em dólar): o painel mostra nela */
+      moeda: (tour && tour.moeda) || '',
       coupon: couponCode, discount, policy,
       /* quem vem: adultos e menores de 18. O preco e pelo total; a divisao e
          para ela saber quem e crianca (ingresso, cadeirinha, ritmo). */

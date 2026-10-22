@@ -56,6 +56,10 @@ var APP_CONFIG = {
     logoEscuro: 'arte/coroa-escura.png',
     logoCompleto: 'arte/logo-yalla.png',
     logoCompletoEscuro: 'arte/logo-yalla-escuro.png',
+    /* o logo oficial deitado (22/10/2026): a coroa e o "YALLA EXPERIENCES" recortados
+       do logo do kit, numa cor só — dourado no escuro, preto no claro */
+    logoHorizontal:       'arte/logo-horizontal.png',
+    logoHorizontalEscuro: 'arte/logo-horizontal-escuro.png',
     /* as palavras dela, do material da marca */
     badge: 'Guia brasileira licenciada nos Emirados · Travel. Connect. Ascend.',
     prefixo: 'YE',                 /* codigo da reserva: YE-4821 */

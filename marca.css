@@ -570,3 +570,54 @@ html.vt-trava{overflow:hidden}
 .galed-x{position:absolute;top:4px;right:4px;width:28px;height:28px;border-radius:50%;border:0;background:rgba(0,0,0,.65);color:#fff;font-size:18px;line-height:1;cursor:pointer}
 .galed-capa{position:absolute;left:4px;bottom:4px;border:0;border-radius:999px;padding:4px 8px;background:rgba(0,0,0,.65);color:#fff;font:600 11px/1 var(--f-ui);cursor:pointer}
 .galed-it.capa .galed-capa{background:var(--accent);color:var(--accent-ink)}
+
+/* o logo oficial deitado, numa cor só (22/10/2026) */
+.mdeit{display:inline-flex;align-items:center;flex:none}
+.mdeit img{height:100%;width:auto;display:block}
+.mdeit .md-preto{display:none}
+/* fundo claro: a versão preta (o topo das páginas e o cabeçalho sólido da capa) */
+:root[data-theme="light"] .tbrand .md-ouro,
+:root[data-theme="light"] .vt-top.solido .md-ouro{display:none}
+:root[data-theme="light"] .tbrand .md-preto,
+:root[data-theme="light"] .vt-top.solido .md-preto{display:block}
+/* em cima da foto da capa, sempre a dourada */
+.vt-top:not(.solido) .md-ouro{display:block}.vt-top:not(.solido) .md-preto{display:none}
+.vt-top .vt-marca .mdeit{height:26px !important}
+@media (min-width:1040px){.vt-top .vt-marca .mdeit{height:30px !important}}
+.topbar .tbrand .mdeit{max-width:46vw}
+.topbar .tbrand .mdeit img{object-fit:contain;max-width:100%}
+.vt-marca-pe img{width:170px;height:auto}
+
+/* CONHEÇA A MILLA (22/10/2026) */
+.vtm{padding-top:8px}
+.vtm-hero{display:grid;gap:26px;padding:18px 0 40px;align-items:start}
+@media (min-width:900px){.vtm-hero{grid-template-columns:.85fr 1.15fr;gap:52px;padding-top:34px}}
+.vtm-foto{border-radius:var(--vt-r);overflow:hidden;aspect-ratio:3/4;box-shadow:var(--vt-sombra);background:var(--surface-2)}
+@media (min-width:900px){.vtm-foto{position:sticky;top:84px}}
+.vtm-foto img{width:100%;height:100%;object-fit:cover;object-position:center 30%}
+.vtm h1{font:600 clamp(30px,6.5vw,46px)/1.1 var(--f-serif);color:var(--ink);margin:0}
+.vtm-sub{margin-top:12px;font-size:17px;line-height:1.55;color:var(--ink-2)}
+.vtm-video{margin-top:22px}
+.vtm-bio{margin-top:20px}
+.vtm-bio p{font-size:16.5px;line-height:1.7;color:var(--ink-2);margin:0 0 14px}
+.vtm-bio p:first-child{font:500 19px/1.55 var(--f-serif);color:var(--ink)}
+.vtm .vt-fatos b{font-size:15px}
+.vtm-momentos{padding-top:10px}
+.vtm-final .vt-acoes{justify-content:center}
+.vtm-contatos{display:flex;flex-wrap:wrap;gap:10px 22px;justify-content:center;margin:22px 0 0 !important}
+.vtm-contatos a{display:inline-flex;align-items:center;gap:8px;color:#fff;text-decoration:none;font:600 14px/1 var(--f-ui);min-height:44px}
+.vtm-contatos svg{width:20px;height:20px}
+/* o vídeo: 16:9 deitado, 9:16 (Shorts/Reels) em pé e no máximo da altura da tela */
+.vid{position:relative;width:100%;aspect-ratio:16/9;border-radius:16px;overflow:hidden;background:#000;box-shadow:var(--vt-sombra)}
+.vid.vert{aspect-ratio:9/16;max-width:min(100%,380px);max-height:80vh}
+.vid.ig{aspect-ratio:auto;height:640px;max-width:min(100%,420px);background:#fff}
+.vid iframe,.vid video{position:absolute;inset:0;width:100%;height:100%;border:0;display:block}
+.vid.arq{aspect-ratio:auto;max-height:80vh}.vid.arq video{position:static;height:auto;max-height:80vh}
+.vt-sobre-video{margin-top:22px}
+/* no topo das páginas o logo deitado ocupa o espaço que sobra entre a seta e os idiomas */
+.topbar .tbrand{flex:1 1 auto;min-width:0;overflow:hidden}
+.topbar .tbrand .mdeit{height:auto !important;width:100%;max-width:210px}
+.topbar .tbrand .mdeit img{width:100%;height:auto;max-height:24px;object-fit:contain;object-position:left center}
+/* o logo dourado em cima do céu laranja da foto: um pouco mais de sombra no topo */
+.vt-hero::after{background:linear-gradient(180deg,rgba(11,11,11,.58) 0%,rgba(11,11,11,.12) 20%,rgba(11,11,11,0) 42%,rgba(11,11,11,.5) 68%,rgba(11,11,11,.86) 100%)}
+.vt-top:not(.solido) .mdeit img{filter:drop-shadow(0 1px 6px rgba(0,0,0,.55))}

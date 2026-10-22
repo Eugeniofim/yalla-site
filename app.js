@@ -411,11 +411,8 @@ function viewHub() {
   const marca = guiaNegocio().split(' ')[0];
   const live = Tours.live();
   const cats = (typeof CONTEUDO !== 'undefined' && CONTEUDO.categorias) || [];
-  const catNome = (id) => { const c = cats.find(z => z.id === id); return c ? txt(c.nome) : ''; };
-  const modNome = (id) => { const o = ((typeof CONTEUDO !== 'undefined' && CONTEUDO.modalidades) || []).find(z => z[0] === id); return o ? opcaoNome(o) : ''; };
   const temCat = (id) => live.some(x => x.categoria === id);
   const temTransfer = live.some(x => x.type === 'transfer');
-  const destaques = live.filter(x => x.type !== 'transfer').sort((a, b) => (b.categoria ? 1 : 0) - (a.categoria ? 1 : 0)).slice(0, 8);
   const depo = (typeof Avaliacoes !== 'undefined') ? Avaliacoes.all().slice(0, 3) : [];
   const fbIg = linkExterno(st.feedbackIg) ? st.feedbackIg : '';
   const faq = (Array.isArray(st.faq) ? st.faq : []).filter(f => txt(f.p) && txt(f.r));
@@ -424,7 +421,6 @@ function viewHub() {
   const insta = (st.insta || GUIA_CFG.insta || '').replace(/^@/, '');
   const foto = st.homePhoto || '';
   const mesAno = (iso) => { try { return new Date(iso + 'T12:00:00').toLocaleDateString(LANG === 'en' ? 'en-GB' : LANG === 'es' ? 'es-ES' : 'pt-BR', { month: 'short', year: 'numeric' }); } catch (e) { return ''; } };
-  const resumo = (x) => String(txt(x.desc)).split(/(?<=[.!?])\s/)[0].slice(0, 170);
 
   const MENU = [
     ['experiencias', L3('Experiências', 'Experiences', 'Experiencias')],
@@ -453,30 +449,12 @@ function viewHub() {
   ];
   const hotelMsg = L3(`Olá, ${guiaNome()}! Pode me indicar um hotel em Dubai?`, `Hi ${guiaNome()}! Could you recommend a hotel in Dubai?`, `¡Hola, ${guiaNome()}! ¿Me recomiendas un hotel en Dubái?`);
 
-  const card = (x) => {
-    const sel = catNome(x.categoria) || tipoLabel(x.type);
-    const meta = [regiaoLabel(x.region), modNome(x.modalidade), x.duration && x.duration !== '—' ? x.duration : '',
-      x.transferInc === 'incluido' ? L3('Transfer incluído', 'Transfer included', 'Traslado incluido') : ''].filter(Boolean);
-    const preco = ehSobConsulta(x)
-      ? `<small>${L3('Investimento', 'Price', 'Inversión')}</small><b>${t('sobConsulta')}</b>`
-      : `<small>${L3('Investimento', 'Price', 'Inversión')} ${esc(unidadePreco(x))}</small><b>${x.priceMode === 'tabela' || x.priceMode === 'transfer' ? t('fromPrice') + ' ' : ''}${valorTour(x, precoVitrine(x))}</b>`;
-    return `<a class="vt-prod" href="#/tour/${esc(x.id)}">
-      <span class="vt-prod-foto"><img src="${esc(x.photo)}" alt="" loading="lazy"><span class="vt-selo">${esc(sel)}</span></span>
-      <span class="vt-prod-corpo">
-        <b class="vt-prod-nome">${esc(txt(x.name))}${txt(x.tagline) ? `<small>${esc(txt(x.tagline))}</small>` : ''}</b>
-        ${meta.length ? `<span class="vt-meta">${meta.map(m => `<span>${esc(m)}</span>`).join('')}</span>` : ''}
-        ${resumo(x) ? `<span class="vt-prod-txt">${esc(resumo(x))}</span>` : ''}
-        <span class="vt-invest"><span>${preco}</span><span class="vt-btn vt-btn-preto">${L3('Ver experiência', 'See experience', 'Ver experiencia')}</span></span>
-      </span></a>`;
-  };
-
   app.innerHTML = `
   <div class="vt">
   <header class="vt-top${scrollY > 40 ? ' solido' : ''}">
     <div class="vt-wrap">
       <a class="vt-marca" href="#/" aria-label="${esc(guiaNegocio())} — ${L3('início', 'home', 'inicio')}">
-        <img class="vt-coroa-clara" src="${esc(GUIA_CFG.logo || '')}" alt=""><img class="vt-coroa-escura" src="${esc(GUIA_CFG.logoEscuro || GUIA_CFG.logo || '')}" alt="">
-        <span><b>${esc(marca)}</b><small>${esc(guiaNegocio().split(' ').slice(1).join(' '))}</small></span>
+        ${marcaDeitada(28, guiaNegocio())}
       </a>
       <nav class="vt-menu" aria-label="${L3('Menu principal', 'Main menu', 'Menú principal')}">${MENU.map(([id, n]) => `<button type="button" data-vai="${id}">${n}</button>`).join('')}</nav>
       ${idiomas('vt-so-grande')}
@@ -525,18 +503,9 @@ function viewHub() {
         <img src="${esc(c.foto)}" alt="" loading="lazy">
         <span><b>${esc(txt(c.nome))}</b><small>${esc(txt(c.desc))}</small>
         <span class="vt-seta">${temCat(c.id) ? L3('Ver experiências', 'See experiences', 'Ver experiencias') : L3('Pedir uma proposta', 'Request a proposal', 'Pedir una propuesta')} →</span></span></button>`).join('')}</div>
-    </div>
-  </section>` : ''}
-
-  ${destaques.length ? `<section class="vt-sec vt-branca" id="destaques" aria-labelledby="vtDest">
-    <div class="vt-wrap">
-      <div class="vt-cab">${rot(L3('Em destaque', 'Featured', 'Destacados'))}
-        <h2 id="vtDest">${L3('Experiências para fazer parte da sua viagem', 'Experiences to make part of your trip', 'Experiencias para formar parte de tu viaje')}</h2>
-        <p>${L3(`Conheça algumas das experiências selecionadas pela ${marca} em Dubai e em todos os Emirados Árabes Unidos.`,
-          `Discover some of the experiences selected by ${marca} in Dubai and across the United Arab Emirates.`,
-          `Conoce algunas de las experiencias seleccionadas por ${marca} en Dubái y en todos los Emiratos Árabes Unidos.`)}</p></div>
-      <div class="vt-prods">${destaques.map(card).join('')}</div>
-      ${live.length > destaques.length || live.length > 4 ? `<p class="vt-mais"><a class="vt-btn vt-btn-linha" href="#/tours">${L3('Ver todas as experiências', 'See all experiences', 'Ver todas las experiencias')}</a></p>` : ''}
+      <!-- 22/10/2026, a Milla: a capa sem a lista de experiências ("a pessoa tem que
+           arrastar demais"); elas abrem em "Experiências" e nas categorias -->
+      ${live.length ? `<p class="vt-mais"><a class="vt-btn vt-btn-preto" href="#/tours">${L3('Ver todas as experiências', 'See all experiences', 'Ver todas las experiencias')} →</a></p>` : ''}
     </div>
   </section>` : ''}
 
@@ -575,7 +544,7 @@ function viewHub() {
 
   <section class="vt-sec" id="sobre" aria-labelledby="vtSobre">
     <div class="vt-wrap vt-sobre">
-      <div class="vt-sobre-foto"><img src="arte/milla.jpg" alt="${L3(guiaNome() + ', fundadora da ' + guiaNegocio(), guiaNome() + ', founder of ' + guiaNegocio(), guiaNome() + ', fundadora de ' + guiaNegocio())}" loading="lazy"></div>
+      <div class="vt-sobre-foto"><img src="${esc(((typeof CONTEUDO !== 'undefined' && CONTEUDO.sobre) || {}).foto || 'arte/milla.jpg')}" alt="${L3(guiaNome() + ', fundadora da ' + guiaNegocio(), guiaNome() + ', founder of ' + guiaNegocio(), guiaNome() + ', fundadora de ' + guiaNegocio())}" loading="lazy"></div>
       <div>
         ${rot(L3('Sobre a ' + marca, 'About ' + marca, 'Sobre ' + marca))}
         <h2 id="vtSobre" class="vt-serif">${L3('Conhecimento local. Cuidado brasileiro.', 'Local knowledge. Brazilian care.', 'Conocimiento local. Cuidado brasileño.')}</h2>
@@ -587,7 +556,8 @@ function viewHub() {
           <div><b>${L3('Licenciada', 'Licensed', 'Con licencia')}</b><small>${L3('guia de turismo', 'tour guide', 'guía de turismo')}</small></div>
           <div><b>7</b><small>${L3('Emirados, um atendimento', 'Emirates, one team', 'Emiratos, una atención')}</small></div>
         </div>
-        <a class="vt-btn vt-btn-linha" href="#/about">${L3('Conheça a ' + marca, 'Meet ' + marca, 'Conoce ' + marca)}</a>
+        <a class="vt-btn vt-btn-linha" href="#/about">${L3('Conheça a ' + guiaNome() + '!', 'Meet ' + guiaNome() + '!', '¡Conoce a ' + guiaNome() + '!')}</a>
+        ${videoEmbed(st.videoApresentacao) ? `<div class="vt-sobre-video">${videoEmbed(st.videoApresentacao)}</div>` : ''}
       </div>
     </div>
   </section>
@@ -652,7 +622,8 @@ function viewHub() {
   <footer class="vt-rodape">
     <div class="vt-wrap">
       <div>
-        <a class="vt-marca" href="#/"><img src="${esc(GUIA_CFG.logo || '')}" alt=""><span><b>${esc(marca)}</b><small>${esc(guiaNegocio().split(' ').slice(1).join(' '))}</small></span></a>
+        <a class="vt-marca vt-marca-pe" href="#/">${GUIA_CFG.logoCompleto ? `<img src="${esc(GUIA_CFG.logoCompleto)}" alt="${esc(guiaNegocio())}" width="544" height="335">`
+          : `<img src="${esc(GUIA_CFG.logo || '')}" alt=""><span><b>${esc(marca)}</b></span>`}</a>
         <p>${L3('Experiências em Dubai, Abu Dhabi e em todos os Emirados Árabes Unidos.', 'Experiences in Dubai, Abu Dhabi and across the United Arab Emirates.', 'Experiencias en Dubái, Abu Dabi y en todos los Emiratos Árabes Unidos.')}</p>
         ${st.razaoSocial || st.licenca ? `<p class="vt-legal">${esc([st.razaoSocial, st.licenca].filter(Boolean).join(' · '))}</p>` : ''}
       </div>
@@ -770,7 +741,7 @@ function viewRoteiro() {
   app.innerHTML = `
   <header class="topbar">
     <button class="backbtn" id="bk" aria-label="${t('back')}">←</button>
-    <span class="tbrand">${logoMark(24, 'var(--brand-assinatura)')}<b>${esc(guiaNome())}</b></span>
+    <span class="tbrand">${marcaDeitada(24, guiaNome())}</span>
     ${langBar('right')}
   </header>
   <main class="wrap roteiro">
@@ -888,7 +859,7 @@ function viewAvaliacoes() {
   app.innerHTML = `
   <header class="topbar">
     <button class="backbtn" id="bk" aria-label="${t('back')}">←</button>
-    <span class="tbrand">${logoMark(24, 'var(--brand-assinatura)')}<b>${esc(guiaNome())}</b></span>
+    <span class="tbrand">${marcaDeitada(24, guiaNome())}</span>
     ${langBar('right')}
   </header>
   <main class="wrap av-pag">
@@ -909,55 +880,88 @@ function viewAvaliacoes() {
   $('#bk').onclick = () => go('/');
 }
 
+/* O VÍDEO DE APRESENTAÇÃO (22/10/2026): o link que ela cola nos Ajustes vira
+   player — YouTube (inclusive Shorts), Vimeo, Instagram (reel/post) ou arquivo
+   de vídeo. Sem link, nada aparece. */
+function videoEmbed(url) {
+  const u = linkExterno(url); if (!u) return '';
+  let m;
+  if ((m = u.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/))([\w-]{6,})/))) {
+    const vert = /\/shorts\//.test(u);
+    return `<div class="vid ${vert ? 'vert' : ''}"><iframe src="https://www.youtube-nocookie.com/embed/${m[1]}?rel=0&playsinline=1" title="${esc(L3('Vídeo de apresentação', 'Introduction video', 'Video de presentación'))}" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe></div>`;
+  }
+  if ((m = u.match(/vimeo\.com\/(?:video\/)?(\d+)/)))
+    return `<div class="vid"><iframe src="https://player.vimeo.com/video/${m[1]}" title="${esc(L3('Vídeo de apresentação', 'Introduction video', 'Video de presentación'))}" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen loading="lazy"></iframe></div>`;
+  if ((m = u.match(/instagram\.com\/(reel|p|tv)\/([\w-]+)/)))
+    return `<div class="vid vert ig"><iframe src="https://www.instagram.com/${m[1]}/${m[2]}/embed" title="${esc(L3('Vídeo de apresentação', 'Introduction video', 'Video de presentación'))}" loading="lazy" allowfullscreen></iframe></div>`;
+  if (/\.(mp4|webm|mov|m4v)(\?|$)/i.test(u))
+    return `<div class="vid arq"><video src="${esc(u)}" controls playsinline preload="metadata"></video></div>`;
+  return `<a class="vt-btn vt-btn-linha" href="${esc(u)}" target="_blank" rel="noopener">${L3('Assistir ao vídeo', 'Watch the video', 'Ver el video')} ↗</a>`;
+}
+
+/* CONHEÇA A MILLA (22/10/2026). Era a página da guia sozinha da base ("Vamos
+   caminhar juntos?", "14 passeios" — a Milla perguntou o que eram). Agora:
+   a foto dela no Museu do Futuro, o vídeo de apresentação (quando houver), a
+   história que ela escreveu, os fatos e as fotos dela pelos Emirados. */
 function viewAbout() {
   const st = DB.settings;
   const bio = (st.bio && (st.bio[LANG] || st.bio.pt)) || '';
   const paras = bio.split(/\n\s*\n/).filter(Boolean);
-  const nTours = Tours.live().length;
+  const marca = guiaNegocio().split(' ')[0];
+  const sobre = (typeof CONTEUDO !== 'undefined' && CONTEUDO.sobre) || {};
+  const fotoGrande = sobre.foto || st.photo || 'guia.jpg';
+  const momentos = (sobre.momentos || []).filter(Boolean);
+  const video = videoEmbed(st.videoApresentacao);
+  const insta = (st.insta || GUIA_CFG.insta || '').replace(/^@/, '');
 
   app.innerHTML = `
   <header class="topbar">
     <button class="backbtn" id="bk" aria-label="${t('back')}">←</button>
-    <span class="tbrand">${logoMark(24, 'var(--brand-assinatura)')}<b>${esc(guiaNome())}</b></span>
+    <span class="tbrand">${marcaDeitada(24, guiaNome())}</span>
     ${langBar('right')}
   </header>
-  <main class="wrap about">
-    <div class="ab-hero">
-      <img class="ab-photo" id="abImg" src="${esc(st.photo || 'guia.jpg')}" alt="${esc(guiaNome())}">
-      <div class="ab-cap">
-        ${st.badge ? `<span class="ab-badge">✓ ${esc(st.badge)}</span>` : ''}
-        <h1>${t('aboutTitle')}</h1>
-        <p class="ab-meta">${t('role')}</p>
+  <main class="vt vtm">
+    <section class="vtm-hero vt-wrap">
+      <div class="vtm-foto"><img id="abImg" src="${esc(fotoGrande)}" alt="${esc(L3(guiaNome() + ' em Dubai', guiaNome() + ' in Dubai', guiaNome() + ' en Dubái'))}"></div>
+      <div class="vtm-cab">
+        <span class="vt-rot">${L3('Fundadora da ' + guiaNegocio(), 'Founder of ' + guiaNegocio(), 'Fundadora de ' + guiaNegocio())}</span>
+        <h1>${L3('Prazer, sou a ' + guiaNome(), 'Hi, I’m ' + guiaNome(), 'Hola, soy ' + guiaNome())}</h1>
+        <p class="vtm-sub">${L3('Brasileira, nos Emirados desde 2010 e guia de turismo licenciada.', 'Brazilian, in the Emirates since 2010 and a licensed tour guide.', 'Brasileña, en los Emiratos desde 2010 y guía de turismo con licencia.')}</p>
+        ${video ? `<div class="vtm-video">${video}</div>` : ''}
+        <div class="vtm-bio">${paras.map(p => `<p>${esc(p).replace(/\n/g, '<br>')}</p>`).join('')}</div>
+        <div class="vt-fatos">
+          <div><b>2010</b><small>${L3('nos Emirados', 'in the Emirates', 'en los Emiratos')}</small></div>
+          <div><b>${L3('Licenciada', 'Licensed', 'Con licencia')}</b><small>${L3('guia de turismo', 'tour guide', 'guía de turismo')}</small></div>
+          <div><b>${esc(t('aboutLangs'))}</b><small>${L3('idiomas', 'languages', 'idiomas')}</small></div>
+        </div>
       </div>
-    </div>
+    </section>
 
-    <div class="ab-body">
-      ${paras.map(p => `<p>${esc(p).replace(/\n/g, '<br>')}</p>`).join('')}
-    </div>
-
-    <div class="ab-facts">
-      <div><small>${t('aboutBased')}</small><b>${esc(st.base || '')}</b></div>
-      <div><small>${LANG === 'pt' ? 'Idiomas' : 'Languages'}</small><b>${t('aboutLangs')}</b></div>
-      <div><small>${LANG === 'pt' ? 'Passeios' : 'Tours'}</small><b>${nTours}</b></div>
-    </div>
-
-    <div class="ab-cta">
-      <h3>${t('aboutMeet')}</h3>
-      <p>${t('aboutMeetSub')}</p>
-      <div class="ab-btns">
-        <button class="cta" id="abTours">${t('aboutCta')}</button>
-        <a class="mini" href="${waLink(t('waHello'))}" target="_blank" rel="noopener">${t('aboutTalk')}</a>
-        <a class="mini" href="https://instagram.com/${esc(st.insta)}" target="_blank" rel="noopener">@${esc(st.insta)}</a>
+    ${momentos.length ? `<section class="vt-sec vtm-momentos" aria-labelledby="vtmMom">
+      <div class="vt-wrap">
+        <div class="vt-cab"><span class="vt-rot">${L3('Pelos Emirados', 'Around the Emirates', 'Por los Emiratos')}</span>
+          <h2 id="vtmMom">${L3('Onde a ' + guiaNome() + ' leva você', 'Where ' + guiaNome() + ' takes you', 'A dónde te lleva ' + guiaNome())}</h2></div>
+        <div class="tgal">${momentos.map((f, i) => `<button type="button" class="tgal-it" data-gal="${i}" aria-label="${L3('Ver foto', 'See photo', 'Ver foto')} ${i + 1}"><img src="${esc(f)}" alt="" loading="lazy"></button>`).join('')}</div>
       </div>
-    </div>
+    </section>` : ''}
+
+    <section class="vt-final vtm-final" aria-labelledby="vtmFim">
+      <img src="arte/home-dubai.jpg" alt="" loading="lazy">
+      <div class="vt-wrap">
+        <h2 id="vtmFim">${L3('Vamos planejar a sua viagem?', 'Shall we plan your trip?', '¿Planificamos tu viaje?')}</h2>
+        <p>${L3(`Conte quando você vem, com quem vai viajar e o que gostaria de viver. A ${marca} cuida dos detalhes.`, `Tell us when you are coming, who you are travelling with and what you would like to experience. ${marca} takes care of the details.`, `Cuéntanos cuándo vienes, con quién viajas y qué te gustaría vivir. ${marca} se ocupa de los detalles.`)}</p>
+        <div class="vt-acoes vtm-acoes">
+          <a class="vt-btn vt-btn-ouro" href="#/tours">${L3('Ver experiências', 'See experiences', 'Ver experiencias')}</a>
+          <a class="vt-btn vt-btn-claro" href="#/roteiro">${L3('Planejar minha viagem', 'Plan my trip', 'Planificar mi viaje')}</a>
+        </div>
+        <p class="vtm-contatos"><a href="${esc(waLink(t('waHello')))}" target="_blank" rel="noopener">${ICONE_WA} WhatsApp</a>${insta ? `<a href="https://instagram.com/${esc(insta)}" target="_blank" rel="noopener">${ICONE_IG} @${esc(insta)}</a>` : ''}</p>
+      </div>
+    </section>
   </main>`;
   bindLang(app);
-  /* sem foto ainda: em vez de um ícone quebrado, diz onde ela põe a dela */
-  fallbackPhoto($('#abImg'), `<div class="ab-photo none">${LANG === 'pt'
-    ? 'Sua foto entra aqui.<br>Ajustes → Sua foto e sua história.'
-    : 'Your photo goes here.<br>Settings → Your photo and your story.'}</div>`);
+  fallbackPhoto($('#abImg'), `<div class="ab-photo none">${L3('A foto entra aqui.', 'The photo goes here.', 'La foto va aquí.')}</div>`);
+  $$('[data-gal]', app).forEach(b => b.onclick = () => abreGaleria(momentos, +b.dataset.gal));
   $('#bk').onclick = () => go('/');
-  $('#abTours').onclick = () => go('/tours');
 }
 
 /* A foto pode vir do painel (dataURL) ou de um guia.jpg na pasta.
@@ -992,6 +996,8 @@ function valorTour(x, v) {
   return (MOEDA_SIGLA[m] || m) + ' ' + n.toLocaleString(LANG === 'pt' ? 'pt-BR' : LANG === 'es' ? 'es-ES' : 'en-GB',
     n % 1 === 0 ? {} : { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
+/* o valor de uma reserva na moeda dela (b.moeda), no painel e nos avisos */
+function valorReserva(b, v) { return b && b.moeda ? valorTour({ moeda: b.moeda }, v) : eur(v); }
 function ehSobConsulta(x) { return x.priceMode !== 'session' && x.priceMode !== 'pp' && !(precoVitrine(x) > 0); }
 function precoVitrine(x) {
   if (x.priceMode === 'transfer') return transferMenor(x) || +x.price || 0;
@@ -1048,6 +1054,8 @@ function lerGrupo() {
 function aceitaCriancas(x) { return x.criancas !== false; }
 
 function tetoPessoas(x, S) {
+  /* passeio compartilhado sem limite cadastrado: até 20 numa reserva */
+  if (!(+x.max > 0)) x = Object.assign({}, x, { max: 20 });
   if (x.priceMode === 'tabela')   return Math.min(tabelaAte(x) || x.max, x.max, S.cap || x.max);
   if (x.priceMode === 'transfer') return Math.min(transferAte(x) || 20, S.cap || 20);
   return Math.min(x.max, S.cap || x.max);
@@ -1172,7 +1180,7 @@ function viewShowcase() {
   app.innerHTML = `
   <header class="topbar">
     <button class="backbtn" id="bk" aria-label="${t('back')}">←</button>
-    <span class="tbrand">${logoMark(24, 'var(--brand-assinatura)')}<b>${esc(guiaNome())}</b></span>
+    <span class="tbrand">${marcaDeitada(24, guiaNome())}</span>
     ${langBar('right')}
   </header>
   <main class="wrap">
@@ -1309,7 +1317,7 @@ function viewTour(id) {
 
   app.innerHTML = `
   <header class="topbar onhero"><button class="backbtn" id="bk" aria-label="${t('back')}">←</button>
-    <span class="tbrand">${logoMark(22, 'var(--brand-assinatura)')}<b>${esc(guiaNome())}</b></span>${langBar('right')}</header>
+    <span class="tbrand">${marcaDeitada(22, guiaNome())}</span>${langBar('right')}</header>
   <!-- CAPA: como a primeira pagina do PDF dela — imagem cheia, titulo por cima -->
   <div class="tourhero" style="background-image:url(${esc(x.photo)})">
     <div class="thveil"></div>
@@ -1569,6 +1577,7 @@ async function viewPago(codigo) {
 
 function comoPagar(b, x) {
   const st = DB.settings || {};
+  const vt = (v) => valorTour(x, v);
   const agora = b.policy === 'sinal' && b.sinal ? b.sinal
               : b.policy === 'split' ? Math.round(b.total / 2) : b.total;
   const saldo = b.total - agora;
@@ -1590,7 +1599,7 @@ function comoPagar(b, x) {
   const blocoPix = codigoPix ? `
     <div class="pixbox">
       <b class="pixtit">${t('pixTit')}</b>
-      <p class="pixvalor">${t('pixValor', { brl: brl.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 2 }), eur: eur(agora) })}</p>
+      <p class="pixvalor">${t('pixValor', { brl: brl.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 2 }), eur: vt(agora) })}</p>
       ${(typeof qrSvg === 'function') ? `<div class="pixqr">${qrSvg(codigoPix, { tamanho: 190, alt: t('pixTit') })}</div>` : ''}
       <p class="why">${t('pixComo')}</p>
       <textarea class="pixcod" id="pixCod" readonly rows="3">${esc(codigoPix)}</textarea>
@@ -1602,11 +1611,34 @@ function comoPagar(b, x) {
      mexer no console para fazer o passeio por um euro. */
   const blocoCartao = st.stripeAtivo ? `
     <div class="cardbox">
-      <button class="cta sm" id="btCartao">${t('cardPagar', { v: eur(agora) })}</button>
+      <button class="cta sm" id="btCartao">${t('cardPagar', { v: vt(agora) })}</button>
       <small class="why">${t('cardComo')}</small>
     </div>` : '';
 
-  const meios = blocoCartao + blocoPix
+  /* o link de pagamento do passeio (glinpay, em dólar): é ele que vale. Em passeio
+     por pessoa o link é de UMA pessoa — com mais gente, o total vem pelo WhatsApp. */
+  const porPessoa = x && x.priceMode === 'pp' && b.pax > 1;
+  const blocoLink = x && linkExterno(x.linkPagamento) ? `
+    <div class="cardbox">
+      <a class="cta sm" style="text-decoration:none;text-align:center" target="_blank" rel="noopener" href="${esc(x.linkPagamento)}">${porPessoa
+        ? L3('Pagar pelo link seguro', 'Pay with the secure link', 'Pagar con el enlace seguro')
+        : L3('Pagar ' + vt(agora) + ' pelo link seguro', 'Pay ' + vt(agora) + ' with the secure link', 'Pagar ' + vt(agora) + ' con el enlace seguro')}</a>
+      ${porPessoa ? `<small class="why">${L3(`O link é de ${vt(x.price)} por pessoa. Para ${b.pax} pessoas o total é ${vt(agora)}: a ${guiaNegocio().split(' ')[0]} confirma pelo WhatsApp e manda o link do total.`,
+        `The link is ${vt(x.price)} per person. For ${b.pax} people the total is ${vt(agora)}: ${guiaNegocio().split(' ')[0]} confirms on WhatsApp and sends the link for the total.`,
+        `El enlace es de ${vt(x.price)} por persona. Para ${b.pax} personas el total es ${vt(agora)}: ${guiaNegocio().split(' ')[0]} confirma por WhatsApp y envía el enlace del total.`)}</small>` : ''}
+    </div>` : '';
+  if (x && x.moeda) {
+    /* em dólar: Pix e conta em AED converteriam o valor errado — fica o link e o dinheiro no dia */
+    const meiosUsd = blocoLink + (st.dinheiroNoDia ? `<p class="why">💵 ${t('cashLbl')}</p>` : '');
+    return `
+  <div class="paybox">
+    <h3>${t('howPay')}</h3>
+    <p class="paynow"><small>${t('howPayNow')}</small><b>${vt(agora)}</b></p>
+    ${meiosUsd || `<p class="why">${t('howPayNone')}</p>`}
+    ${st.payNote ? `<p class="why">${esc(st.payNote)}</p>` : ''}
+  </div>`;
+  }
+  const meios = blocoLink + blocoCartao + blocoPix
               + (st.pixKey && !codigoPix ? linha(t('pixLbl'), st.pixKey, st.pixName) : '')
               + (st.iban ? linha(t('ibanLbl'), st.iban, st.ibanName) : '')
               + (linkExterno(st.wiseLink) ? `<div class="payline"><small>${t('wiseLbl')}</small>
@@ -1615,8 +1647,8 @@ function comoPagar(b, x) {
   return `
   <div class="paybox">
     <h3>${t('howPay')}</h3>
-    <p class="paynow"><small>${t('howPayNow')}</small><b>${eur(agora)}</b></p>
-    ${saldo > 0 ? `<p class="due">${b.policy === 'sinal' ? t('trfRestoDia', { v: eur(saldo) }) : prazoSaldo(b, saldo)}</p>` : ''}
+    <p class="paynow"><small>${t('howPayNow')}</small><b>${vt(agora)}</b></p>
+    ${saldo > 0 ? `<p class="due">${b.policy === 'sinal' ? t('trfRestoDia', { v: vt(saldo) }) : prazoSaldo(b, saldo)}</p>` : ''}
     ${meios || `<p class="why">${t('howPayNone')}</p>`}
     ${st.payNote ? `<p class="why">${esc(st.payNote)}</p>` : ''}
     ${meios ? `<p class="why">${t('payProof')}</p>` : ''}
@@ -1706,7 +1738,7 @@ function renderBook() {
       return `<p class="hint">${t('pickTime')}</p><div class="times">` + list.map(d => {
         const left = Cal.seatsLeft(x.id, d.date, d.time, d.capacity);
         return left > 0
-          ? `<button class="slot ${S.time === d.time ? 'on' : ''}" data-t="${d.time}" data-c="${d.capacity}">${d.time}<small>${left} ${t('spotsLeft')}</small></button>`
+          ? `<button class="slot ${S.time === d.time ? 'on' : ''}" data-t="${d.time}" data-c="${d.capacity}">${d.time}${d.livre ? '' : `<small>${left} ${t('spotsLeft')}</small>`}</button>`
           : `<button class="slot off" disabled>${d.time}<small>0</small></button>`;
       }).join('') + '</div>';
     }
@@ -1716,21 +1748,21 @@ function renderBook() {
     book.innerHTML = `
       <div class="bhead"><span class="bprice">${priceLine}</span></div>
       <div class="bstep">${t(x.priceMode === 'transfer' ? 'step2trf' : 'step2')}</div>
-      ${x.priceMode === 'session' ? '' : pessoasHtml(x, S)}
+      ${x.priceMode === 'session' && !(+x.max > 1) ? '' : pessoasHtml(x, S)}
       ${x.priceMode === 'transfer' ? transferEscolhaHtml(x, S) : ''}
       <div class="sums">
         <div><span>${fmtDate(S.date)} · ${S.time}</span></div>
-        ${S.discount ? `<div><span>${t('couponOk', { c: S.coupon })}</span><b>−${eur(S.discount)}</b></div>` : ''}
+        ${S.discount ? `<div><span>${t('couponOk', { c: S.coupon })}</span><b>−${valorTour(x, S.discount)}</b></div>` : ''}
         ${x.priceMode === 'transfer'
-          ? `<div class="quebra"><span>${esc(pr.veiculo || '')} · ${pr.noturno ? t('trfNight') : t('trfDay')}</span><b>${eur(pr.total)}</b></div>`
-            + (pr.sinal ? `<div class="quebra"><span>${t('trfSinalLbl')}</span><b>${eur(pr.sinal)}</b></div>` : '')
+          ? `<div class="quebra"><span>${esc(pr.veiculo || '')} · ${pr.noturno ? t('trfNight') : t('trfDay')}</span><b>${valorTour(x, pr.total)}</b></div>`
+            + (pr.sinal ? `<div class="quebra"><span>${t('trfSinalLbl')}</span><b>${valorTour(x, pr.sinal)}</b></div>` : '')
           : x.priceMode === 'tabela'
-          ? `<div class="quebra"><span>${t('closedPrice', { n: S.pax })}</span><b>${eur(pr.total)}</b></div>`
+          ? `<div class="quebra"><span>${t('closedPrice', { n: S.pax })}</span><b>${valorTour(x, pr.total)}</b></div>`
           : (pr.linhas && pr.linhas.length > 1) ? pr.linhas.map(l =>
-          `<div class="quebra"><span>${t('linhaPreco', { qtd: l.qtd, valor: eur(l.valor) })}</span><b>${eur(l.qtd * l.valor)}</b></div>`).join('') : ''}
+          `<div class="quebra"><span>${t('linhaPreco', { qtd: l.qtd, valor: valorTour(x, l.valor) })}</span><b>${valorTour(x, l.qtd * l.valor)}</b></div>`).join('') : ''}
         ${ingressosResumo(x, S, ing)}
-        <div class="tot"><span>${t('total')}</span><b>${eur(total)}</b></div>
-        ${linhaReais(total)}
+        <div class="tot"><span>${t('total')}</span><b>${valorTour(x, total)}</b></div>
+        ${x.moeda ? '' : linhaReais(total)}
         ${(x.min > 1 && S.pax < x.min) ? `<p class="why">${t('minAviso', { n: x.min })}</p>` : ''}
       </div>
       <details class="coupon"><summary>${t('haveCoupon')}</summary>
@@ -1794,13 +1826,13 @@ function renderBook() {
       <label class="optin"><input type="checkbox" id="fOptin">
         <span><b>${t('consentLbl')}</b><small>${t('consentWhy')}</small></span></label>
       ${x.priceMode === 'transfer' && pr.sinal ? `
-      <p class="sinalnote">${t('trfSinalNota', { s: eur(pr.sinal), r: eur(Math.max(0, total - pr.sinal)) })}</p>` : ''}
+      <p class="sinalnote">${t('trfSinalNota', { s: valorTour(x, pr.sinal), r: valorTour(x, Math.max(0, total - pr.sinal)) })}</p>` : ''}
       ${splitAllowed ? `
       <div class="payopts">
-        <button class="popt ${S.policy === 'full' ? 'on' : ''}" data-p="full"><b>${t('payFull')}</b><small>${t('payFullSub')} · ${eur(total)}</small></button>
-        <button class="popt ${S.policy === 'split' ? 'on' : ''}" data-p="split"><b>${t('paySplit')}</b><small>${t('paySplitSub', { half: eur(half), d: (+x.balanceDays || 1) })}</small></button>
+        <button class="popt ${S.policy === 'full' ? 'on' : ''}" data-p="full"><b>${t('payFull')}</b><small>${t('payFullSub')} · ${valorTour(x, total)}</small></button>
+        <button class="popt ${S.policy === 'split' ? 'on' : ''}" data-p="split"><b>${t('paySplit')}</b><small>${t('paySplitSub', { half: valorTour(x, half), d: (+x.balanceDays || 1) })}</small></button>
       </div>` : ''}
-      <button class="cta" id="payBtn">${x.priceMode === 'transfer' && pr.sinal ? t('payNowBtn', { v: eur(pr.sinal) }) : S.policy === 'split' && splitAllowed ? t('payNowBtn', { v: eur(half) }) : t('payBtn', { v: eur(total) })}</button>
+      <button class="cta" id="payBtn">${x.priceMode === 'transfer' && pr.sinal ? t('payNowBtn', { v: valorTour(x, pr.sinal) }) : S.policy === 'split' && splitAllowed ? t('payNowBtn', { v: valorTour(x, half) }) : t('payBtn', { v: valorTour(x, total) })}</button>
       <p class="fine">${[cancelaTxt(x), t('noHidden')].filter(Boolean).join(' · ')}</p>
       ${DB.settings.termos && (DB.settings.termos[LANG] || DB.settings.termos.pt) ? `<details class="termos-ck"><summary>${L3('Ao pagar você aceita os termos e condições', 'By paying you accept the terms and conditions', 'Al pagar aceptas los términos y condiciones')}</summary>
         <p>${esc(DB.settings.termos[LANG] || DB.settings.termos.pt).replace(/\n/g, '<br>')}</p></details>` : ''}
@@ -1810,7 +1842,7 @@ function renderBook() {
       /* não re-renderizar: apagaria o que a pessoa já digitou */
       S.policy = b.dataset.p;
       $$('.popt', book).forEach(z => z.classList.toggle('on', z === b));
-      $('#payBtn').textContent = S.policy === 'split' ? t('payNowBtn', { v: eur(half) }) : t('payBtn', { v: eur(total) });
+      $('#payBtn').textContent = S.policy === 'split' ? t('payNowBtn', { v: valorTour(x, half) }) : t('payBtn', { v: valorTour(x, total) });
     });
     /* quem vai: uma linha por pessoa; "eu tambem vou" tira ou poe uma linha
        sem redesenhar (quem ja digitou nao perde nada) */
@@ -2122,6 +2154,8 @@ function admTourEdit(id) {
             <option value="imediata" ${x.reserva !== 'consulta' ? 'selected' : ''}>${L3('Na hora, pelo calendário', 'Instantly, from the calendar', 'Al instante, por el calendario')}</option>
             <option value="consulta" ${x.reserva === 'consulta' ? 'selected' : ''}>${L3('Consultar disponibilidade', 'Check availability', 'Consultar disponibilidad')}</option></select></label>
         </div>
+        <label class="fld">${L3('Horários de início', 'Start times', 'Horarios de inicio')}<input id="fHorarios" value="${esc((x.horarios || []).join(', '))}" placeholder="09:00, 10:00, 11:00, 13:00, 14:00">
+          <small class="why">${L3('Com "Na hora": o cliente escolhe a data e um destes horários e reserva direto. Em branco, valem as saídas do calendário.', 'With "Instantly": the guest picks a date and one of these times and books directly. Blank = the calendar departures apply.', 'Con "Al instante": el cliente elige la fecha y uno de estos horarios y reserva directo. En blanco, valen las salidas del calendario.')}</small></label>
         <small class="why">${L3('Se depende do parceiro confirmar, use "Consultar disponibilidade": o botão do site muda e o cliente vê que pedido não é reserva confirmada.',
           'If a partner has to confirm, choose "Check availability": the button changes and the guest sees a request is not a confirmed booking.',
           'Si depende de que el socio confirme, usa "Consultar disponibilidad": el botón cambia y el cliente ve que un pedido no es una reserva confirmada.')}</small>
@@ -2433,6 +2467,7 @@ function admTourEdit(id) {
       ...($('#fCat') ? { categoria: $('#fCat').value, modalidade: $('#fModal').value, transferInc: $('#fTrfInc').value,
         reserva: $('#fReserva').value, idioma: par('#fIdiomaPt', '#fIdiomaEn'),
         moeda: $('#fMoeda').value, unidade: par('#fUnidPt', '#fUnidEn'), paraQuem: par('#fQuemPt', '#fQuemEn'),
+        horarios: ($('#fHorarios').value.match(/\b([01]?\d|2[0-3])[:h]([0-5]\d)\b/g) || []).map(h => h.replace('h', ':').padStart(5, '0')),
         linkPagamento: linkExterno($('#fLinkPag').value.trim()) } : {}),
       ...($('#galEd') ? { fotos: $$('#galEd .galed-it').map(el => el.dataset.f) } : {}),
       name: { pt: $('#fNamePt').value.trim(), en: $('#fNameEn').value.trim() || $('#fNamePt').value.trim() },
@@ -2610,8 +2645,8 @@ function situacaoPgto(b, hoje) {
   const total = +b.total || 0;
   const pago = Bookings.paid(b);
   const falta = Math.max(0, total - pago);
-  const conta = t('stDeTotal', { pago: eur(pago), total: eur(total) })
-              + (falta > 0 ? ' · ' + t('stFalta', { v: eur(falta) }) : '');
+  const conta = t('stDeTotal', { pago: valorReserva(b, pago), total: valorReserva(b, total) })
+              + (falta > 0 ? ' · ' + t('stFalta', { v: valorReserva(b, falta) }) : '');
 
   if (b.status === 'cancelled') return { classe: 'n', titulo: t('cancelled'), conta, aberta: false };
   if (falta <= 0)               return { classe: 'ok', titulo: t('stPago'), conta, aberta: false };
@@ -2701,7 +2736,7 @@ function admBookings() {
       const first = b.name.split(' ')[0];
       const tourName = x ? (x.name[LANG] || x.name.pt) : '';
       const waText = (b.status !== 'cancelled' && due > 0)
-        ? t('waCharge', { name: first, v: eur(due), tour: tourName, when: fmtDate(b.date) })
+        ? t('waCharge', { name: first, v: valorReserva(b, due), tour: tourName, when: fmtDate(b.date) })
         : t('waHi', { name: first, tour: tourName, when: fmtDate(b.date) + ' ' + b.time });
       const wa = waLink(waText, (b.whats || '').replace(/\D/g, ''));
       /* cobrar é mandar mensagem. É este o botão que a palavra "cobrar" promete. */
@@ -2720,7 +2755,7 @@ function admBookings() {
       return `<div class="trow">
         <div class="tinfo"><b>${esc(b.name)}</b>
           <small>${esc(x ? x.name.pt : '?')} · ${fmtDate(b.date)} ${esc(b.time)} · ${esc(b.pax)}p${veic} · <span class="mono">${esc(b.code)}</span></small>${grupo}</div>
-        <b class="mono">${eur(b.total)}</b>${pill}
+        <b class="mono">${valorReserva(b, b.total)}</b>${pill}
         <div class="tacts" id="ta-${esc(b.id)}">${cobrar}${act}${conf}</div>
       </div>`;
     }).join('')}</div>`
@@ -2788,7 +2823,7 @@ function admBookings() {
       if (!b2.dataset.m) return admBookings();
       const b = Bookings.get(id);
       Bookings.payBalance(id, b2.dataset.m);
-      toast(t('charged', { v: eur(b.payments.at(-1).amount), n: b.name.split(' ')[0] }));
+      toast(t('charged', { v: valorReserva(b, b.payments.at(-1).amount), n: b.name.split(' ')[0] }));
       admBookings();
     });
   });
@@ -2928,6 +2963,12 @@ function admAparencia() {
     </section>
 
     <section class="card">
+      <h3>${L3('Vídeo de apresentação', 'Introduction video', 'Video de presentación')}</h3>
+      <p class="why">${L3('Cole o link do vídeo em que você se apresenta (YouTube, Instagram, Vimeo ou arquivo .mp4). Ele aparece na capa, logo depois de "Conheça a ' + guiaNome() + '!", e na sua página.', 'Paste the link to the video where you introduce yourself (YouTube, Instagram, Vimeo or an .mp4 file). It shows on the home page, right after "Meet ' + guiaNome() + '!", and on your page.', 'Pega el enlace del video en el que te presentas (YouTube, Instagram, Vimeo o archivo .mp4). Aparece en la portada, justo después de "¡Conoce a ' + guiaNome() + '!", y en tu página.')}</p>
+      <label class="fld">${L3('Link do vídeo', 'Video link', 'Enlace del video')}<input id="apVideo" type="url" inputmode="url" value="${esc(DB.settings.videoApresentacao || '')}" placeholder="https://youtube.com/shorts/…"></label>
+    </section>
+
+    <section class="card">
       <h3>${L3('Rodapé do site', 'Site footer', 'Pie del sitio')}</h3>
       <p class="why">${L3('Só aparece no site o que estiver preenchido.', 'Only what is filled in shows on the site.', 'Solo aparece en el sitio lo que esté completo.')}</p>
       <label class="fld">${L3('E-mail de contato', 'Contact e-mail', 'E-mail de contacto')}<input id="apEmailPub" type="email" value="${esc(DB.settings.emailPublico || '')}" placeholder="${esc(GUIA_CFG.email || '')}"></label>
@@ -2989,6 +3030,7 @@ function admAparencia() {
         let p0 = {}, r0 = {}; try { p0 = JSON.parse(r.dataset.p || '{}'); r0 = JSON.parse(r.dataset.r || '{}'); } catch (e) {}
         return { p: mesmo(p0, r.querySelector('.fp').value.trim()), r: mesmo(r0, r.querySelector('.fr').value.trim()) };
       }).filter(f => f.p.pt);
+      st.videoApresentacao = linkExterno($('#apVideo').value.trim());
       st.emailPublico = $('#apEmailPub').value.trim();
       st.razaoSocial = $('#apRazao').value.trim(); st.licenca = $('#apLicenca').value.trim();
     }
@@ -3689,7 +3731,7 @@ cloudStart((r) => {
   if (r.bootstrap || r.semMudanca || r.segurando || r.vazio) return;
   if (r.fresh && r.fresh.length && location.hash.startsWith('#/adm')) {
     const b = r.fresh[r.fresh.length - 1];
-    toast((LANG === 'pt' ? '🎉 Nova reserva: ' : '🎉 New booking: ') + b.name + ' · ' + eur(b.total));
+    toast((LANG === 'pt' ? '🎉 Nova reserva: ' : '🎉 New booking: ') + b.name + ' · ' + valorReserva(b, b.total));
   }
   /* re-render seguro: nunca por cima de trabalho em andamento */
   if (isBusyEditing()) { pendingSync = true; return; }

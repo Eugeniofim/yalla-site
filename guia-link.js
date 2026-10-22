@@ -122,7 +122,7 @@ function viewGuiaLink(id) {
 
   app.innerHTML = `
   <header class="topbar">
-    <span class="tbrand">${logoMark(24, 'var(--brand-assinatura)')}<b>${esc(guiaNegocio())}</b></span>
+    <span class="tbrand">${marcaDeitada(22, guiaNegocio())}</span>
     ${langBar('right')}
   </header>
   <main class="wrap gp">

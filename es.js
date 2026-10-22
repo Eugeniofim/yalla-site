@@ -626,6 +626,19 @@ const STR_YALLA = {
   "en": "Hi! I saw the {tour} experience on the {negocio} website and would like to check availability.",
   "es": "¡Hola! Vi la experiencia {tour} en el sitio de {negocio} y quisiera consultar la disponibilidad."
  },
+ "booked": { "pt": "Pedido de reserva recebido!", "en": "Booking request received!", "es": "¡Solicitud de reserva recibida!" },
+ "sentAll": {
+  "pt": "Guarde o código abaixo e avise a {negocio} pelo WhatsApp: a confirmação da data e do horário chega por lá.",
+  "en": "Keep the code below and let {negocio} know on WhatsApp: the date and time are confirmed there.",
+  "es": "Guarda el código de abajo y avisa a {negocio} por WhatsApp: la confirmación de la fecha y el horario llega por allí."
+ },
+ "payBtn": { "pt": "Pedir a reserva · {v}", "en": "Request the booking · {v}", "es": "Pedir la reserva · {v}" },
+ "waBookingMsg": {
+  "pt": "Olá, {negocio}! Acabei de pedir a reserva: {tour}, {when}. Meu código é {code}. Sou {name}.",
+  "en": "Hi {negocio}! I just requested a booking: {tour}, {when}. My code is {code}. I'm {name}.",
+  "es": "¡Hola, {negocio}! Acabo de pedir la reserva: {tour}, {when}. Mi código es {code}. Soy {name}."
+ },
+ "waSendBooking": { "pt": "Avisar a {negocio} no WhatsApp", "en": "Let {negocio} know on WhatsApp", "es": "Avisar a {negocio} por WhatsApp" },
  "rtTit": { "pt": "Planejar minha viagem", "en": "Plan my trip", "es": "Planificar mi viaje" },
  "rtIntro": {
   "pt": "Conte quando você vem, com quem vai viajar e o que gostaria de viver. A {negocio} monta uma proposta personalizada e responde pelo WhatsApp.",

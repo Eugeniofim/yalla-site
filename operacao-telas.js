@@ -98,11 +98,11 @@ function opCardServico(b, o) {
   const pago = Bookings.paid(b);
   let din;
   if (b.status === 'cancelled') din = `<span class="pill n">${L('Cancelado', 'Cancelled')}</span>`;
-  else if (nd.valor <= 0) din = `<span class="svc-din ok">✓ Tudo pago · ${eur(pago)}</span>`;
+  else if (nd.valor <= 0) din = `<span class="svc-din ok">✓ Tudo pago · ${valorReserva(b, pago)}</span>`;
   else if (nd.para === 'prestador') din = `<span class="svc-din warn">💵 Paga no dia: <b>${eur(nd.valor)}</b> ${pres ? 'para ' + esc(opPrimeiro(pres.nome)) : (papel === 'motorista' ? 'ao motorista' : 'à guia')}
-      <small>já pagou ${eur(pago)} de ${eur(b.total)}</small></span>`;
+      <small>já pagou ${valorReserva(b, pago)} de ${valorReserva(b, b.total)}</small></span>`;
   else din = `<span class="svc-din bad">Falta pagar a você: <b>${eur(nd.valor)}</b>
-      <small>já pagou ${eur(pago)} de ${eur(b.total)} · até ${fmtDate(Bookings.dueDate(b))}</small></span>`;
+      <small>já pagou ${valorReserva(b, pago)} de ${valorReserva(b, b.total)} · até ${fmtDate(Bookings.dueDate(b))}</small></span>`;
 
   const presLinha = pres
     ? `<span>👤 ${papel === 'motorista' ? 'Motorista' : 'Guia'}: <b>${esc(pres.nome)}</b>
@@ -153,7 +153,7 @@ function opFormPagamento(b) {
       <label class="fld">Comprovante (link do arquivo)<input id="pgk-${esc(b.id)}" placeholder="https://drive.google.com/…"></label>
       <label class="fld sm">Em R$ (se foi Pix)<input type="number" min="0" step="0.01" id="pgr-${esc(b.id)}" placeholder="0"></label>
     </div>
-    <p class="why">Falta ${eur(due)}. A conta decide para qual contador vai (${esc(ladoNome('brasil'))} ou ${esc(ladoNome('europa'))}). "Pago direto ao guia/motorista" não entra no seu caixa.</p>
+    <p class="why">Falta ${valorReserva(b, due)}. A conta decide para qual contador vai (${esc(ladoNome('brasil'))} ou ${esc(ladoNome('europa'))}). "Pago direto ao guia/motorista" não entra no seu caixa.</p>
     <button class="cta sm" data-pgok="${esc(b.id)}">Registrar</button>
   </div>`;
 }
@@ -769,7 +769,7 @@ function admFicha(arg) {
           ${part.length < b.pax ? `<span class="pill warn">faltam ${b.pax - part.length} nome(s)</span>` : ''}</div>
         <div class="fc-links">${Op.precisaIngresso(b) && !PedidosFor.daReserva(b).some(p => p.tipo === 'ingressos') ? (b.ingressosOk ? '<span class="pill ok">🎟 ingressos comprados</span>' : '<span class="pill warn">🎟 comprar ingressos</span>') : ''} ${pedForPills(b)}
           ${(b.links || []).map(l => `<a class="mini" target="_blank" rel="noopener" href="${esc(l.url)}">🔗 ${esc(l.nome)}</a>`).join('')}</div></td>
-      <td class="mono right">${eur(b.total)}</td><td class="mono right">${eur(pago)}</td>
+      <td class="mono right">${valorReserva(b, b.total)}</td><td class="mono right">${valorReserva(b, pago)}</td>
       <td class="mono right">${nd.valor ? eur(nd.valor) + (nd.para === 'prestador' ? '<br><small>no dia</small>' : '<br><small>a você</small>') : '✓'}</td>
       <td>${pres ? esc(opPrimeiro(pres.nome)) : `<a href="#/adm/guias/servico:${esc(b.id)}" class="fc-sem">escalar</a>`}</td>
       <td><button class="mini" data-abre="fc-${esc(b.id)}" aria-label="abrir o serviço">abrir</button></td></tr>
@@ -778,7 +778,7 @@ function admFicha(arg) {
   const somaTot = prox.reduce((s2, b) => s2 + (+b.total || 0), 0), somaPago = prox.reduce((s2, b) => s2 + Bookings.paid(b), 0), somaDia = prox.reduce((s2, b) => s2 + Op.noDia(b).valor, 0);
   /* o historico: tudo em ordem, do mais novo para o mais antigo */
   const hist = [];
-  for (const b of bs) hist.push({ d: b.date, ico: b.status === 'cancelled' ? '✕' : '🏛️', txt: `${nomeDoServico(b)} · ${b.pax}p${b.clienteId !== c.id ? ' (veio junto)' : ''}${b.status === 'cancelled' ? ' · cancelado' : ''}`, v: b.clienteId === c.id ? eur(b.total) : '' });
+  for (const b of bs) hist.push({ d: b.date, ico: b.status === 'cancelled' ? '✕' : '🏛️', txt: `${nomeDoServico(b)} · ${b.pax}p${b.clienteId !== c.id ? ' (veio junto)' : ''}${b.status === 'cancelled' ? ' · cancelado' : ''}`, v: b.clienteId === c.id ? valorReserva(b, b.total) : '' });
   for (const b of bs.filter(x => x.clienteId === c.id)) for (const p of b.payments || []) hist.push({ d: p.date, ico: '💵', txt: `pagou ${eur(p.amount)} · ${Contas.nome(p.conta) || formaPg(p.method)}${p.comprovante ? ' · comprovante' : ''}`, href: p.comprovante || '' });
   for (const o of orcamentos) hist.push({ d: String(o.criado).slice(0, 10), ico: '🧾', txt: `orçamento ${o.num} · ${o.status}`, v: eur(Orc.total(o)), link: '#/adm/consulta/' + o.id });
   for (const t of tfs) hist.push({ d: String(t.feitaEm || t.criada).slice(0, 10), ico: t.tipo === 'nota' ? '📝' : t.feita ? '✅' : '⏳', txt: t.texto });
@@ -1786,8 +1786,8 @@ function opVoucherTexto(b) {
   if (b.destino) l.push(`Destino: ${b.destino}`);
   if (pres) l.push(`${opPapel(b) === 'motorista' ? 'Motorista' : 'Guia'}: ${pres.nome}`);
   l.push('', nd.valor > 0 ? (nd.para === 'prestador'
-    ? `No dia: pague ${eur(nd.valor)} em dinheiro ${opPapel(b) === 'motorista' ? 'ao motorista' : 'à guia'}.`
-    : `Falta pagar ${eur(nd.valor)} até ${fmtDate(Bookings.dueDate(b))}.`) : 'Tudo pago. Não há nada a pagar no dia.');
+    ? `No dia: pague ${valorReserva(b, nd.valor)} em dinheiro ${opPapel(b) === 'motorista' ? 'ao motorista' : 'à guia'}.`
+    : `Falta pagar ${valorReserva(b, nd.valor)} até ${fmtDate(Bookings.dueDate(b))}.`) : 'Tudo pago. Não há nada a pagar no dia.');
   l.push('', 'Dicas: ' + dicasDo(b));
   if (DB.settings.plantao) l.push('', `Plantão (emergências): ${DB.settings.plantao}`);
   l.push(`WhatsApp: ${DB.settings.whats || ''}`);
@@ -1902,8 +1902,8 @@ function opDocVoucher(id) {
     </dl>
     <div class="doc-pag ${nd.valor > 0 ? 'falta' : 'ok'}">
       ${nd.valor > 0 ? (nd.para === 'prestador'
-        ? `<b>No dia, pague ${eur(nd.valor)} em dinheiro ${opPapel(b) === 'motorista' ? 'ao motorista' : 'à guia'}.</b><small>Já pago: ${eur(pago)} de ${eur(b.total)}</small>`
-        : `<b>Falta pagar ${eur(nd.valor)} até ${fmtDate(Bookings.dueDate(b))}.</b><small>Já pago: ${eur(pago)} de ${eur(b.total)}</small>`)
+        ? `<b>No dia, pague ${valorReserva(b, nd.valor)} em dinheiro ${opPapel(b) === 'motorista' ? 'ao motorista' : 'à guia'}.</b><small>Já pago: ${valorReserva(b, pago)} de ${valorReserva(b, b.total)}</small>`
+        : `<b>Falta pagar ${valorReserva(b, nd.valor)} até ${fmtDate(Bookings.dueDate(b))}.</b><small>Já pago: ${valorReserva(b, pago)} de ${valorReserva(b, b.total)}</small>`)
         : `<b>✓ Tudo pago.</b><small>Não há nada a pagar no dia.</small>`}
     </div>
     ${docExtrasReserva(b, 'cliente')}
@@ -2046,7 +2046,7 @@ function viewPedido() {
   app.innerHTML = `
   <header class="topbar">
     <button class="backbtn" id="bk" aria-label="${t('back')}">←</button>
-    <span class="tbrand">${logoMark(24, 'var(--brand-assinatura)')}<b>${esc(guiaNome())}</b></span>
+    <span class="tbrand">${marcaDeitada(24, guiaNome())}</span>
     ${langBar('right')}
   </header>
   <main class="wrap roteiro">
@@ -3026,7 +3026,7 @@ function admParcerias() {
         ${p.cupom ? `<span class="pill conta">cupom <b>${esc(p.cupom)}</b>${p.desconto ? ' · ' + p.desconto + '% para o cliente' : ''}</span>` : ''}</div>
         <div class="par-nums"><span><small>Reservas</small><b>${c.reservas}</b></span><span><small>Clientes</small><b>${c.clientes}</b></span><span><small>Faturado</small><b>${eur(c.faturado)}</b></span>
           <span><small>Comissão ${p.comissao}%</small><b>${eur(c.devida)}</b></span><span><small>Já pago</small><b>${eur(c.paga)}</b></span><span class="${c.saldo > 0 ? 'par-deve' : ''}"><small>A pagar</small><b>${eur(c.saldo)}</b></span></div>
-        ${bs.length ? `<details><summary class="why">as ${bs.length} reservas</summary>${bs.map(b => `<div class="deprow"><span class="mono">${crmData(b.date)}</span><a href="${opFicha(b)}">${esc(b.name)}</a><span>${esc(nomeDoServico(b))}</span><b class="mono">${eur(b.total)}</b></div>`).join('')}</details>` : '<p class="why">Nenhuma reserva ainda.</p>'}
+        ${bs.length ? `<details><summary class="why">as ${bs.length} reservas</summary>${bs.map(b => `<div class="deprow"><span class="mono">${crmData(b.date)}</span><a href="${opFicha(b)}">${esc(b.name)}</a><span>${esc(nomeDoServico(b))}</span><b class="mono">${valorReserva(b, b.total)}</b></div>`).join('')}</details>` : '<p class="why">Nenhuma reserva ainda.</p>'}
         <div class="btnrow">
           ${c.saldo > 0 ? `<input type="number" min="0" step="0.01" class="par-val" id="pv-${esc(p.id)}" value="${c.saldo}"><button class="mini strong" data-parpaga="${esc(p.id)}">registrar comissão paga</button>` : ''}
           <button class="mini" data-pared="${esc(p.id)}">editar</button><button class="mini ghost danger" data-parrm="${esc(p.id)}">remover</button></div>
@@ -3101,7 +3101,7 @@ function atReservas(q, soDevendo) {
     .slice(0, 12);
 }
 function atLinhaReserva(b) {
-  return `<button class="at-res" data-res="${esc(b.id)}"><b>${esc(b.name)}</b><span>${crmData(b.date)} · ${esc(nomeDoServico(b))}</span><small>${esc(b.code || '')}${Bookings.due(b) > 0 ? ' · falta ' + eur(Bookings.due(b)) : ' · pago ✓'}</small></button>`;
+  return `<button class="at-res" data-res="${esc(b.id)}"><b>${esc(b.name)}</b><span>${crmData(b.date)} · ${esc(nomeDoServico(b))}</span><small>${esc(b.code || '')}${Bookings.due(b) > 0 ? ' · falta ' + valorReserva(b, Bookings.due(b)) : ' · pago ✓'}</small></button>`;
 }
 function atBusca(d, soDevendo, escolhe) {
   const inp = d.querySelector('.at-q'), box = d.querySelector('.at-lista');
@@ -3172,7 +3172,7 @@ const ATALHO = {
           p.arquivoId = arquivo.id; _opSaveBooking(b);
         }
         Tarefas.sincroniza();
-        d.close(); toast(`💵 ${eur(p.amount)} registrado · ${Contas.nome(conta)}${Bookings.due(b) ? ' · ainda falta ' + eur(Bookings.due(b)) : ' · pago ✓'}`);
+        d.close(); toast(`💵 ${valorReserva(b, p.amount)} registrado · ${Contas.nome(conta)}${Bookings.due(b) ? ' · ainda falta ' + valorReserva(b, Bookings.due(b)) : ' · pago ✓'}`);
         route();
       };
     };

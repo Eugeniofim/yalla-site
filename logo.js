@@ -54,6 +54,19 @@ function logoFull(opts = {}) {
   </span>`;
 }
 
+/* o logo oficial deitado, numa cor só (22/10/2026, pedido da Milla: a coroa
+   dourada com o nome em branco misturava as cores). Vão as duas versões e o
+   CSS escolhe pelo fundo; sem o arquivo no config, a coroa com o nome. */
+function marcaDeitada(h, nomeFallback) {
+  const g = (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.guia) || {};
+  if (!g.logoHorizontal) return logoMark(h, 'var(--brand-assinatura)') + `<b>${_lgEsc(nomeFallback || '')}</b>`;
+  const nome = (typeof guiaNegocio === 'function' && guiaNegocio()) || '';
+  return `<span class="mdeit" style="height:${h}px">` +
+    `<img class="md-ouro" src="${_lgEsc(g.logoHorizontal)}" alt="${_lgEsc(nome)}">` +
+    `<img class="md-preto" src="${_lgEsc(g.logoHorizontalEscuro || g.logoHorizontal)}" alt="" aria-hidden="true">` +
+    `</span>`;
+}
+
 /* logotipo completo, empilhado */
 function logoLockup(markHeight = 150) {
   const nome = (typeof guiaNegocio === 'function' && guiaNegocio()) || '';
