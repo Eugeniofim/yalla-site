@@ -3326,6 +3326,12 @@ function avAjustesHtml() {
       <label class="fld">Link para ver todas (opcional)<input id="avVer" inputmode="url" placeholder="https://…" value="${esc(st.linkAvaliacoesVer || '')}"></label></div>
     <p class="why">O primeiro link também vai na mensagem "⭐ pedir avaliação" do CRM.</p>
     <button class="mini strong" id="avLinks">Salvar os links</button>
+    ${(() => { const rec = (DB.avaliacoes || []).filter(a => a && !a.publicar && !a.descartada).sort((a, b) => String(b.criado || '').localeCompare(String(a.criado || '')));
+      return rec.length ? `<div class="rulesep"></div><h4>Chegaram pelo site (${rec.length})</h4>
+      <p class="why">O cliente escreveu no site. Só aparece para o público se você publicar.</p>
+      ${rec.map(a => `<div class="deprow av-rec"><span><b>${esc(a.nome)}</b> <span class="av-est-p">${'★'.repeat(+a.nota || 5)}</span>${a.passeio ? ` <small class="why">· ${esc(a.passeio)}</small>` : ''}<br>
+        <small>${esc(String(a.texto || ''))}</small>${a.autorizou === false ? '<br><small class="why">⚠ não autorizou publicar</small>' : ''}</span>
+        <span class="btnrow">${a.autorizou === false ? '' : `<button class="mini strong" data-avpub="${esc(a.id)}">Publicar</button>`}<button class="mini ghost" data-avdesc="${esc(a.id)}">Não publicar</button></span></div>`).join('')}` : ''; })()}
     <div class="rulesep"></div>
     ${l.map(a => `<div class="deprow"><span><b>${esc(a.nome)}</b> <span class="av-est-p">${'★'.repeat(a.nota)}</span><br><small class="why">${esc(a.texto.slice(0, 90))}${a.texto.length > 90 ? '…' : ''}</small></span><button class="mini ghost danger" data-avrm="${esc(a.id)}" aria-label="apagar a avaliação de ${esc(a.nome)}">✕</button></div>`).join('') || '<p class="why">Nenhuma avaliação ainda.</p>'}
     <details><summary><b>+ Colar uma avaliação</b></summary>
@@ -3353,6 +3359,14 @@ function avAjustesLiga() {
     toast('⭐ Avaliação no site'); re();
   };
   c.querySelectorAll('[data-avrm]').forEach(b => b.onclick = () => { if (confirm('Tirar esta avaliação do site?')) { Avaliacoes.remove(b.dataset.avrm); re(); } });
+  const rec = (id) => (DB.avaliacoes || []).find(a => a.id === id);
+  c.querySelectorAll('[data-avpub]').forEach(b => b.onclick = () => {
+    const a = rec(b.dataset.avpub); if (!a) return;
+    const r = Avaliacoes.salva({ nome: a.nome, cidade: a.cidade, nota: a.nota, passeio: a.passeio, texto: a.texto, fonte: 'site' });
+    if (r.erro) return toast(r.erro);
+    r.data = a.data || r.data; a.publicar = true; a.publicadaId = r.id; save(); toast('⭐ Publicada no site'); re();
+  });
+  c.querySelectorAll('[data-avdesc]').forEach(b => b.onclick = () => { const a = rec(b.dataset.avdesc); if (!a) return; a.descartada = true; save(); re(); });
 }
 
 /* =====================================================

@@ -21,7 +21,7 @@
    ===================================================== */
 'use strict';
 
-const ITENS_COLS = ['equipe', 'disp', 'contas', 'orcamentos', 'fichas', 'tarefas', 'clientes', 'parceiros', 'pontos', 'pedidos', 'lembretesVistos', 'interesse'];
+const ITENS_COLS = ['equipe', 'disp', 'contas', 'orcamentos', 'fichas', 'tarefas', 'clientes', 'parceiros', 'pontos', 'pedidos', 'lembretesVistos', 'interesse', 'avaliacoes'];
 /* estas sao "dicionarios" no DB (chave -> valor); as outras sao listas com id */
 const ITENS_DIC = ['fichas', 'lembretesVistos', 'interesse'];
 const IT_SOMBRA = 'yalla_sombra_v1', IT_FILA = 'yalla_fila_v1', IT_MARCA = 'yalla_marca_v1';
@@ -156,8 +156,10 @@ function itAgendar() {
 /* O VISITANTE (cliente no site) so CRIA pedido: nao le nada, nao muda nada.
    E o que faz o "Meu pedido" e o "Monte seu roteiro" chegarem no celular dela. */
 async function itPedidoPublico(colecao, x) {
-  if (!(typeof temNuvem === 'function' && temNuvem()) || !['pedidos', 'orcamentos'].includes(colecao) || !x || !x.id) return false;
-  try { const r = await supaFetch('itens', { method: 'POST', body: JSON.stringify({ colecao, id: x.id, dados: x, apagado: false }) }); return r.ok || r.status === 409; }
+  if (!(typeof temNuvem === 'function' && temNuvem()) || !['pedidos', 'orcamentos', 'avaliacoes'].includes(colecao) || !x || !x.id) return false;
+  /* avaliação do cliente nasce SEMPRE não publicada: quem publica é ela (a sala só aceita assim) */
+  const dados = colecao === 'avaliacoes' ? { ...x, publicar: false } : x;
+  try { const r = await supaFetch('itens', { method: 'POST', body: JSON.stringify({ colecao, id: x.id, dados, apagado: false }) }); return r.ok || r.status === 409; }
   catch (e) { return false; }
 }
 /* de 25 em 25 s, e quando a internet volta (nunca depender so do aviso na hora).

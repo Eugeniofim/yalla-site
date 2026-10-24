@@ -621,3 +621,27 @@ html.vt-trava{overflow:hidden}
 /* o logo dourado em cima do céu laranja da foto: um pouco mais de sombra no topo */
 .vt-hero::after{background:linear-gradient(180deg,rgba(11,11,11,.58) 0%,rgba(11,11,11,.12) 20%,rgba(11,11,11,0) 42%,rgba(11,11,11,.5) 68%,rgba(11,11,11,.86) 100%)}
 .vt-top:not(.solido) .mdeit img{filter:drop-shadow(0 1px 6px rgba(0,0,0,.55))}
+
+/* 24/10/2026, pedidos da Milla */
+/* fotos no computador: a capa do passeio ocupava a tela inteira com ~3:1 e cortava
+   a foto. No computador vira uma moldura 5:3 ("3x5", como ela pediu), centrada. */
+@media (min-width:900px){
+  .tourhero{width:min(1180px,calc(100% - 48px));margin:20px auto 0;min-height:0;aspect-ratio:5/3;max-height:74vh;
+    border-radius:22px;overflow:hidden;background-position:center 42%;box-shadow:0 22px 50px -30px rgba(0,0,0,.55)}
+  .tourhero .thin{padding:0 40px 34px}
+  .tgal{grid-auto-columns:calc((100% - 30px)/4)}
+  .tgal-it{aspect-ratio:5/3}
+}
+/* as regras da mesquita (o cartaz oficial) nas Orientações */
+.orient-img{display:block;margin-top:14px;padding:0;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#fff;cursor:zoom-in;max-width:420px}
+.orient-img img{display:block;width:100%;height:auto}
+/* preço de criança na caixa de valor */
+.pbcri{display:block;margin-top:6px;color:var(--ink-2)}
+/* o cliente deixa a avaliação */
+.av-form{margin-top:32px;padding:22px;border:1px solid rgba(212,175,55,.32);border-radius:22px;background:var(--surface);display:grid;gap:12px}
+.av-form h2{font:600 22px/1.25 var(--f-serif);margin:0}
+.av-notas{display:flex;gap:6px}
+.av-nota{width:44px;height:44px;border-radius:12px;border:1px solid var(--line-2);background:var(--paper);color:var(--line-2);font-size:24px;line-height:1;cursor:pointer}
+.av-nota.on{color:#D4AF37;border-color:rgba(212,175,55,.6);background:var(--accent-wash)}
+.av-form .cta.soft{text-decoration:none;text-align:center}
+.av-rec .btnrow{display:flex;gap:6px;flex-wrap:wrap;align-items:center}

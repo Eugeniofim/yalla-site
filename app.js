@@ -528,19 +528,22 @@ function viewHub() {
     </div>
   </section>
 
-  ${depo.length || fbIg ? `<section class="vt-sec vt-branca" aria-labelledby="vtAval">
+  <section class="vt-sec vt-branca" aria-labelledby="vtAval">
     <div class="vt-wrap">
       <div class="vt-cab">${rot(L3('Avaliações', 'Reviews', 'Opiniones'))}<h2 id="vtAval">${L3('Quem viveu, conta.', 'Those who lived it, tell it.', 'Quien lo vivió, lo cuenta.')}</h2></div>
       ${depo.length ? `<div class="vt-avals">${depo.map(a => `<figure class="vt-aval">
         ${+a.nota ? `<span class="vt-estrelas" aria-label="${a.nota} ${L3('de 5 estrelas', 'of 5 stars', 'de 5 estrellas')}">${'★'.repeat(+a.nota)}</span>` : ''}
         <blockquote>“${esc(a.texto)}”</blockquote>
         <figcaption>${esc(a.nome)}${a.data ? ` · ${esc(mesAno(a.data))}` : ''}</figcaption></figure>`).join('')}</div>` : ''}
-      ${Avaliacoes.all().length > depo.length ? `<p class="vt-mais"><a class="vt-btn vt-btn-linha" href="#/avaliacoes">${L3('Ver todas as avaliações', 'See all reviews', 'Ver todas las opiniones')}</a></p>` : ''}
+      <p class="vt-mais">
+        ${Avaliacoes.all().length > depo.length ? `<a class="vt-btn vt-btn-linha" href="#/avaliacoes">${L3('Ver todas as avaliações', 'See all reviews', 'Ver todas las opiniones')}</a>` : ''}
+        <a class="vt-btn vt-btn-linha" href="#/avaliacoes">${L3('Deixar minha avaliação', 'Leave a review', 'Dejar mi opinión')}</a>
+      </p>
       ${fbIg ? `<div class="vt-indica"><a href="${esc(fbIg)}" target="_blank" rel="noopener"><span class="vt-ic vt-ig">${ICONE_IG}</span>
         <span><b>${L3('Relatos de quem viajou com a ' + marca, 'Stories from people who travelled with ' + marca, 'Relatos de quienes viajaron con ' + marca)}</b><small>${L3('Nos destaques do Instagram', 'In our Instagram highlights', 'En los destacados de Instagram')}${insta ? ' @' + esc(insta) : ''}</small></span>
         <span class="vt-ir" aria-hidden="true">${YL.fora}</span><span class="sr-only">${L3('(abre em outra aba)', '(opens in a new tab)', '(abre en otra pestaña)')}</span></a></div>` : ''}
     </div>
-  </section>` : ''}
+  </section>
 
   <section class="vt-sec" id="sobre" aria-labelledby="vtSobre">
     <div class="vt-wrap vt-sobre">
@@ -853,9 +856,11 @@ function viewRoteiro() {
    aceita melhor o valor. A foto e o texto saem dos Ajustes. */
 /* AVALIACOES — so as de verdade, que ela cola no painel (Ajustes) */
 function viewAvaliacoes() {
-  const st = DB.settings, l = Avaliacoes.all(), m = Avaliacoes.media(), en = LANG === 'en';
-  const estrelas = (n) => `<span class="av-est" aria-label="${n} ${en ? 'of 5 stars' : 'de 5 estrelas'}">${'★'.repeat(n)}<i>${'★'.repeat(5 - n)}</i></span>`;
-  const deixar = linkExterno(st.linkAvaliacao), verTodas = linkExterno(st.linkAvaliacoesVer) || deixar;
+  const st = DB.settings, l = Avaliacoes.all(), m = Avaliacoes.media();
+  const estrelas = (n) => `<span class="av-est" aria-label="${n} ${L3('de 5 estrelas', 'of 5 stars', 'de 5 estrellas')}">${'★'.repeat(n)}<i>${'★'.repeat(5 - n)}</i></span>`;
+  const google = linkExterno(st.linkAvaliacao), verTodas = linkExterno(st.linkAvaliacoesVer) || google;
+  const R = viewAvaliacoes._s = viewAvaliacoes._s || { nota: 5 };
+  const passeios = Tours.live().map(x => x.name[LANG] || x.name.pt);
   app.innerHTML = `
   <header class="topbar">
     <button class="backbtn" id="bk" aria-label="${t('back')}">←</button>
@@ -863,21 +868,51 @@ function viewAvaliacoes() {
     ${langBar('right')}
   </header>
   <main class="wrap av-pag">
-    <h1>⭐ ${t('hubAval')}</h1>
-    ${m ? `<div class="av-media"><b>${String(m).replace('.', ',')}</b>${estrelas(Math.round(m))}<small>${l.length} ${en ? (l.length === 1 ? 'review' : 'reviews') : (l.length === 1 ? 'avaliação' : 'avaliações')}</small></div>` : ''}
-    ${l.length ? l.map(a => `<article class="av-card">
+    <h1 class="pageh">${L3('Avaliações', 'Reviews', 'Opiniones')}</h1>
+    ${m ? `<div class="av-media"><b>${String(m).replace('.', ',')}</b>${estrelas(Math.round(m))}<small>${l.length} ${l.length === 1 ? L3('avaliação', 'review', 'opinión') : L3('avaliações', 'reviews', 'opiniones')}</small></div>` : ''}
+    ${l.map(a => `<article class="av-card">
         <div class="av-top"><b>${esc(a.nome)}</b>${a.cidade ? `<small>${esc(a.cidade)}</small>` : ''}${estrelas(a.nota)}</div>
         <p>${esc(a.texto).replace(/\n/g, '<br>')}</p>
-        <small class="av-pe">${[a.passeio, a.data ? new Date(a.data + 'T12:00:00').toLocaleDateString(en ? 'en-GB' : 'pt-BR', { month: 'long', year: 'numeric' }) : '', a.fonte].filter(Boolean).map(esc).join(' · ')}</small>
-      </article>`).join('') : `<p class="empty">${en ? 'Reviews from our guests will appear here soon.' : 'Em breve as avaliações dos clientes aparecem aqui.'}</p>
-      ${DB.demo ? '<p class="why">No painel › Ajustes › <b>Avaliações do site</b> você cola as avaliações de verdade (do Google, do WhatsApp) e o link para deixar uma avaliação.</p>' : ''}`}
-    <div class="av-bts">
-      ${deixar ? `<a class="cta" href="${esc(deixar)}" target="_blank" rel="noopener">⭐ ${en ? 'Leave a review' : 'Deixar a minha avaliação'}</a>` : ''}
-      ${verTodas && verTodas !== deixar ? `<a class="lk-mini" href="${esc(verTodas)}" target="_blank" rel="noopener">${en ? 'See all on Google' : 'Ver todas no Google'} ↗</a>` : ''}
-    </div>
+        <small class="av-pe">${[a.passeio, a.data ? new Date(a.data + 'T12:00:00').toLocaleDateString(LANG === 'en' ? 'en-GB' : LANG === 'es' ? 'es-ES' : 'pt-BR', { month: 'long', year: 'numeric' }) : '', a.fonte].filter(Boolean).map(esc).join(' · ')}</small>
+      </article>`).join('')}
+    ${verTodas && verTodas !== google ? `<p><a class="lk-mini" href="${esc(verTodas)}" target="_blank" rel="noopener">${L3('Ver todas no Google', 'See all on Google', 'Ver todas en Google')} ↗</a></p>` : ''}
+
+    <!-- 24/10/2026, a Milla: "existe a possibilidade de cliente deixar feedback na plataforma?"
+         A avaliação chega para ela e só aparece aqui depois que ela publica. -->
+    <section class="av-form" id="avForm" aria-labelledby="avFormTit">
+      <h2 id="avFormTit">${L3('Viajou com a ' + guiaNegocio().split(' ')[0] + '? Conte como foi', 'Travelled with ' + guiaNegocio().split(' ')[0] + '? Tell us how it went', '¿Viajaste con ' + guiaNegocio().split(' ')[0] + '? Cuéntanos cómo fue')}</h2>
+      <div class="av-notas" role="radiogroup" aria-label="${L3('Sua nota', 'Your rating', 'Tu nota')}">${[1, 2, 3, 4, 5].map(n => `<button type="button" role="radio" aria-checked="${R.nota === n}" class="av-nota ${n <= R.nota ? 'on' : ''}" data-nota="${n}" aria-label="${n} ${L3('estrelas', 'stars', 'estrellas')}">★</button>`).join('')}</div>
+      <label class="fld">${L3('Seu nome', 'Your name', 'Tu nombre')}<input id="avfNome" autocomplete="given-name" maxlength="40" value="${esc(R.nome || '')}"></label>
+      <div class="frow">
+        <label class="fld">${L3('Cidade', 'City', 'Ciudad')}<input id="avfCid" maxlength="40" value="${esc(R.cidade || '')}" placeholder="${L3('São Paulo', 'London', 'Madrid')}"></label>
+        <label class="fld">${L3('Experiência', 'Experience', 'Experiencia')}<select id="avfPas"><option value="">—</option>${passeios.map(p => `<option ${R.passeio === p ? 'selected' : ''}>${esc(p)}</option>`).join('')}</select></label>
+      </div>
+      <label class="fld">${L3('Sua avaliação', 'Your review', 'Tu opinión')}<textarea id="avfTxt" rows="4" maxlength="800">${esc(R.texto || '')}</textarea></label>
+      <label class="rtcheck"><input type="checkbox" id="avfOk" ${R.autorizou === false ? '' : 'checked'}> ${L3('Autorizo publicar no site (só o primeiro nome)', 'I allow it to be published on the site (first name only)', 'Autorizo publicarla en el sitio (solo el nombre)')}</label>
+      <button class="cta" id="avfEnviar">${L3('Enviar avaliação', 'Send review', 'Enviar opinión')}</button>
+      ${google ? `<a class="cta soft" href="${esc(google)}" target="_blank" rel="noopener">${L3('Avaliar também no Google', 'Also review us on Google', 'Opinar también en Google')} ↗</a>` : ''}
+    </section>
   </main>`;
   bindLang(app);
   $('#bk').onclick = () => go('/');
+  const guarda = () => { R.nome = $('#avfNome').value; R.cidade = $('#avfCid').value; R.passeio = $('#avfPas').value; R.texto = $('#avfTxt').value; R.autorizou = $('#avfOk').checked; };
+  $$('[data-nota]').forEach(b => b.onclick = () => { guarda(); R.nota = +b.dataset.nota; viewAvaliacoes(); $('#avForm').scrollIntoView({ block: 'center' }); });
+  $('#avfEnviar').onclick = async () => {
+    guarda();
+    const nome = String(R.nome || '').trim(), texto = String(R.texto || '').trim();
+    if (!nome || texto.length < 5) return toast(L3('Escreva seu nome e a avaliação.', 'Write your name and your review.', 'Escribe tu nombre y tu opinión.'));
+    const a = { id: uid(), nome: nome.slice(0, 40), cidade: String(R.cidade || '').trim().slice(0, 40), passeio: R.passeio || '', nota: R.nota,
+      texto: texto.slice(0, 800), autorizou: !!R.autorizou, data: isoToday(), criado: new Date().toISOString(), lang: LANG, publicar: false };
+    const btn = $('#avfEnviar'); btn.disabled = true;
+    let ok = true;
+    if (typeof temNuvem === 'function' && temNuvem()) ok = await itPedidoPublico('avaliacoes', a);
+    else { DB.avaliacoes = DB.avaliacoes || []; DB.avaliacoes.push(a); save(); }
+    if (!ok) { btn.disabled = false; return toast(L3('Não consegui enviar agora. Tente de novo em instantes.', 'Could not send right now. Please try again shortly.', 'No se pudo enviar ahora. Inténtalo de nuevo en un momento.')); }
+    viewAvaliacoes._s = null;
+    $('#avForm').innerHTML = `<div class="okc">✓</div><h2 class="okh">${L3('Obrigada pela avaliação!', 'Thank you for your review!', '¡Gracias por tu opinión!')}</h2>
+      <p class="hint center">${L3('Ela aparece aqui depois que a ' + guiaNegocio().split(' ')[0] + ' publicar.', 'It shows here once ' + guiaNegocio().split(' ')[0] + ' publishes it.', 'Aparece aquí cuando ' + guiaNegocio().split(' ')[0] + ' la publique.')}</p>
+      ${google ? `<a class="cta soft" href="${esc(google)}" target="_blank" rel="noopener">${L3('Avaliar também no Google', 'Also review us on Google', 'Opinar también en Google')} ↗</a>` : ''}`;
+  };
 }
 
 /* O VÍDEO DE APRESENTAÇÃO (22/10/2026): o link que ela cola nos Ajustes vira
@@ -996,6 +1031,39 @@ function valorTour(x, v) {
   return (MOEDA_SIGLA[m] || m) + ' ' + n.toLocaleString(LANG === 'pt' ? 'pt-BR' : LANG === 'es' ? 'es-ES' : 'en-GB',
     n % 1 === 0 ? {} : { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
+/* os horários do passeio em texto e de volta: "09:00, 08:00-08:45 (sáb-qui), 14:00-14:30 (sex)".
+   Dias: dom seg ter qua qui sex sáb (0 = domingo); faixa que passa do sábado para o domingo vale. */
+const DIAS_CURTOS = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+function horariosTxt(hs) {
+  const dTxt = (ds) => {
+    if (!Array.isArray(ds) || !ds.length || ds.length >= 7) return '';
+    const set = new Set(ds), ini = ds.find(d => !set.has((d + 6) % 7));
+    if (ini !== undefined) { let f = ini, n = 1; while (set.has((f + 1) % 7) && n < ds.length) { f = (f + 1) % 7; n++; } if (n === ds.length) return ds.length === 1 ? DIAS_CURTOS[ini] : DIAS_CURTOS[ini] + '-' + DIAS_CURTOS[f]; }
+    return [...ds].sort().map(d => DIAS_CURTOS[d]).join('/');
+  };
+  return (hs || []).map(h => typeof h === 'string' ? h : (h.hora + (h.ate ? '-' + h.ate : '') + (dTxt(h.dias) ? ' (' + dTxt(h.dias) + ')' : ''))).join(', ');
+}
+function lerHorarios(txt) {
+  const dia = (n) => DIAS_CURTOS.indexOf(String(n).toLowerCase().trim().replace('sab', 'sáb').slice(0, 3));
+  const hm = (h, m) => String(+h).padStart(2, '0') + ':' + m;
+  return String(txt || '').split(/[,;|]/).map(tk => {
+    const m = tk.match(/(\d{1,2})[:h](\d{2})(?:\s*(?:-|–|a|até)\s*(\d{1,2})[:h](\d{2}))?/); if (!m || +m[1] > 23) return null;
+    const o = { hora: hm(m[1], m[2]) }; if (m[3]) o.ate = hm(m[3], m[4]);
+    const p = tk.match(/\(([^)]*)\)/);
+    if (p) {
+      const dias = [];
+      for (const parte of p[1].split(/\/|\se\s/)) {
+        const r = parte.split(/[-–]/).map(dia);
+        if (r.length === 2 && r[0] >= 0 && r[1] >= 0) { for (let d = r[0], k = 0; k < 7; d = (d + 1) % 7, k++) { dias.push(d); if (d === r[1]) break; } }
+        else if (r[0] >= 0) dias.push(r[0]);
+      }
+      if (dias.length && dias.length < 7) o.dias = [...new Set(dias)];
+    }
+    return o.ate || o.dias ? o : o.hora;
+  }).filter(Boolean);
+}
+/* o idioma do guia (compartilhados da Yalla: inglês ou espanhol) */
+function nomeIdiomaGuia(c) { return ({ en: L3('Inglês', 'English', 'Inglés'), es: L3('Espanhol', 'Spanish', 'Español'), pt: L3('Português', 'Portuguese', 'Portugués') })[c] || c; }
 /* o valor de uma reserva na moeda dela (b.moeda), no painel e nos avisos */
 function valorReserva(b, v) { return b && b.moeda ? valorTour({ moeda: b.moeda }, v) : eur(v); }
 function ehSobConsulta(x) { return x.priceMode !== 'session' && x.priceMode !== 'pp' && !(precoVitrine(x) > 0); }
@@ -1298,7 +1366,7 @@ function viewTour(id) {
     }
     return go('/tours');
   }
-  const S = viewTour._s = { tour: x, date: null, time: null, cap: 0, pax: x.priceMode === 'session' ? 1 : 2, adultos: x.priceMode === 'session' ? 1 : 2, criancas: 0, idades: [], opcao: 0, noCentro: null, step: 1, coupon: null, discount: 0, policy: x.payPolicy === 'split' ? 'split' : 'full' };
+  const S = viewTour._s = { tour: x, idiomaGuia: (x.idiomasGuia || [])[0] || '', ate: '', date: null, time: null, cap: 0, pax: x.priceMode === 'session' ? 1 : 2, adultos: x.priceMode === 'session' ? 1 : 2, criancas: 0, idades: [], opcao: 0, noCentro: null, step: 1, coupon: null, discount: 0, policy: x.payPolicy === 'split' ? 'split' : 'full' };
 
   /* quantas vezes abriram este passeio (o relatorio de cliques e conversao).
      Quem mexe no painel nao conta: so visitante. */
@@ -1411,6 +1479,7 @@ function viewTour(id) {
           <div class="pbmain">
             ${ehSobConsulta(x) ? `<b>${t('sobConsulta')}</b>${x.priceNote ? `<small>${esc(tl(x.priceNote))}</small>` : ''}` : `<b>${x.priceMode === 'tabela' ? `<u class="fromlbl">${t('fromPrice')}</u> ` : ''}${valorTour(x, precoVitrine(x))}</b>
             <small>${unidadePreco(x)}</small>
+            ${+x.precoCrianca > 0 ? `<small class="pbcri">${L3('Criança até ' + x.idadeCrianca + ' anos', 'Child up to ' + x.idadeCrianca, 'Niño hasta ' + x.idadeCrianca + ' años')}: <b>${valorTour(x, x.precoCrianca)}</b></small>` : ''}
             ${x.moeda ? '' : linhaReais(precoVitrine(x))}`}
             ${(x.ingressos || []).length ? `<p class="pbing">🎟️ ${t('ingPagina')}</p>` : ''}
             ${x.priceLate && x.earlySeats && x.priceMode !== 'session'
@@ -1427,6 +1496,8 @@ function viewTour(id) {
       <div class="sec">
         <span class="seclabel">${L3('Orientações', 'Good to know', 'Recomendaciones')}</span>
         <p class="desc">${esc(tl(x.dicas)).replace(/\n/g, '<br>')}</p>
+        ${x.orientacoesImg ? `<button type="button" class="orient-img" id="orientImg" aria-label="${L3('Ver as regras de visita à mesquita', 'See the mosque visiting rules', 'Ver las reglas de visita a la mezquita')}">
+          <img src="${esc(x.orientacoesImg)}" alt="${L3('Regras oficiais de visita à mesquita (Mosque Manners)', 'Official mosque visiting rules (Mosque Manners)', 'Reglas oficiales de visita a la mezquita (Mosque Manners)')}" loading="lazy"></button>` : ''}
       </div>` : ''}
 
       ${cancelaTxt(x) ? `
@@ -1445,6 +1516,7 @@ function viewTour(id) {
   bindLang(app);
   $('#bk').onclick = () => go('/tours');
   $$('[data-gal]').forEach(b => b.onclick = () => abreGaleria(galeria, +b.dataset.gal));
+  if ($('#orientImg')) $('#orientImg').onclick = () => abreGaleria([x.orientacoesImg], 0);
   renderBook();
 }
 
@@ -1659,7 +1731,7 @@ function renderBook() {
   const S = viewTour._s, x = S.tour, book = $('#book');
   /* Precos vem de Bookings.precoDe: ele sabe quantas vagas baratas restam
      naquela data e divide as pessoas entre os dois valores. */
-  const pr = Bookings.precoDe(x, x.id, S.date, S.time, S.pax, { opcao: S.opcao });
+  const pr = Bookings.precoDe(x, x.id, S.date, S.time, S.pax, { opcao: S.opcao, idades: (S.idades || []).slice(0, S.criancas) });
   /* Preco escalonado: 195 para as 3 primeiras da data, 225 depois.
      Enquanto sobra vaga barata, o valor em destaque e 195 e a nota explica.
      Quando as 3 acabam, anunciar "195, depois 225" vira propaganda enganosa —
@@ -1728,17 +1800,18 @@ function renderBook() {
         </div>`}`;
     $$('.dcell', book).forEach(b => b.onclick = () => { S.date = b.dataset.d; S.time = null; renderBook(); });
     $$('[data-t]', book).forEach(b => b.onclick = () => {
-      S.time = b.dataset.t; S.cap = +b.dataset.c;
+      S.time = b.dataset.t; S.cap = +b.dataset.c; S.ate = b.dataset.ate || '';
       $$('[data-t]', book).forEach(z => z.classList.remove('on')); b.classList.add('on');
       $('#next1').disabled = false;
     });
     $('#next1')?.addEventListener('click', () => { S.step = 2; renderBook(); });
 
     function timesHtml(list) {
-      return `<p class="hint">${t('pickTime')}</p><div class="times">` + list.map(d => {
+      const janela = list.some(d => d.ate);
+      return `<p class="hint">${janela ? L3('Escolha o horário de busca no hotel', 'Pick your hotel pickup window', 'Elige el horario de recogida en el hotel') : t('pickTime')}</p><div class="times">` + list.map(d => {
         const left = Cal.seatsLeft(x.id, d.date, d.time, d.capacity);
         return left > 0
-          ? `<button class="slot ${S.time === d.time ? 'on' : ''}" data-t="${d.time}" data-c="${d.capacity}">${d.time}${d.livre ? '' : `<small>${left} ${t('spotsLeft')}</small>`}</button>`
+          ? `<button class="slot ${S.time === d.time ? 'on' : ''}" data-t="${d.time}" data-c="${d.capacity}" data-ate="${d.ate || ''}">${d.time}${d.ate ? '–' + d.ate : ''}${d.livre ? '' : `<small>${left} ${t('spotsLeft')}</small>`}</button>`
           : `<button class="slot off" disabled>${d.time}<small>0</small></button>`;
       }).join('') + '</div>';
     }
@@ -1750,8 +1823,13 @@ function renderBook() {
       <div class="bstep">${t(x.priceMode === 'transfer' ? 'step2trf' : 'step2')}</div>
       ${x.priceMode === 'session' && !(+x.max > 1) ? '' : pessoasHtml(x, S)}
       ${x.priceMode === 'transfer' ? transferEscolhaHtml(x, S) : ''}
+      ${(x.idiomasGuia || []).length > 1 ? `<div class="trfcentro">
+        <b>${L3('Idioma do guia', 'Guide language', 'Idioma del guía')}</b>
+        <small class="why">${L3('Este passeio não tem guia em português.', 'This tour has no Portuguese-speaking guide.', 'Este paseo no tiene guía en portugués.')}</small>
+        <div class="trfsn">${x.idiomasGuia.map(c => `<button class="popt ${S.idiomaGuia === c ? 'on' : ''}" data-idg="${c}"><b>${nomeIdiomaGuia(c)}</b></button>`).join('')}</div>
+      </div>` : ''}
       <div class="sums">
-        <div><span>${fmtDate(S.date)} · ${S.time}</span></div>
+        <div><span>${fmtDate(S.date)} · ${S.time}${S.ate ? '–' + S.ate : ''}${S.idiomaGuia && (x.idiomasGuia || []).length > 1 ? ' · ' + L3('guia em ', 'guide in ', 'guía en ') + nomeIdiomaGuia(S.idiomaGuia).toLowerCase() : ''}</span></div>
         ${S.discount ? `<div><span>${t('couponOk', { c: S.coupon })}</span><b>−${valorTour(x, S.discount)}</b></div>` : ''}
         ${x.priceMode === 'transfer'
           ? `<div class="quebra"><span>${esc(pr.veiculo || '')} · ${pr.noturno ? t('trfNight') : t('trfDay')}</span><b>${valorTour(x, pr.total)}</b></div>`
@@ -1759,7 +1837,7 @@ function renderBook() {
           : x.priceMode === 'tabela'
           ? `<div class="quebra"><span>${t('closedPrice', { n: S.pax })}</span><b>${valorTour(x, pr.total)}</b></div>`
           : (pr.linhas && pr.linhas.length > 1) ? pr.linhas.map(l =>
-          `<div class="quebra"><span>${t('linhaPreco', { qtd: l.qtd, valor: valorTour(x, l.valor) })}</span><b>${valorTour(x, l.qtd * l.valor)}</b></div>`).join('') : ''}
+          `<div class="quebra"><span>${t('linhaPreco', { qtd: l.qtd, valor: valorTour(x, l.valor) })}${l.crianca ? ' · ' + L3('criança até ' + x.idadeCrianca + ' anos', 'child up to ' + x.idadeCrianca, 'niño hasta ' + x.idadeCrianca + ' años') : ''}</span><b>${valorTour(x, l.qtd * l.valor)}</b></div>`).join('') : ''}
         ${ingressosResumo(x, S, ing)}
         <div class="tot"><span>${t('total')}</span><b>${valorTour(x, total)}</b></div>
         ${x.moeda ? '' : linhaReais(total)}
@@ -1784,6 +1862,7 @@ function renderBook() {
        pessoas SUBIA para 3, e um casal nao conseguia reservar de jeito nenhum.
        O minimo dela e a regra de saida, nao o tamanho minimo de uma reserva. */
     ligaPessoas(x, S, book);
+    $$('[data-idg]', book).forEach(b => b.onclick = () => { S.idiomaGuia = b.dataset.idg; renderBook(); });
     $$('.trfopt', book).forEach(b => b.onclick = () => {
       S.opcao = +b.dataset.o; S.discount = 0; S.coupon = null; renderBook();
     });
@@ -1796,7 +1875,7 @@ function renderBook() {
       else $('#cbad').textContent = t('couponBad');
     };
     $('#next2').onclick = () => {
-      if ((x.ingressos || []).length && S.criancas &&
+      if (((x.ingressos || []).length || +x.precoCrianca > 0) && S.criancas &&
           Array.from({ length: S.criancas }, (_, i) => S.idades[i]).some(v => v === '' || v === undefined || v === null)) {
         return toast(t('idadesFalta'));
       }
@@ -1863,6 +1942,7 @@ function renderBook() {
           consent: $('#fOptin').checked, opcao: S.opcao, group: part.grupo,
           nasc: part.nasc, compradorVai: part.vai, veioPor: part.veioPor, indicadoPor: part.indicadoPor,
           adultos: S.adultos, criancas: S.criancas, idades: S.idades.slice(0, S.criancas),
+          idiomaGuia: (x.idiomasGuia || []).length ? S.idiomaGuia : '', janela: S.ate ? S.time + '–' + S.ate : '',
           policy: (x.priceMode === 'transfer' && pr.sinal) ? 'sinal' : splitAllowed ? S.policy : 'full', origin: 'site',
         });
         S.step = 4; renderBook();
@@ -1878,11 +1958,11 @@ function renderBook() {
       <p class="hint center">${t('sentAll')}</p>
       <div class="voucher">
         <small>${t('yourCode')}</small><div class="code">${esc(b.code)}</div>
-        <p>${fmtDate(b.date)} · ${b.time}</p><p>${esc(noIdioma(x.meeting))}</p>
+        <p>${fmtDate(b.date)} · ${esc(b.janela || b.time)}</p><p>${esc(noIdioma(x.meeting))}</p>
       </div>
       ${comoPagar(b, x)}
       <a class="cta" style="text-decoration:none;text-align:center" target="_blank" rel="noopener"
-         href="${waLink(t('waBookingMsg', { code: b.code, tour: x.name[LANG] || x.name.pt, when: fmtDate(b.date) + ' ' + b.time, name: b.name }))}">✆ ${t('waSendBooking')}</a>
+         href="${waLink(t('waBookingMsg', { code: b.code, tour: (x.name[LANG] || x.name.pt) + (b.idiomaGuia ? ' (' + L3('guia em ', 'guide in ', 'guía en ') + nomeIdiomaGuia(b.idiomaGuia).toLowerCase() + ')' : ''), when: fmtDate(b.date) + ' ' + (b.janela || b.time) + (b.criancas ? ' · ' + b.adultos + ' + ' + b.criancas + ' ' + L3('criança(s)', 'child(ren)', 'niño(s)') : ''), name: b.name }))}">✆ ${t('waSendBooking')}</a>
       <div class="okrow">
         <a class="mini" href="${icsFor(b, x)}" download="${esc(b.code)}.ics">${t('addCal')}</a>
         <a class="mini" target="_blank" rel="noopener" href="${mapLink(noIdioma(x.meeting))}">${t('seeMap')}</a>
@@ -2154,8 +2234,13 @@ function admTourEdit(id) {
             <option value="imediata" ${x.reserva !== 'consulta' ? 'selected' : ''}>${L3('Na hora, pelo calendário', 'Instantly, from the calendar', 'Al instante, por el calendario')}</option>
             <option value="consulta" ${x.reserva === 'consulta' ? 'selected' : ''}>${L3('Consultar disponibilidade', 'Check availability', 'Consultar disponibilidad')}</option></select></label>
         </div>
-        <label class="fld">${L3('Horários de início', 'Start times', 'Horarios de inicio')}<input id="fHorarios" value="${esc((x.horarios || []).join(', '))}" placeholder="09:00, 10:00, 11:00, 13:00, 14:00">
-          <small class="why">${L3('Com "Na hora": o cliente escolhe a data e um destes horários e reserva direto. Em branco, valem as saídas do calendário.', 'With "Instantly": the guest picks a date and one of these times and books directly. Blank = the calendar departures apply.', 'Con "Al instante": el cliente elige la fecha y uno de estos horarios y reserva directo. En blanco, valen las salidas del calendario.')}</small></label>
+        <label class="fld">${L3('Horários de início', 'Start times', 'Horarios de inicio')}<input id="fHorarios" value="${esc(horariosTxt(x.horarios))}" placeholder="09:00, 10:00, 08:00-08:45 (sáb-qui), 14:00-14:30 (sex)">
+          <small class="why">${L3('Com "Na hora": o cliente escolhe a data e um destes horários e reserva direto. Janela de busca: 08:00-08:45. Só alguns dias: (sáb-qui), (sex), (seg/qua). Em branco, valem as saídas do calendário.', 'With "Instantly": the guest picks a date and one of these times. Pickup window: 08:00-08:45. Some days only: (sat-thu) in Portuguese day names. Blank = calendar departures.', 'Con "Al instante": el cliente elige la fecha y uno de estos horarios. Ventana: 08:00-08:45. Solo algunos días: (sáb-qui). En blanco, valen las salidas del calendario.')}</small></label>
+        <div class="frow">
+          <label class="fld">${L3('Idiomas do guia para escolher', 'Guide languages to choose from', 'Idiomas del guía para elegir')}<input id="fIdiomasGuia" value="${esc((x.idiomasGuia || []).join(', '))}" placeholder="en, es"></label>
+          <label class="fld">${L3('Preço de criança', 'Child price', 'Precio de niño')}<input id="fPrecoCri" type="number" min="0" value="${+x.precoCrianca || ''}" placeholder="—"></label>
+          <label class="fld">${L3('Criança até (anos)', 'Child up to (age)', 'Niño hasta (años)')}<input id="fIdadeCri" type="number" min="0" max="17" value="${+x.idadeCrianca || ''}" placeholder="12"></label>
+        </div>
         <small class="why">${L3('Se depende do parceiro confirmar, use "Consultar disponibilidade": o botão do site muda e o cliente vê que pedido não é reserva confirmada.',
           'If a partner has to confirm, choose "Check availability": the button changes and the guest sees a request is not a confirmed booking.',
           'Si depende de que el socio confirme, usa "Consultar disponibilidad": el botón cambia y el cliente ve que un pedido no es una reserva confirmada.')}</small>
@@ -2467,7 +2552,9 @@ function admTourEdit(id) {
       ...($('#fCat') ? { categoria: $('#fCat').value, modalidade: $('#fModal').value, transferInc: $('#fTrfInc').value,
         reserva: $('#fReserva').value, idioma: par('#fIdiomaPt', '#fIdiomaEn'),
         moeda: $('#fMoeda').value, unidade: par('#fUnidPt', '#fUnidEn'), paraQuem: par('#fQuemPt', '#fQuemEn'),
-        horarios: ($('#fHorarios').value.match(/\b([01]?\d|2[0-3])[:h]([0-5]\d)\b/g) || []).map(h => h.replace('h', ':').padStart(5, '0')),
+        horarios: lerHorarios($('#fHorarios').value),
+        idiomasGuia: ($('#fIdiomasGuia').value.toLowerCase().match(/\b(pt|en|es)\b/g) || []).filter((v, k, a) => a.indexOf(v) === k),
+        precoCrianca: +$('#fPrecoCri').value || 0, idadeCrianca: +$('#fIdadeCri').value || 0,
         linkPagamento: linkExterno($('#fLinkPag').value.trim()) } : {}),
       ...($('#galEd') ? { fotos: $$('#galEd .galed-it').map(el => el.dataset.f) } : {}),
       name: { pt: $('#fNamePt').value.trim(), en: $('#fNameEn').value.trim() || $('#fNamePt').value.trim() },
@@ -2755,7 +2842,7 @@ function admBookings() {
       return `<div class="trow">
         <div class="tinfo"><b>${esc(b.name)}</b>
           <small>${esc(x ? x.name.pt : '?')} · ${fmtDate(b.date)} ${esc(b.time)} · ${esc(b.pax)}p${veic} · <span class="mono">${esc(b.code)}</span></small>${grupo}</div>
-        <b class="mono">${valorReserva(b, b.total)}</b>${pill}
+        <b class="mono">${valorReserva(b, b.total)}</b>${b.idiomaGuia ? `<span class="pill n" title="idioma do guia">${esc(b.idiomaGuia.toUpperCase())}</span>` : ''}${pill}
         <div class="tacts" id="ta-${esc(b.id)}">${cobrar}${act}${conf}</div>
       </div>`;
     }).join('')}</div>`

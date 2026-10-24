@@ -633,7 +633,14 @@ const Cal = {
     if (tour && Array.isArray(tour.horarios) && tour.horarios.length && tour.reserva !== 'consulta' && !Cal.rulesFor(tourId).length) {
       let d = addDays(isoToday(), 1); if (d < fromIso) d = fromIso;
       while (d <= toIso) {
-        if (!Cal.blocked(d)) for (const h of tour.horarios) out.push({ tourId, date: d, time: h, capacity: +tour.vagasHorario || 50, livre: true });
+        /* cada horário é "09:00" ou {hora, ate, dias}: a janela de busca no hotel
+           (08:00–08:45) e os dias da semana em que vale (0 = domingo … 6 = sábado) */
+        const wd = new Date(d + 'T12:00:00').getDay();
+        if (!Cal.blocked(d)) for (const h of tour.horarios) {
+          const o = typeof h === 'string' ? { hora: h } : (h || {});
+          if (!o.hora || (Array.isArray(o.dias) && o.dias.length && !o.dias.includes(wd))) continue;
+          out.push({ tourId, date: d, time: o.hora, ate: o.ate || '', capacity: +tour.vagasHorario || 50, livre: true });
+        }
         d = addDays(d, 1);
       }
     }
@@ -683,7 +690,7 @@ const Bookings = {
   get(id) { return DB.bookings.find(b => b.id === id); },
   byCode(code) { return DB.bookings.find(b => b.code === code); },
 
-  create({ tourId, date, time, name, email, whats, insta, pax, coupon, policy, origin, consent, opcao, group, adultos, criancas, idades, veioPor, indicadoPor, nasc, compradorVai }) {
+  create({ tourId, date, time, name, email, whats, insta, pax, coupon, policy, origin, consent, opcao, group, adultos, criancas, idades, veioPor, indicadoPor, nasc, compradorVai, idiomaGuia, janela }) {
     const tour = Tours.get(tourId);
     /* Tem que ser o MESMO calculo que a tela mostrou. tour.price * pax ignora
        o preco escalonado (195 para as 3 primeiras, 225 depois) e gravava a
@@ -691,7 +698,7 @@ const Bookings = {
     /* O veiculo tem que vir junto: sem ele, uma reserva de minivan as 22h
        era gravada pelo valor do carro diurno. A tela mostrava 130 e o caixa
        guardava 90, e so o extrato no fim do mes acusaria. */
-    const pr0 = Bookings.precoDe(tour, tourId, date, time, pax, { opcao });
+    const pr0 = Bookings.precoDe(tour, tourId, date, time, pax, { opcao, idades: (idades || []).slice(0, +criancas || 0) });
     const base = pr0.total;
     let discount = 0, couponCode = null;
     if (coupon) {
@@ -707,6 +714,8 @@ const Bookings = {
       name, email, whats, insta: insta || '', pax, total,
       /* a moeda do passeio (os tours da planilha dela são em dólar): o painel mostra nela */
       moeda: (tour && tour.moeda) || '',
+      /* o idioma do guia que o cliente escolheu (compartilhados) e a janela de busca */
+      idiomaGuia: idiomaGuia || '', janela: janela || '',
       coupon: couponCode, discount, policy,
       /* quem vem: adultos e menores de 18. O preco e pelo total; a divisao e
          para ela saber quem e crianca (ingresso, cadeirinha, ritmo). */
@@ -820,6 +829,16 @@ const Bookings = {
       return { total: v, linhas: [{ qtd: pax, valor: v, fechado: true }], consultar: v === 0 };
     }
     if (x.priceMode === 'session') return { total: cheio, linhas: [{ qtd: 1, valor: cheio }] };
+    /* preço de criança (o deserto da Milla: até 7 anos paga menos). Conta pelas
+       idades escolhidas; criança sem idade marcada ainda paga como adulto. */
+    if (+x.precoCrianca > 0 && opt && Array.isArray(opt.idades) && opt.idades.length) {
+      const lim = +x.idadeCrianca || 12;
+      const nCri = Math.min(pax, opt.idades.filter(v => v !== '' && v != null && +v <= lim).length);
+      const nAd = pax - nCri, linhas = [];
+      if (nAd) linhas.push({ qtd: nAd, valor: cheio });
+      if (nCri) linhas.push({ qtd: nCri, valor: +x.precoCrianca, crianca: true });
+      return { total: nAd * cheio + nCri * +x.precoCrianca, linhas };
+    }
     if (!tarde || !vagasBaratas) return { total: cheio * pax, linhas: [{ qtd: pax, valor: cheio }] };
 
     const jaVendidos = Bookings.vendidosEm(tourId, date, time);
