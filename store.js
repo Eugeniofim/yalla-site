@@ -716,6 +716,9 @@ const Bookings = {
       moeda: (tour && tour.moeda) || '',
       /* o idioma do guia que o cliente escolheu (compartilhados) e a janela de busca */
       idiomaGuia: idiomaGuia || '', janela: janela || '',
+      /* a opção escolhida (nome em português, para o painel dela) */
+      opcao: +opcao || 0,
+      opcaoNome: tour && Array.isArray(tour.opcoes) && tour.opcoes[opcao] ? ((tour.opcoes[opcao].nome || {}).pt || '') : '',
       coupon: couponCode, discount, policy,
       /* quem vem: adultos e menores de 18. O preco e pelo total; a divisao e
          para ela saber quem e crianca (ingresso, cadeirinha, ritmo). */
@@ -813,6 +816,10 @@ const Bookings = {
      os 3 primeiros, 225 depois. O calculo e por DATA, nao por reserva —
      quem chega quando ja ha 2 vendidos leva 1 barato e o resto caro. */
   precoDe(x, tourId, date, time, pax, opt) {
+    /* produto com OPÇÕES (26/10/2026, a planilha da Milla: prime/non-prime, 12/17/22/30 min,
+       deck standard/VIP...): a opção escolhida traz o preço, o de criança e a idade */
+    const op = Array.isArray(x.opcoes) && x.opcoes.length ? (x.opcoes[(opt && opt.opcao) || 0] || x.opcoes[0]) : null;
+    if (op) x = Object.assign({}, x, { price: +op.preco || 0, precoCrianca: +op.precoCrianca || 0, idadeCrianca: +op.idadeCrianca || +x.idadeCrianca || 0, priceLate: 0, earlySeats: 0 });
     const cheio = +x.price || 0;
     const tarde = +x.priceLate || 0;
     const vagasBaratas = +x.earlySeats || 0;

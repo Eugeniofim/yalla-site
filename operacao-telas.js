@@ -36,7 +36,7 @@ function pedForPills(b) {
 function restoTexto() { return _restoNoDia() ? 'é pago no dia, a quem faz cada serviço' : 'é pago a ' + guiaNegocio() + ' até a data combinada'; }
 function restoRotulo() { return _restoNoDia() ? 'No dia, a quem faz cada serviço' : 'Restante, até a data combinada'; }
 const OP_ICO = { transfer: '🚐', walk: '🏛️', day: '🚗', papal: '⛪', conexao: '🚢', trem: '🚆' };
-function opNomeServ(b) { if (b.servicoTxt) return b.servicoTxt; const x = Tours.get(b.tourId); return x ? (x.name[LANG] || x.name.pt) : '?'; }
+function opNomeServ(b) { if (b.servicoTxt) return b.servicoTxt; const x = Tours.get(b.tourId); return x ? (x.name[LANG] || x.name.pt) + (b.opcaoNome ? ' – ' + b.opcaoNome : '') : '?'; }
 function opNum(n) { return String(n || '').replace(/\D/g, ''); }
 function opCurta(iso) { return iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) : ''; }
 function opFicha(b) { return '#/adm/clients/' + encodeURIComponent(b.clienteId ? 'c:' + b.clienteId : chaveCliente(b)); }

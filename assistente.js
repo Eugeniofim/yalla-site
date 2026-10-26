@@ -1079,6 +1079,10 @@ function iaAparaHist(h) {
 }
 
 let iaOcupado = false;
+/* 26/10 (veio da Mari: "não consigo logo enviar a mensagem, parece que tranca"): mensagem nova com um
+   cartão de confirmação aberto. O cartão fecha sem gravar e a volta termina aqui, sem outra chamada à IA —
+   a mensagem nova vem a seguir, da fila (assistente-ingrid.js). */
+let iaCartaoTrocado = false;
 async function iaConversa(texto, fotos) {
   fotos = !fotos ? [] : Array.isArray(fotos) ? fotos : [fotos];
   if (iaOcupado) return;
@@ -1103,8 +1107,9 @@ async function iaConversa(texto, fotos) {
       if (txt) iaBolha('assistant', txt, pensando);
       if (resp.stop_reason !== 'tool_use') break;
       const res = [];
-      for (const b of resp.content.filter(b => b.type === 'tool_use')) res.push({ type: 'tool_result', tool_use_id: b.id, content: JSON.stringify(await iaRodaFerramenta(b.name, b.input)) });
+      for (const b of resp.content.filter(b => b.type === 'tool_use')) res.push({ type: 'tool_result', tool_use_id: b.id, content: JSON.stringify(iaCartaoTrocado ? { cancelado: true, aviso: 'ela mandou outra mensagem; nada foi feito' } : await iaRodaFerramenta(b.name, b.input)) });
       hist.push({ role: 'user', content: res });
+      if (iaCartaoTrocado) { iaCartaoTrocado = false; const t = 'Tudo bem, deixei isso de lado.'; hist.push({ role: 'assistant', content: [{ type: 'text', text: t }] }); iaBolha('assistant', t, pensando); break; }
     }
     if (hist[hist.length - 1].role === 'user') { hist.pop(); hist.pop(); }
     iaGrava(IA_HIST, iaAparaHist(hist));
@@ -2527,11 +2532,20 @@ function iaFechaCartao(c, sim) {
   const h = c.querySelector('h4'); h.textContent = h.textContent.replace(' — ' + ia('confirma'), '');
   c.querySelector('.bts').outerHTML = `<p class="ass">${sim ? ia('feito') : ia('cancelado')}</p>`;
 }
+/* o cartão que espera o toque dela. Se ele sumir da tela (nova conversa, painel redesenhado)
+   a espera termina como "cancelou" — antes ficava pendurada e o assistente travava para sempre.
+   Mensagem nova com o cartão aberto também fecha o cartão (assistente-ingrid.js, ingManda). */
+let iaCartaoPendente = null;
+function iaCancelaCartaoPendente() { if (iaCartaoPendente) { const p = iaCartaoPendente; iaCartaoPendente = null; p(false); } }
 function iaPedeConfirmacao(plano) {
   return new Promise((ok) => {
     const c = iaCartao(plano);
-    c.querySelector('.sim').onclick = () => { iaFechaCartao(c, true); ok(true); };
-    c.querySelector('.nao').onclick = () => { iaFechaCartao(c, false); ok(false); };
+    let fim = false;
+    const vigia = setInterval(() => { if (!fim && !c.isConnected) termina(false); }, 500);
+    const termina = (sim) => { if (fim) return; fim = true; clearInterval(vigia); iaCartaoPendente = null; if (c.isConnected) iaFechaCartao(c, sim); ok(sim); };
+    iaCartaoPendente = termina;
+    c.querySelector('.sim').onclick = () => termina(true);
+    c.querySelector('.nao').onclick = () => termina(false);
   });
 }
 function iaCartaoFeito(plano) { iaFechaCartao(iaCartao(plano), true); }

@@ -78,7 +78,8 @@ function assinaturaSonora() {
   const g = (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.guia) || {};
   const marca = g.negocio || g.nome || '';
   if (marca) {
-    document.title = marca + (g.nome && g.nome !== marca ? ' — ' + g.nome : '');
+    /* o título do index.html já traz a marca ("Yalla Experiences — Dubai e Emirados…"): fica ele, sem o nome dela */
+    if (!document.title.includes(marca)) document.title = marca + (g.nome && g.nome !== marca ? ' — ' + g.nome : '');
     document.documentElement.style.setProperty('--marca-print', JSON.stringify(' — ' + marca + (g.nome ? ' · ' + g.nome : '')));
   }
   const spW = document.getElementById('spWord'); if (spW) spW.textContent = marca;
@@ -1066,8 +1067,27 @@ function lerHorarios(txt) {
 function nomeIdiomaGuia(c) { return ({ en: L3('Inglês', 'English', 'Inglés'), es: L3('Espanhol', 'Spanish', 'Español'), pt: L3('Português', 'Portuguese', 'Portugués') })[c] || c; }
 /* o valor de uma reserva na moeda dela (b.moeda), no painel e nos avisos */
 function valorReserva(b, v) { return b && b.moeda ? valorTour({ moeda: b.moeda }, v) : eur(v); }
+/* uma linha do editor de opções: nome, preço, preço de criança, link e link de criança */
+function opcEdLinha(o, i) {
+  o = o || {};
+  const campo = (cls, rot, val, tipo) => `<label class="ol ${cls}"><small>${rot}</small><input class="${cls}" ${tipo || ''} value="${esc(val)}"></label>`;
+  return `<div class="opced" data-i="${i}">
+    ${campo('oNome', L3('Nome da opção', 'Option name', 'Nombre de la opción'), (o.nome && o.nome.pt) || '')}
+    ${campo('oPreco', L3('Preço', 'Price', 'Precio'), +o.preco || '', 'type="number" min="0" step="0.01"')}
+    ${campo('oCri', L3('Criança', 'Child', 'Niño'), +o.precoCrianca || '', 'type="number" min="0" step="0.01"')}
+    ${campo('oIdade', L3('Criança até', 'Child up to', 'Niño hasta'), +o.idadeCrianca || '', 'type="number" min="0" max="17"')}
+    ${campo('oMax', L3('Máx. pessoas', 'Max people', 'Máx. personas'), +o.max || '', 'type="number" min="0"')}
+    ${campo('oLink', L3('Link de pagamento', 'Payment link', 'Enlace de pago'), o.link || '', 'type="url" inputmode="url"')}
+    ${campo('oLinkCri', L3('Link de criança', 'Child link', 'Enlace de niño'), o.linkCrianca || '', 'type="url" inputmode="url"')}
+    <button type="button" class="opced-x" data-opcdel aria-label="${L3('Tirar opção', 'Remove option', 'Quitar opción')}">✕</button>
+  </div>`;
+}
+/* a opção de um produto (ou nada, se ele não tem opções) */
+function opcaoDe(x, i) { return Array.isArray(x.opcoes) && x.opcoes.length ? (x.opcoes[+i || 0] || x.opcoes[0]) : null; }
+function temOpcoes(x) { return Array.isArray(x.opcoes) && x.opcoes.length > 1; }
 function ehSobConsulta(x) { return x.priceMode !== 'session' && x.priceMode !== 'pp' && !(precoVitrine(x) > 0); }
 function precoVitrine(x) {
+  if (Array.isArray(x.opcoes) && x.opcoes.length) { const vs = x.opcoes.map(o => +o.preco || 0).filter(v => v > 0); return vs.length ? Math.min(...vs) : 0; }
   if (x.priceMode === 'transfer') return transferMenor(x) || +x.price || 0;
   return x.priceMode === 'tabela' ? (tabelaMenor(x) || +x.price || 0) : +x.price || 0;
 }
@@ -1122,6 +1142,7 @@ function lerGrupo() {
 function aceitaCriancas(x) { return x.criancas !== false; }
 
 function tetoPessoas(x, S) {
+  const op = opcaoDe(x, S.opcao); if (op && +op.max > 0) x = Object.assign({}, x, { max: +op.max });
   /* passeio compartilhado sem limite cadastrado: até 20 numa reserva */
   if (!(+x.max > 0)) x = Object.assign({}, x, { max: 20 });
   if (x.priceMode === 'tabela')   return Math.min(tabelaAte(x) || x.max, x.max, S.cap || x.max);
@@ -1182,7 +1203,8 @@ function ligaPessoas(x, S, root) {
     if (ad + cr > teto) return toast(t(x.priceMode === 'tabela' || x.priceMode === 'transfer' ? 'bigGroup' : 'maxNote', { n: teto }));
     S.adultos = ad; S.criancas = cr; S.pax = ad + cr;
     S.idades = (S.idades || []).slice(0, cr);
-    S.opcao = 0; S.discount = 0; S.coupon = null;
+    if (x.priceMode === 'transfer') S.opcao = 0;
+    S.discount = 0; S.coupon = null;
     renderBook();
   });
 }
@@ -1244,7 +1266,34 @@ function viewShowcase() {
   const cat = cats.some(c => c.id === viewShowcase._c) ? viewShowcase._c : '';
   const catNome = (id) => { const c = ((typeof CONTEUDO !== 'undefined' && CONTEUDO.categorias) || []).find(z => z.id === id); return c ? tl(c.nome) : ''; };
   const modNome = (id) => { const o = ((typeof CONTEUDO !== 'undefined' && CONTEUDO.modalidades) || []).find(z => z[0] === id); return o ? opcaoNome(o) : ''; };
-  const list = tours.filter(x => (filter === 'all' || x.type === filter) && (onde === 'all' || x.region === onde) && (!cat || x.categoria === cat));
+  const list = tours.filter(x => (filter === 'all' || x.type === filter) && (onde === 'all' || x.region === onde) && (!cat || x.categoria === cat))
+    .sort((a, b) => (+a.order || 0) - (+b.order || 0));
+  /* 25/10/2026, a Milla: "dividir as experiências por compartilhadas e privativas dentro
+     de cada categoria". Sem categoria escolhida: uma seção por categoria; dentro de cada
+     uma, Privativos / Compartilhados / Ingressos. */
+  const MODS = [['privativo', L3('Privativos', 'Private', 'Privados')], ['compartilhado', L3('Compartilhados', 'Shared', 'Compartidos')], ['ingresso', L3('Ingressos', 'Tickets', 'Entradas')], ['', '']];
+  const porMod = (xs) => { const sub = MODS.map(([m, n]) => ({ titulo: n, itens: xs.filter(x => (x.modalidade || '') === m || (!m && !MODS.some(z => z[0] && z[0] === x.modalidade))) })).filter(g => g.itens.length);
+    return sub.length > 1 ? sub : [{ titulo: '', itens: xs }]; };
+  const todasCats = (typeof CONTEUDO !== 'undefined' && CONTEUDO.categorias) || [];
+  const grupos = cat || !cats.length ? [{ titulo: '', sub: porMod(list) }]
+    : [...todasCats.map(c => ({ titulo: tl(c.nome), sub: porMod(list.filter(x => x.categoria === c.id)) })),
+       { titulo: L3('Outros', 'Other', 'Otros'), sub: porMod(list.filter(x => !todasCats.some(c => c.id === x.categoria))) }].filter(g => g.sub.some(z => z.itens.length));
+  const cartao = (x) => `<button class="tourcard" data-id="${x.id}">
+          <span class="ph" style="background-image:url(${esc(x.photo)})">
+            <span class="tbadge">${esc(catNome(x.categoria) || tipoLabel(x.type))}</span>
+          </span>
+          <span class="bd">
+            <b>${esc(x.name[LANG] || x.name.pt)}</b>
+            ${x.tagline && (x.tagline[LANG] || x.tagline.pt) ? `<small class="ctag">${esc(x.tagline[LANG] || x.tagline.pt)}</small>`
+              : x.desc && (x.desc[LANG] || x.desc.pt) ? `<small class="cdesc">${esc(String(x.desc[LANG] || x.desc.pt).split(/(?<=[.!?])\s/)[0].slice(0, 160))}</small>` : ''}
+            <small class="meta">${regiaoLabel(x.region)}${modNome(x.modalidade) ? ' · ' + esc(modNome(x.modalidade)) : ''}${x.duration && x.duration !== '—' ? ' · ' + esc(x.duration) : ''}${(x.stops || []).length ? ' · ' + t('nParadas', { n: x.stops.length }) : ''}</small>
+            <span class="cardfoot">
+              ${ehSobConsulta(x) ? `<span class="pr">${t('sobConsulta')}</span>` : `<span class="pr">${x.priceMode === 'tabela' || x.priceMode === 'transfer' || temOpcoes(x) || (x.priceLate && x.earlySeats && x.priceMode !== 'session') ? `<u>${t('fromPrice')}</u> ` : ''}${valorTour(x, precoVitrine(x))}
+                <i>${unidadePreco(x)}</i></span>`}
+              <span class="cver">${L3('Ver experiência', 'See experience', 'Ver experiencia')}</span>
+            </span>
+          </span>
+        </button>`;
   app.innerHTML = `
   <header class="topbar">
     <button class="backbtn" id="bk" aria-label="${t('back')}">←</button>
@@ -1264,26 +1313,11 @@ function viewShowcase() {
       ${['all', ...ORDEM_TIPOS.filter(f => tours.some(x => x.type === f))].map(f =>
         `<button class="chip ${filter === f ? 'on' : ''}" data-f="${f}">${f === 'all' ? t('fAll') : tipoLabel(f)}</button>`).join('')}
     </div>`}
-    <div class="cards" id="tourCards">
-      ${list.length ? list.map(x => `
-        <button class="tourcard" data-id="${x.id}">
-          <span class="ph" style="background-image:url(${esc(x.photo)})">
-            <span class="tbadge">${esc(catNome(x.categoria) || tipoLabel(x.type))}</span>
-          </span>
-          <span class="bd">
-            <b>${esc(x.name[LANG] || x.name.pt)}</b>
-            ${x.tagline && (x.tagline[LANG] || x.tagline.pt) ? `<small class="ctag">${esc(x.tagline[LANG] || x.tagline.pt)}</small>`
-              : x.desc && (x.desc[LANG] || x.desc.pt) ? `<small class="cdesc">${esc(String(x.desc[LANG] || x.desc.pt).split(/(?<=[.!?])\s/)[0].slice(0, 160))}</small>` : ''}
-            <small class="meta">${regiaoLabel(x.region)}${modNome(x.modalidade) ? ' · ' + esc(modNome(x.modalidade)) : ''}${x.duration && x.duration !== '—' ? ' · ' + esc(x.duration) : ''}${(x.stops || []).length ? ' · ' + t('nParadas', { n: x.stops.length }) : ''}</small>
-            <span class="cardfoot">
-              ${ehSobConsulta(x) ? `<span class="pr">${t('sobConsulta')}</span>` : `<span class="pr">${x.priceMode === 'tabela' || x.priceMode === 'transfer' || (x.priceLate && x.earlySeats && x.priceMode !== 'session') ? `<u>${t('fromPrice')}</u> ` : ''}${valorTour(x, precoVitrine(x))}
-                <i>${unidadePreco(x)}</i></span>`}
-              <span class="cver">${L3('Ver experiência', 'See experience', 'Ver experiencia')}</span>
-            </span>
-          </span>
-        </button>`).join('')
-      : `<p class="empty">${t('emptyFilter')}</p>`}
-    </div>
+    ${list.length ? grupos.map(g => `
+      ${g.titulo ? `<h2 class="tgrupo">${esc(g.titulo)}</h2>` : ''}
+      ${g.sub.map(sg => `${sg.titulo ? `<h3 class="tsub">${esc(sg.titulo)}</h3>` : ''}
+      <div class="cards">${sg.itens.map(cartao).join('')}</div>`).join('')}`).join('')
+    : `<p class="empty">${t('emptyFilter')}</p>`}
   </main>`;
   bindLang(app);
   $('#bk').onclick = () => go('/');
@@ -1477,8 +1511,10 @@ function viewTour(id) {
         <span class="seclabel">${t('secPrice')}</span>
         <div class="pricebox">
           <div class="pbmain">
-            ${ehSobConsulta(x) ? `<b>${t('sobConsulta')}</b>${x.priceNote ? `<small>${esc(tl(x.priceNote))}</small>` : ''}` : `<b>${x.priceMode === 'tabela' ? `<u class="fromlbl">${t('fromPrice')}</u> ` : ''}${valorTour(x, precoVitrine(x))}</b>
+            ${ehSobConsulta(x) ? `<b>${t('sobConsulta')}</b>${x.priceNote ? `<small>${esc(tl(x.priceNote))}</small>` : ''}` : `<b>${x.priceMode === 'tabela' || temOpcoes(x) ? `<u class="fromlbl">${t('fromPrice')}</u> ` : ''}${valorTour(x, precoVitrine(x))}</b>
             <small>${unidadePreco(x)}</small>
+            ${temOpcoes(x) ? `<div class="opclista">${x.opcoes.map(o => `<div class="opcl"><span><b>${esc(tl(o.nome))}</b>${o.desc && tl(o.desc) ? `<small>${esc(tl(o.desc))}</small>` : ''}</span>
+              <span class="opcv"><b>${valorTour(x, o.preco)}</b>${+o.precoCrianca > 0 ? `<small>${L3('criança até ' + o.idadeCrianca + ' anos', 'child up to ' + o.idadeCrianca, 'niño hasta ' + o.idadeCrianca + ' años')}: ${valorTour(x, o.precoCrianca)}</small>` : ''}</span></div>`).join('')}</div>` : ''}
             ${+x.precoCrianca > 0 ? `<small class="pbcri">${L3('Criança até ' + x.idadeCrianca + ' anos', 'Child up to ' + x.idadeCrianca, 'Niño hasta ' + x.idadeCrianca + ' años')}: <b>${valorTour(x, x.precoCrianca)}</b></small>` : ''}
             ${x.moeda ? '' : linhaReais(precoVitrine(x))}`}
             ${(x.ingressos || []).length ? `<p class="pbing">🎟️ ${t('ingPagina')}</p>` : ''}
@@ -1650,6 +1686,8 @@ async function viewPago(codigo) {
 function comoPagar(b, x) {
   const st = DB.settings || {};
   const vt = (v) => valorTour(x, v);
+  const opB = x && Array.isArray(x.opcoes) && x.opcoes.length ? (x.opcoes[+b.opcao || 0] || x.opcoes[0]) : null;
+  if (opB) x = Object.assign({}, x, { price: +opB.preco || 0, linkPagamento: opB.link || x.linkPagamento });
   const agora = b.policy === 'sinal' && b.sinal ? b.sinal
               : b.policy === 'split' ? Math.round(b.total / 2) : b.total;
   const saldo = b.total - agora;
@@ -1728,10 +1766,14 @@ function comoPagar(b, x) {
 }
 
 function renderBook() {
-  const S = viewTour._s, x = S.tour, book = $('#book');
+  const S = viewTour._s, book = $('#book');
+  let x = S.tour;
   /* Precos vem de Bookings.precoDe: ele sabe quantas vagas baratas restam
      naquela data e divide as pessoas entre os dois valores. */
   const pr = Bookings.precoDe(x, x.id, S.date, S.time, S.pax, { opcao: S.opcao, idades: (S.idades || []).slice(0, S.criancas) });
+  const opc = opcaoDe(x, S.opcao);
+  if (opc) x = Object.assign({}, x, { price: +opc.preco || 0, precoCrianca: +opc.precoCrianca || 0, idadeCrianca: +opc.idadeCrianca || +x.idadeCrianca || 0,
+    linkPagamento: opc.link || x.linkPagamento, opcoesTodas: x.opcoes, opcaoAtual: S.opcao || 0 });
   /* Preco escalonado: 195 para as 3 primeiras da data, 225 depois.
      Enquanto sobra vaga barata, o valor em destaque e 195 e a nota explica.
      Quando as 3 acabam, anunciar "195, depois 225" vira propaganda enganosa —
@@ -1772,7 +1814,10 @@ function renderBook() {
           <p>${t('noDatesYet')}</p>
           <a class="cta sm wide" target="_blank" rel="noopener"
              href="${waLink(t('waAskDates', { tour: x.name[LANG] || x.name.pt }))}">${ICONE_WA_BTN} ${t('askDatesBtn')}</a>
-          ${linkExterno(x.linkPagamento) ? `<div class="bpagar">
+          ${temOpcoes(S.tour) && S.tour.opcoes.some(o => linkExterno(o.link)) ? `<div class="bpagar">
+            <small>${L3('Já combinou a data com a ' + guiaNegocio().split(' ')[0] + '? Pague pela opção escolhida:', 'Already agreed the date with ' + guiaNegocio().split(' ')[0] + '? Pay for your option:', '¿Ya acordaste la fecha con ' + guiaNegocio().split(' ')[0] + '? Paga la opción elegida:')}</small>
+            ${S.tour.opcoes.filter(o => linkExterno(o.link)).map(o => `<a class="cta soft sm wide" href="${esc(o.link)}" target="_blank" rel="noopener">${YL.cartao} ${esc(tl(o.nome))} · ${valorTour(S.tour, o.preco)}</a>`).join('')}
+          </div>` : linkExterno(x.linkPagamento) ? `<div class="bpagar">
             <small>${L3('Já combinou a data com a ' + guiaNegocio().split(' ')[0] + '?', 'Already agreed the date with ' + guiaNegocio().split(' ')[0] + '?', '¿Ya acordaste la fecha con ' + guiaNegocio().split(' ')[0] + '?')}</small>
             <a class="cta soft sm wide" href="${esc(x.linkPagamento)}" target="_blank" rel="noopener">${YL.cartao} ${L3('Pagar pelo link seguro', 'Pay with the secure link', 'Pagar con el enlace seguro')}</a>
           </div>` : ''}
@@ -1808,7 +1853,8 @@ function renderBook() {
 
     function timesHtml(list) {
       const janela = list.some(d => d.ate);
-      return `<p class="hint">${janela ? L3('Escolha o horário de busca no hotel', 'Pick your hotel pickup window', 'Elige el horario de recogida en el hotel') : t('pickTime')}</p><div class="times">` + list.map(d => {
+      const busca = janela && x.transferInc === 'incluido';
+      return `<p class="hint">${busca ? L3('Escolha o horário de busca no hotel', 'Pick your hotel pickup window', 'Elige el horario de recogida en el hotel') : janela ? L3('Escolha o horário', 'Pick a time', 'Elige el horario') : t('pickTime')}</p><div class="times">` + list.map(d => {
         const left = Cal.seatsLeft(x.id, d.date, d.time, d.capacity);
         return left > 0
           ? `<button class="slot ${S.time === d.time ? 'on' : ''}" data-t="${d.time}" data-c="${d.capacity}" data-ate="${d.ate || ''}">${d.time}${d.ate ? '–' + d.ate : ''}${d.livre ? '' : `<small>${left} ${t('spotsLeft')}</small>`}</button>`
@@ -1823,12 +1869,17 @@ function renderBook() {
       <div class="bstep">${t(x.priceMode === 'transfer' ? 'step2trf' : 'step2')}</div>
       ${x.priceMode === 'session' && !(+x.max > 1) ? '' : pessoasHtml(x, S)}
       ${x.priceMode === 'transfer' ? transferEscolhaHtml(x, S) : ''}
+      ${temOpcoes(S.tour) ? `<div class="trfcentro">
+        <b>${L3('Escolha a opção', 'Choose an option', 'Elige la opción')}</b>
+        <div class="opcgrid">${S.tour.opcoes.map((o, i) => `<button class="popt ${(S.opcao || 0) === i ? 'on' : ''}" data-opc="${i}"><b>${esc(tl(o.nome))}</b><small>${valorTour(S.tour, o.preco)}${+o.precoCrianca > 0 ? ' · ' + L3('criança', 'child', 'niño') + ' ' + valorTour(S.tour, o.precoCrianca) : ''}</small></button>`).join('')}</div>
+      </div>` : ''}
       ${(x.idiomasGuia || []).length > 1 ? `<div class="trfcentro">
         <b>${L3('Idioma do guia', 'Guide language', 'Idioma del guía')}</b>
         <small class="why">${L3('Este passeio não tem guia em português.', 'This tour has no Portuguese-speaking guide.', 'Este paseo no tiene guía en portugués.')}</small>
         <div class="trfsn">${x.idiomasGuia.map(c => `<button class="popt ${S.idiomaGuia === c ? 'on' : ''}" data-idg="${c}"><b>${nomeIdiomaGuia(c)}</b></button>`).join('')}</div>
       </div>` : ''}
       <div class="sums">
+        ${opc && temOpcoes(S.tour) ? `<div><span><b>${esc(tl(opc.nome))}</b></span></div>` : ''}
         <div><span>${fmtDate(S.date)} · ${S.time}${S.ate ? '–' + S.ate : ''}${S.idiomaGuia && (x.idiomasGuia || []).length > 1 ? ' · ' + L3('guia em ', 'guide in ', 'guía en ') + nomeIdiomaGuia(S.idiomaGuia).toLowerCase() : ''}</span></div>
         ${S.discount ? `<div><span>${t('couponOk', { c: S.coupon })}</span><b>−${valorTour(x, S.discount)}</b></div>` : ''}
         ${x.priceMode === 'transfer'
@@ -1863,6 +1914,12 @@ function renderBook() {
        O minimo dela e a regra de saida, nao o tamanho minimo de uma reserva. */
     ligaPessoas(x, S, book);
     $$('[data-idg]', book).forEach(b => b.onclick = () => { S.idiomaGuia = b.dataset.idg; renderBook(); });
+    $$('[data-opc]', book).forEach(b => b.onclick = () => {
+      S.opcao = +b.dataset.opc; S.discount = 0; S.coupon = null;
+      const teto = tetoPessoas(S.tour, S);
+      if (S.adultos + S.criancas > teto) { S.adultos = Math.max(1, teto - S.criancas); S.criancas = Math.max(0, teto - S.adultos); S.pax = S.adultos + S.criancas; S.idades = S.idades.slice(0, S.criancas); }
+      renderBook();
+    });
     $$('.trfopt', book).forEach(b => b.onclick = () => {
       S.opcao = +b.dataset.o; S.discount = 0; S.coupon = null; renderBook();
     });
@@ -1875,7 +1932,7 @@ function renderBook() {
       else $('#cbad').textContent = t('couponBad');
     };
     $('#next2').onclick = () => {
-      if (((x.ingressos || []).length || +x.precoCrianca > 0) && S.criancas &&
+      if (((x.ingressos || []).length || +x.precoCrianca > 0 || (opc && +opc.precoCrianca > 0)) && S.criancas &&
           Array.from({ length: S.criancas }, (_, i) => S.idades[i]).some(v => v === '' || v === undefined || v === null)) {
         return toast(t('idadesFalta'));
       }
@@ -1962,10 +2019,10 @@ function renderBook() {
       </div>
       ${comoPagar(b, x)}
       <a class="cta" style="text-decoration:none;text-align:center" target="_blank" rel="noopener"
-         href="${waLink(t('waBookingMsg', { code: b.code, tour: (x.name[LANG] || x.name.pt) + (b.idiomaGuia ? ' (' + L3('guia em ', 'guide in ', 'guía en ') + nomeIdiomaGuia(b.idiomaGuia).toLowerCase() + ')' : ''), when: fmtDate(b.date) + ' ' + (b.janela || b.time) + (b.criancas ? ' · ' + b.adultos + ' + ' + b.criancas + ' ' + L3('criança(s)', 'child(ren)', 'niño(s)') : ''), name: b.name }))}">✆ ${t('waSendBooking')}</a>
+         href="${waLink(t('waBookingMsg', { code: b.code, tour: (x.name[LANG] || x.name.pt) + (opc && temOpcoes(S.tour) ? ' – ' + tl(opc.nome) : '') + (b.idiomaGuia ? ' (' + L3('guia em ', 'guide in ', 'guía en ') + nomeIdiomaGuia(b.idiomaGuia).toLowerCase() + ')' : ''), when: fmtDate(b.date) + ' ' + (b.janela || b.time) + (b.criancas ? ' · ' + b.adultos + ' + ' + b.criancas + ' ' + L3('criança(s)', 'child(ren)', 'niño(s)') : ''), name: b.name }))}">✆ ${t('waSendBooking')}</a>
       <div class="okrow">
         <a class="mini" href="${icsFor(b, x)}" download="${esc(b.code)}.ics">${t('addCal')}</a>
-        <a class="mini" target="_blank" rel="noopener" href="${mapLink(noIdioma(x.meeting))}">${t('seeMap')}</a>
+        ${noIdioma(x.meeting) ? `<a class="mini" target="_blank" rel="noopener" href="${mapLink(noIdioma(x.meeting))}">${t('seeMap')}</a>` : ''}
       </div>
       <button class="cta soft" id="again">${t('bookAgain')}</button>`;
     ligaBotaoCartao(b);
@@ -2253,6 +2310,10 @@ function admTourEdit(id) {
           <label class="fld">${L3('O preço vale', 'The price is', 'El precio es')}<input id="fUnidPt" value="${esc((x.unidade && x.unidade.pt) || '')}" placeholder="${L3('ex.: por veículo (até 5 pessoas)', 'e.g. per vehicle (up to 5 people)', 'ej.: por vehículo (hasta 5 personas)')}"></label>
         </div>
         <label class="fld campo-en">${L3('O preço vale', 'The price is', 'El precio es')} (EN)<input id="fUnidEn" value="${esc((x.unidade && x.unidade.en) || '')}"></label>
+        <div class="fld" id="opcEd">${L3('Opções (preço e link de cada uma)', 'Options (price and link of each)', 'Opciones (precio y enlace de cada una)')}
+          <div class="opced-l">${(x.opcoes || []).map((o, i) => opcEdLinha(o, i)).join('')}</div>
+          <button type="button" class="cta soft sm" id="opcMais">+ ${L3('opção', 'option', 'opción')}</button>
+          <small class="why">${L3('Ex.: prime / non-prime, 12 / 17 min, deck Standard / VIP. Com opções, o preço de cada uma vale no lugar do preço base.', 'E.g. prime / non-prime. With options, each option price replaces the base price.', 'Ej.: prime / non-prime. Con opciones, el precio de cada una sustituye al precio base.')}</small></div>
         <label class="fld">${L3('Link de pagamento', 'Payment link', 'Enlace de pago')}<input id="fLinkPag" type="url" inputmode="url" value="${esc(x.linkPagamento || '')}" placeholder="https://glinpay.me/…">
           <small class="why">${L3('Aparece como "Pagar pelo link seguro", para quem já combinou a data.', 'Shown as "Pay with the secure link", for guests who already agreed the date.', 'Aparece como "Pagar con el enlace seguro", para quien ya acordó la fecha.')}</small></label>
         <label class="fld">${L3('Para quem é', 'Who it is for', 'Para quién es')}<textarea id="fQuemPt" rows="2">${esc((x.paraQuem && x.paraQuem.pt) || '')}</textarea></label>
@@ -2543,6 +2604,24 @@ function admTourEdit(id) {
     if (e.target.closest('[data-galdel]')) it.remove();
     else if (e.target.closest('[data-galcapa]')) { $$('#galEd .galed-it').forEach(z => z.classList.toggle('capa', z === it)); $('#galEd').prepend(it); }
   });
+  if ($('#opcEd')) {
+    $('#opcMais').onclick = () => $('#opcEd .opced-l').insertAdjacentHTML('beforeend', opcEdLinha({}, $$('#opcEd .opced').length));
+    $('#opcEd').addEventListener('click', (e) => { if (e.target.closest('[data-opcdel]')) e.target.closest('.opced').remove(); });
+  }
+  /* lê as opções do editor; o inglês e o espanhol de cada nome ficam se o português não mudou */
+  function lerOpcoes() {
+    const velhas = x.opcoes || [];
+    return $$('#opcEd .opced').map(el => {
+      const v = (c) => (el.querySelector('input' + c).value || '').trim();
+      const nomePt = v('.oNome'); if (!nomePt) return null;
+      const antes = velhas.find(o => o.nome && o.nome.pt === nomePt) || velhas[+el.dataset.i] || {};
+      const nome = antes.nome && antes.nome.pt === nomePt ? antes.nome : { pt: nomePt, en: nomePt, es: nomePt };
+      const o = Object.assign({}, antes, { nome, preco: +v('.oPreco') || 0, precoCrianca: +v('.oCri') || 0, idadeCrianca: +v('.oIdade') || 0,
+        max: +v('.oMax') || 0, link: linkExterno(v('.oLink')) ? v('.oLink') : '', linkCrianca: linkExterno(v('.oLinkCri')) ? v('.oLinkCri') : '' });
+      if (antes.nome && antes.nome.pt !== nomePt) delete o.desc;
+      return o;
+    }).filter(Boolean);
+  }
   $('#savePub2').onclick   = () => $('#savePub').click();
   $('#saveDraft2').onclick = () => $('#saveDraft').click();
 
@@ -2556,6 +2635,7 @@ function admTourEdit(id) {
         idiomasGuia: ($('#fIdiomasGuia').value.toLowerCase().match(/\b(pt|en|es)\b/g) || []).filter((v, k, a) => a.indexOf(v) === k),
         precoCrianca: +$('#fPrecoCri').value || 0, idadeCrianca: +$('#fIdadeCri').value || 0,
         linkPagamento: linkExterno($('#fLinkPag').value.trim()) } : {}),
+      ...($('#opcEd') ? { opcoes: lerOpcoes() } : {}),
       ...($('#galEd') ? { fotos: $$('#galEd .galed-it').map(el => el.dataset.f) } : {}),
       name: { pt: $('#fNamePt').value.trim(), en: $('#fNameEn').value.trim() || $('#fNamePt').value.trim() },
       desc: { pt: $('#fDescPt').value.trim(), en: $('#fDescEn').value.trim() || $('#fDescPt').value.trim() },
@@ -2567,7 +2647,8 @@ function admTourEdit(id) {
       transfer: { linhas: lerTrfLinhas() },
       ingressos: lerIngLinhas(),
       criancas: $('#fKids').checked, idadeMin: Math.max(0, +$('#fIdadeMin').value || 0),
-      min: +$('#fMin').value || 1, max: +$('#fMax').value || 1,
+      /* máx. 0 = sem limite (compartilhado); antes virava 1 ao salvar e travava o tour em 1 pessoa */
+      min: +$('#fMin').value || 1, max: Math.max(0, +$('#fMax').value || 0),
       payPolicy: $('#fPay').value,
       /* guarda qual portugues gerou o ingles atual: se nao mudar,
          nao traduz de novo e o ajuste manual dela sobrevive */
@@ -2609,8 +2690,8 @@ function admTourEdit(id) {
     } else if (data.priceMode === 'tabela') {
       /* tabela vazia é "Sob consulta" no site (ehSobConsulta): os pilares da
          Yalla são assim e precisam poder ser editados e publicados de novo */
-    } else if (!(data.price > 0)) problems.push(['fPrice', t('vPrice')]);
-    if (data.min > data.max) problems.push(['fMin', t('vMinMax')]);
+    } else if (!(data.price > 0) && !(data.opcoes || []).some(o => o.preco > 0)) problems.push(['fPrice', t('vPrice')]);
+    if (data.max > 0 && data.min > data.max) problems.push(['fMin', t('vMinMax')]);
     $$('.fld .err').forEach(e => e.remove());
     $$('.fld input, .fld textarea').forEach(e => e.classList.remove('invalid'));
     problems.forEach(([id, msg]) => {
@@ -2841,7 +2922,7 @@ function admBookings() {
       const veic = b.veiculo ? ' · ' + esc(b.veiculo) : '';
       return `<div class="trow">
         <div class="tinfo"><b>${esc(b.name)}</b>
-          <small>${esc(x ? x.name.pt : '?')} · ${fmtDate(b.date)} ${esc(b.time)} · ${esc(b.pax)}p${veic} · <span class="mono">${esc(b.code)}</span></small>${grupo}</div>
+          <small>${esc(x ? x.name.pt : '?')}${b.opcaoNome ? ' – ' + esc(b.opcaoNome) : ''} · ${fmtDate(b.date)} ${esc(b.time)} · ${esc(b.pax)}p${veic} · <span class="mono">${esc(b.code)}</span></small>${grupo}</div>
         <b class="mono">${valorReserva(b, b.total)}</b>${b.idiomaGuia ? `<span class="pill n" title="idioma do guia">${esc(b.idiomaGuia.toUpperCase())}</span>` : ''}${pill}
         <div class="tacts" id="ta-${esc(b.id)}">${cobrar}${act}${conf}</div>
       </div>`;
