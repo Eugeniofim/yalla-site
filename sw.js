@@ -4,7 +4,7 @@
    Para publicar uma atualização: subir os arquivos novos e trocar a VERSION. */
 'use strict';
 
-const VERSION = 'yalla-v1.6.2';
+const VERSION = 'yalla-v1.6.3';
 const CORE = [
   './', './index.html', './config.js', './app.js', './fx.js', './pix.js', './qr.js', './qrcode.js', './traduz.js', './store.js', './auth.js', './logo.js', './cloud.js', './nuvem-itens.js', './i18n.js', './es.js', './conteudo.js', './operacao.js', './operacao-telas.js', './precos.js', './assistente.js', './assistente-ingrid.js', './guia-link.js', './tokens.css', './operacao.css', './marca.css', './manifest.webmanifest', './capa.jpg', './home.jpg', './og.jpg', './guia.jpg', './arte/capa-arco.jpg', './arte/marmore.jpg',
   /* a arte da Yalla: o selo, o fundo da marca e as capas. Vao para o cache
