@@ -1245,6 +1245,8 @@ function pacoteBackup() {
     contas: DB.contas || [], orcamentos: DB.orcamentos || [], fichas: DB.fichas || {},
     tarefas: DB.tarefas || [], lembretesVistos: DB.lembretesVistos || {}, memoriaAssistente: memoria,
     clientes: DB.clientes || [], parceiros: DB.parceiros || [], pontos: DB.pontos || [], interesse: DB.interesse || {},
+    /* os códigos dos links curtos do kit da viagem (27/10): sem eles, o link já mandado para de se atualizar */
+    privado: DB.privado || {},
   };
 }
 function resumoBackup(p) {
@@ -1268,6 +1270,7 @@ function restauraBackup(txt) {
     equipe: p.equipe || [], disp: p.disponibilidade || [], contas: p.contas || [], orcamentos: p.orcamentos || [],
     fichas: p.fichas || {}, tarefas: p.tarefas || [], lembretesVistos: p.lembretesVistos || {},
     clientes: p.clientes || [], parceiros: p.parceiros || [], pontos: p.pontos || [], interesse: p.interesse || {},
+    privado: (p.privado && typeof p.privado === 'object') ? p.privado : ((DB && DB.privado) || {}),
   });
   novo.cadastroFeito = Array.isArray(p.clientes) ? 1 : 0; novo.parceirosSeed = 1; novo.pontosSeed = 1;
   novo.settings = fillSettings(p.configuracoes || {});

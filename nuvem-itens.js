@@ -23,9 +23,9 @@
 
 /* 26/10/2026 (revisão da entrega): despesas (Contabilidade), fornecedores, a tabela de
    preços e a ficha dos arquivos ficavam SÓ no aparelho — entram como na EmRoma/Ingrid */
-const ITENS_COLS = ['equipe', 'disp', 'contas', 'orcamentos', 'fichas', 'tarefas', 'clientes', 'parceiros', 'pontos', 'pedidos', 'lembretesVistos', 'interesse', 'avaliacoes', 'despesas', 'fornecedores', 'precos', 'arquivos'];
+const ITENS_COLS = ['equipe', 'disp', 'contas', 'orcamentos', 'fichas', 'tarefas', 'clientes', 'parceiros', 'pontos', 'pedidos', 'privado', 'lembretesVistos', 'interesse', 'avaliacoes', 'despesas', 'fornecedores', 'precos', 'arquivos'];
 /* estas sao "dicionarios" no DB (chave -> valor); as outras sao listas com id */
-const ITENS_DIC = ['fichas', 'lembretesVistos', 'interesse'];
+const ITENS_DIC = ['fichas', 'lembretesVistos', 'interesse', 'privado'];   /* privado = os códigos dos links curtos do kit da viagem (27/10) */
 const IT_SOMBRA = 'yalla_sombra_v1', IT_FILA = 'yalla_fila_v1', IT_MARCA = 'yalla_marca_v1';
 /* a chave antiga do "em dia" (ate 18/10): nao vale mais nada, so e apagada */
 const IT_EMDIA_VELHO = 'yalla_emdia_v1';
