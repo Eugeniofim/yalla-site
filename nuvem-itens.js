@@ -21,7 +21,9 @@
    ===================================================== */
 'use strict';
 
-const ITENS_COLS = ['equipe', 'disp', 'contas', 'orcamentos', 'fichas', 'tarefas', 'clientes', 'parceiros', 'pontos', 'pedidos', 'lembretesVistos', 'interesse', 'avaliacoes'];
+/* 26/10/2026 (revisão da entrega): despesas (Contabilidade), fornecedores, a tabela de
+   preços e a ficha dos arquivos ficavam SÓ no aparelho — entram como na EmRoma/Ingrid */
+const ITENS_COLS = ['equipe', 'disp', 'contas', 'orcamentos', 'fichas', 'tarefas', 'clientes', 'parceiros', 'pontos', 'pedidos', 'lembretesVistos', 'interesse', 'avaliacoes', 'despesas', 'fornecedores', 'precos', 'arquivos'];
 /* estas sao "dicionarios" no DB (chave -> valor); as outras sao listas com id */
 const ITENS_DIC = ['fichas', 'lembretesVistos', 'interesse'];
 const IT_SOMBRA = 'yalla_sombra_v1', IT_FILA = 'yalla_fila_v1', IT_MARCA = 'yalla_marca_v1';

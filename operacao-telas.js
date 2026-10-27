@@ -2975,7 +2975,7 @@ function participantesHtml(x, S) {
   <div class="grupo veio">
     <b>${L('Como você conheceu a', 'How did you find')} ${esc(guiaNegocio())}?</b>
     <select id="fVeio"><option value="">${L('Escolha…', 'Choose…')}</option>
-      ${VEIO_POR.filter(v => v[0] !== 'junto').map(([v, n2]) => `<option value="${v}">${esc(v === 'voltou' ? L('Já viajei com ' + guiaNome(), 'I have travelled with ' + guiaNome()) : n2)}</option>`).join('')}</select>
+      ${VEIO_POR.filter(v => v[0] !== 'junto').map(([v, n2]) => `<option value="${v}">${esc(v === 'voltou' ? L('Já viajei com ' + guiaNegocio(), 'I have travelled with ' + guiaNegocio()) : n2)}</option>`).join('')}</select>
     <label class="fld" id="fIndBox" hidden>${L('Quem indicou?', 'Who referred you?')}<input id="fInd" placeholder="${L('nome de quem indicou', 'name')}"></label>
   </div>`;
 }

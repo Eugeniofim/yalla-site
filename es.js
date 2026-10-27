@@ -604,6 +604,10 @@ const STR_ES = {
 
 /* o que era da EmRoma e na Yalla tem outro texto */
 const STR_YALLA = {
+ /* 26/10/2026: "Yalla Experiences" no lugar de "Milla" (pedido dela de 22/10), também no login e no consentimento */
+ "loginTitle": { "pt": "Painel da Yalla Experiences", "en": "Yalla Experiences panel", "es": "Panel de Yalla Experiences" },
+ "admEntry": { "pt": "Painel da Yalla Experiences", "en": "Yalla Experiences panel", "es": "Panel de Yalla Experiences" },
+ "consentLbl": { "pt": "Quero receber as novidades da Yalla Experiences por e-mail e WhatsApp", "en": "I'd like to hear from Yalla Experiences by email and WhatsApp", "es": "Quiero recibir las novedades de Yalla Experiences por e-mail y WhatsApp" },
  "seeTours": { "pt": "Ver experiências", "en": "See the experiences", "es": "Ver experiencias" },
  "seeToursSub": { "pt": "Privativas, corporativas e sob medida", "en": "Private, corporate and bespoke", "es": "Privadas, corporativas y a medida" },
  "hubRoteiro": {
