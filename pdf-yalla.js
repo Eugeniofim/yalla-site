@@ -34,9 +34,13 @@ function pdfCarrega() {
     .catch(e => { _pdfLibs = null; throw e; });
   return _pdfLibs;
 }
-/* os blocos onde a folha pode virar (o fim de cada um), por documento */
+/* os blocos onde a folha pode virar (o fim de cada um), por documento.
+   28/10/2026 (ele: "o PDF da proposta tem umas quebras em branco"): título nunca fecha a folha —
+   antes a folha virava logo depois do nome do passeio, a foto ia para a folha seguinte e ficava um
+   buraco em branco embaixo do título. Agora pode virar depois da FOTO (.pp-foto) e de cada
+   parágrafo, nunca depois de h2/h3 nem do "Roteiro personalizado" (.pp-kick). */
 const PDF_BLOCOS = '.od-top,.od-it,.od-opc,.od-sub,.od-cards,.od-total,.od-cond,.od-rod,.od-pe,.od-txtc,.od-sec,' +
-  '.fd-topo,.fd-bloco,.fd-tab tr,.fd-tot,.fd-pe,.vo-top,.vo-sec,.vo-pe,.rt-pg,.rt-dia,.rt-parada,.rt-map,.kt-bl,.kt-grade,section,h2,h3,p,li,tr';
+  '.fd-topo,.fd-bloco,.fd-tab tr,.fd-tot,.fd-pe,.vo-top,.vo-sec,.vo-pe,.rt-pg,.rt-dia,.rt-parada,.rt-map,.kt-bl,.kt-grade,section,.pp-foto,p:not(.pp-kick),li,tr';
 function pdfCortes(alturaTotal, folha, fins) {
   const cortes = []; let ini = 0;
   while (alturaTotal - ini > folha + 1) {
@@ -75,7 +79,11 @@ async function pdfDoElemento(el, nome) {
     const k = folhaCss / altura;
     pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', (W - W * k) / 2, 0, W * k, H);
   } else {
-    const cortes = pdfCortes(altura, folhaCss, fins), limites = [0, ...cortes, altura];
+    const cortes = pdfCortes(altura, folhaCss, fins);
+    /* sobrou um fiapo (o rodapé) para a última folha: a penúltima encolhe um pouco e leva junto,
+       em vez de uma folha quase toda em branco (28/10/2026) */
+    if (cortes.length && altura - cortes[cortes.length - 1] < folhaCss * 0.15) cortes.pop();
+    const limites = [0, ...cortes, altura];
     for (let i = 0; i < limites.length - 1; i++) {
       const y0 = Math.round(limites[i] * pxPorCss), y1 = Math.min(canvas.height, Math.round(limites[i + 1] * pxPorCss));
       if (y1 - y0 < 4) continue;
@@ -83,7 +91,8 @@ async function pdfDoElemento(el, nome) {
       const g = fatia.getContext('2d'); g.fillStyle = '#ffffff'; g.fillRect(0, 0, fatia.width, fatia.height);
       g.drawImage(canvas, 0, y0, canvas.width, y1 - y0, 0, 0, canvas.width, y1 - y0);
       if (i) pdf.addPage();
-      pdf.addImage(fatia.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, W, (y1 - y0) / pxPorCss * W / LARG);
+      const h = (y1 - y0) / pxPorCss * W / LARG, k = h > H ? H / h : 1;
+      pdf.addImage(fatia.toDataURL('image/jpeg', 0.92), 'JPEG', (W - W * k) / 2, 0, W * k, h * k);
     }
   }
   const arquivo = String(nome || 'documento').replace(/[\\/:*?"<>|]+/g, '-').trim() + '.pdf';

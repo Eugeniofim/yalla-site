@@ -1202,7 +1202,7 @@ function opcEdLinha(o, i) {
 /* a opção de um produto (ou nada, se ele não tem opções) */
 function opcaoDe(x, i) { return Array.isArray(x.opcoes) && x.opcoes.length ? (x.opcoes[+i || 0] || x.opcoes[0]) : null; }
 function temOpcoes(x) { return Array.isArray(x.opcoes) && x.opcoes.length > 1; }
-function ehSobConsulta(x) { return x.priceMode !== 'session' && x.priceMode !== 'pp' && !(precoVitrine(x) > 0); }
+function ehSobConsulta(x) { return x.priceMode !== 'session' && x.priceMode !== 'pp' && x.priceMode !== 'hora' && !(precoVitrine(x) > 0); }
 function precoVitrine(x) {
   if (Array.isArray(x.opcoes) && x.opcoes.length) { const vs = x.opcoes.map(o => +o.preco || 0).filter(v => v > 0); return vs.length ? Math.min(...vs) : 0; }
   if (x.priceMode === 'transfer') return transferMenor(x) || +x.price || 0;
@@ -1213,6 +1213,7 @@ function unidadePreco(x) {
   if (x.priceMode === 'transfer') return t('perTrip');
   if (x.priceMode === 'tabela')   return t('perGroup');
   if (x.priceMode === 'session')  return t('perSession');
+  if (x.priceMode === 'hora')     return t('perHour') + (+x.minHoras > 1 ? ' · ' + L3('mínimo ' + x.minHoras + 'h', 'min. ' + x.minHoras + 'h', 'mínimo ' + x.minHoras + 'h') : '');
   return t('perPerson');
 }
 
@@ -2307,17 +2308,30 @@ function admToday(arg) {
 
 /* ---- Passeios ---- */
 const STATUS_PILL = { live: ['ok', 'live'], draft: ['n', 'draft'], seasonal: ['warn', 'seasonal'] };
+/* BUSCAR E FILTRAR "MEUS PASSEIOS" (28/10/2026, ele: "nos passeios ter a opção também de filtrar no
+   catálogo"): com 49 passeios a lista virou rolagem. Busca por nome (sem acento), situação, onde e tipo;
+   filtra na hora, sem redesenhar (o cursor fica na busca), e lembra o filtro ao duplicar/pausar. */
+const _tfN = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 function admTours() {
-  const tours = Tours.all();
+  const tours = Tours.all(), F = admTours._f = admTours._f || { q: '', st: '', reg: '', tipo: '' };
+  const regs = [...new Set(tours.map(x => x.region).filter(Boolean))], tipos = [...new Set(tours.map(x => x.type).filter(Boolean))];
+  const opt = (v, n, cur) => `<option value="${esc(v)}" ${cur === v ? 'selected' : ''}>${esc(n)}</option>`;
   admShell('tours', `
     <div class="pagehead"><h1 class="pageh">${t('admTours')}</h1>
       <button class="cta sm" id="newTour">${t('newTour')}</button></div>
+    ${tours.length > 5 ? `<div class="tfiltro" role="search">
+      <label class="fld tf-q"><span class="sr">Buscar passeio</span><input id="tfQ" type="search" value="${esc(F.q)}" placeholder="Buscar: deserto, Burj, Abu Dhabi…" autocomplete="off" aria-label="Buscar passeio"></label>
+      <label class="fld"><span class="sr">Situação</span><select id="tfSt" aria-label="Situação">${opt('', 'Todos', F.st)}${opt('live', 'No ar', F.st)}${opt('draft', 'Rascunho', F.st)}</select></label>
+      ${regs.length > 1 ? `<label class="fld"><span class="sr">Onde</span><select id="tfReg" aria-label="Onde">${opt('', 'Lugar', F.reg)}${regs.map(r => opt(r, regiaoLabel(r), F.reg)).join('')}</select></label>` : ''}
+      ${tipos.length > 1 ? `<label class="fld"><span class="sr">Tipo</span><select id="tfTipo" aria-label="Tipo">${opt('', 'Tipo', F.tipo)}${tipos.map(k => opt(k, tipoLabel(k), F.tipo)).join('')}</select></label>` : ''}
+      <span class="tf-n" id="tfN" aria-live="polite"></span>
+    </div>` : ''}
     ${tours.length ? `<div class="tlist">${tours.map(x => {
       const [cls, k] = STATUS_PILL[x.status] || STATUS_PILL.draft;
-      return `<div class="trow">
+      return `<div class="trow trow-ph" data-busca="${esc(_tfN([x.name.pt, x.name.en, regiaoLabel(x.region), tipoLabel(x.type), x.id].join(' ')))}" data-st="${esc(x.status || 'draft')}" data-reg="${esc(x.region || '')}" data-tipo="${esc(x.type || '')}">
         <span class="ph sm" style="background-image:url(${esc(x.photo)})"></span>
         <div class="tinfo"><b>${esc(x.name.pt)}</b>
-          <small>${esc(tipoLabel(x.type))} · ${ehSobConsulta(x) ? t('sobConsulta') : eur(x.price)} ${x.priceMode === 'session' ? t('perSession') : t('perPerson')} · ${regiaoLabel(x.region)}</small></div>
+          <small>${esc(tipoLabel(x.type))} · ${ehSobConsulta(x) ? t('sobConsulta') : eur(x.price)} ${x.priceMode === 'session' ? t('perSession') : x.priceMode === 'hora' ? t('perHour') : t('perPerson')} · ${regiaoLabel(x.region)}</small></div>
         <span class="pill ${cls}">${t(k)}</span>
         <div class="tacts">
           <button class="mini" data-edit="${x.id}">${t('edit')}</button>
@@ -2326,7 +2340,22 @@ function admTours() {
           <button class="mini danger" data-del="${x.id}">×</button>
         </div></div>`;
     }).join('')}</div>`
-    : `<div class="emptybox"><p>${t('emptyTours')}</p><button class="cta" id="newTour2">${t('firstTour')}</button></div>`}`);
+    : `<div class="emptybox"><p>${t('emptyTours')}</p><button class="cta" id="newTour2">${t('firstTour')}</button></div>`}
+    <p class="why tf-nada" id="tfNada" hidden>Nenhum passeio com esse filtro. <button type="button" class="linkbtn" id="tfLimpa">Limpar o filtro</button></p>`);
+  const filtra = () => {
+    const q = _tfN(F.q).split(/\s+/).filter(Boolean); let n = 0;
+    $$('.tlist .trow').forEach(r => {
+      const ok = q.every(w => r.dataset.busca.includes(w)) && (!F.st || (F.st === 'draft' ? r.dataset.st === 'draft' : r.dataset.st !== 'draft'))
+        && (!F.reg || r.dataset.reg === F.reg) && (!F.tipo || r.dataset.tipo === F.tipo);
+      r.style.display = ok ? '' : 'none'; if (ok) n++;
+    });
+    const nn = $('#tfN'); if (nn) nn.textContent = n === tours.length ? `${n} passeios` : `${n} de ${tours.length}`;
+    const nada = $('#tfNada'); if (nada) nada.hidden = !!n || !tours.length;
+  };
+  const q = $('#tfQ'); if (q) q.oninput = () => { F.q = q.value; filtra(); };
+  for (const [id, k] of [['#tfSt', 'st'], ['#tfReg', 'reg'], ['#tfTipo', 'tipo']]) { const e = $(id); if (e) e.onchange = () => { F[k] = e.value; filtra(); }; }
+  const lp = $('#tfLimpa'); if (lp) lp.onclick = () => { Object.assign(F, { q: '', st: '', reg: '', tipo: '' }); admTours(); };
+  filtra();
   $('#newTour')?.addEventListener('click', () => admTourEdit('new'));
   $('#newTour2')?.addEventListener('click', () => admTourEdit('new'));
   $$('[data-edit]').forEach(b => b.onclick = () => go('/adm/tours/' + b.dataset.edit));
@@ -2499,7 +2528,8 @@ function admTourEdit(id) {
         <h3>${t('edMoney')}</h3>
         <div class="frow">
           <label class="fld">${t('tPrice')}<input id="fPrice" type="number" value="${x.price}"></label>
-          <label class="fld">${t('tPriceMode')}<select id="fMode">${selOpts([['pp','perPerson'],['session','perSession'],['tabela','perTable'],['transfer','perTransfer']], x.priceMode)}</select></label>
+          <label class="fld">${t('tPriceMode')}<select id="fMode">${selOpts([['pp','perPerson'],['session','perSession'],['hora','perHour'],['tabela','perTable'],['transfer','perTransfer']], x.priceMode)}</select></label>
+          <label class="fld ${x.priceMode === 'hora' ? '' : 'hide'}" id="fMinHorasWrap">${L3('Mínimo de horas', 'Minimum hours', 'Mínimo de horas')}<input id="fMinHoras" type="number" min="1" step="1" inputmode="numeric" value="${+x.minHoras || 1}"></label>
         </div>
 
         <div id="tabWrap" class="${x.priceMode === 'tabela' ? '' : 'hide'}">
@@ -2719,6 +2749,7 @@ function admTourEdit(id) {
   $('#fMode').onchange = (e) => {
     $('#trfWrap').classList.toggle('hide', e.target.value !== 'transfer');
     $('#tabWrap').classList.toggle('hide', e.target.value !== 'tabela');
+    $('#fMinHorasWrap').classList.toggle('hide', e.target.value !== 'hora');
   };
   $('#ingAdd').onclick = () => $('#ingRows').insertAdjacentHTML('beforeend', ingLinhaEd({}));
   $('#ingRows').addEventListener('click', (e) => {
@@ -2791,7 +2822,7 @@ function admTourEdit(id) {
       meeting: par('#fMeetPt', '#fMeetEn'),
       pontos: $$('[data-tpponto]').filter(el => el.checked).map(el => el.dataset.tpponto),
       pontoPadrao: ($('input[name="tpPadrao"]:checked') || {}).value || '',
-      price: +$('#fPrice').value || 0, priceMode: $('#fMode').value,
+      price: +$('#fPrice').value || 0, priceMode: $('#fMode').value, minHoras: Math.max(1, Math.round(+$('#fMinHoras').value || 1)),
       tabela: $$('.ftab').sort((p, q) => +p.dataset.i - +q.dataset.i).map(el => +el.value || 0),
       transfer: { linhas: lerTrfLinhas() },
       ingressos: lerIngLinhas(),

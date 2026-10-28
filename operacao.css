@@ -912,3 +912,18 @@ p.ag-leg{display:flex;flex-wrap:wrap;gap:6px 18px}
 /* os ícones da lista "Precisa de você" (no lugar dos emojis) */
 .crm-ag-i{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--accent-wash);color:var(--accent);flex:none}
 .crm-ag-i svg{width:16px;height:16px}
+
+/* "Meus passeios": busca e filtros (28/10/2026) */
+.tfiltro{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 14px}
+.tfiltro .fld{margin:0}
+.tfiltro .tf-q{flex:1 1 260px}
+.tfiltro select{min-height:44px}
+.tfiltro .tf-n{color:var(--ink-3);font-size:13px;margin-left:auto}
+.tfiltro .sr,.tf-nada .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+@media(max-width:600px){.tfiltro .fld:not(.tf-q){flex:1 1 40%}.tfiltro .tf-n{flex-basis:100%;margin:0}}
+.trow.trow-ph{grid-template-columns:auto minmax(0,1fr) auto auto}   /* a foto tem coluna própria (o nome ia para a direita) */
+@media(max-width:860px){
+  .trow.trow-ph{grid-template-columns:auto minmax(0,1fr) auto}
+  .trow.trow-ph>.tinfo{grid-column:2}.trow.trow-ph>.pill{grid-column:3}
+  .trow.trow-ph>.tacts{grid-column:1/-1}
+}

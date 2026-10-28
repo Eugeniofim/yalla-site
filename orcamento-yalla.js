@@ -54,6 +54,7 @@ Orc._item = function (i) {
     criancas: Math.max(0, Math.min(+i.criancas || 0, Math.max(1, +i.pax || 1))),   /* das pessoas, quantas são crianças */
     naoIncluso: String(i.naoIncluso || '').trim(),
     aParte: !!i.aParte,                            /* "(a parte)": entra no roteiro, por conta do cliente, sem valor */
+    horas: Math.max(0, Math.round(+i.horas || 0)), /* passeio POR HORA (o iate): quantas horas (28/10/2026) */
   });
 };
 /* O TOTAL (o que o resto do app já usa: CRM, painel, assistente):
@@ -62,7 +63,8 @@ Orc._item = function (i) {
    (vatPct, em Mais opções), 5% se ela não mudar. */
 const OY_VAT = 5;
 const oyCent = (v) => Math.round((+v || 0) * 100) / 100;
-const oyVatPct = (o) => o && o.vatPct != null && o.vatPct !== '' ? Math.max(0, +o.vatPct || 0) : OY_VAT;
+/* COM OU SEM VAT (28/10/2026, ele: "colocar opção de incluir ou não o VAT"): semVat desliga só neste orçamento */
+const oyVatPct = (o) => o && o.semVat ? 0 : o && o.vatPct != null && o.vatPct !== '' ? Math.max(0, +o.vatPct || 0) : OY_VAT;
 const _oyTotalBase = Orc.total;
 /* O TOTAL QUE ELA INFORMA vale (28/10/2026, ele: "não pode recriar nada, tem que respeitar o
    que ela pede"): com totalInformado, o total é esse número e o VAT de 5% fica DENTRO dele. */
@@ -75,7 +77,6 @@ function oyHoteis(o, comVazios) {
   const l = Array.isArray(o.hoteis) ? o.hoteis.filter(h => h && (comVazios || String(h.nome || '').trim())) : [];
   return l.length ? l : (o.hotel ? [{ de: '', ate: '', nome: o.hotel, situacao: '' }] : []);
 }
-const oyPorCasal = (o) => (+o.adultos || 0) >= 2 ? oyCent(oyPorPessoa(o) * 2) : 0;
 /* SÓ DÓLAR (28/10/2026, pedido dele: "deixar tudo em dólares, somente
    dólares"): o orçamento, a proposta e as reservas que saem dele são em USD */
 const OY_MOEDA = 'USD';
@@ -96,6 +97,9 @@ Orc.fecha = function (id, opts) {
     Object.assign(b, { orcTitulo: i.desc || '', orcTexto: i.texto || '', orcIncluso: i.incluso || '', orcFoto: i.foto || '', orcObs: /^Sem preço na tabela/.test(i.obs || '') ? '' : (i.obs || '') });
     const par = oyParceiroDe(o); if (par && !b.parceiroId) b.parceiroId = par.id;
     if (i.horaFim) b.horaFim = i.horaFim;
+    /* serviço sem horário no orçamento: a reserva guarda 09:00 por dentro (a agenda precisa de uma
+       hora), mas o roteiro que vai para o cliente NÃO mostra horário nenhum (28/10/2026) */
+    if (!i.hora) b.semHora = true;
   });
   for (const b of bs) {
     if (!b.moeda) b.moeda = OY_MOEDA;
@@ -110,15 +114,28 @@ const oyLista = (a) => (a && !Array.isArray(a) && (a.pt || a.en) ? (a.pt || a.en
 const oyParagrafo = (t) => (String(t || '').split(/\n\s*\n/)[0] || '').trim();
 const oyFoto = (p) => /^data:/i.test(String(p || '')) ? '' : String(p || '');
 const oyFotosDe = (x) => [...new Set([x && x.photo, ...((x && x.fotos) || [])].map(oyFoto).filter(Boolean))];
-const oyHm = (h) => { const m = String(h || '').match(/(\d{1,2})[:h](\d{2})?/); return m ? String(+m[1]).padStart(2, '0') + ':' + (m[2] || '00') : ''; };
+/* a hora do jeito que ela digitar (28/10/2026, "os horários não estão deixando mudar"): 14:30,
+   14h30, 14.30, 14 30, 1430, 930, 14h, 14 → "14:30"/"09:30"/"14:00". Hora ou minuto impossível → vazio. */
+const oyHm = (h) => {
+  const t = String(h || '').trim().toLowerCase(), ok = (H, M) => +H <= 23 && +M <= 59 ? String(+H).padStart(2, '0') + ':' + String(+M).padStart(2, '0') : '';
+  let m = t.match(/(\d{1,2})\s*[:h.,\s]\s*(\d{2})/); if (m) return ok(m[1], m[2]);
+  m = t.match(/^(\d{1,2})(\d{2})$/); if (m) return ok(m[1], m[2]);
+  m = t.match(/^(\d{1,2})\s*h?$/); if (m) return ok(m[1], 0);
+  return '';
+};
+/* "09:00–17:00", "9h às 17h", "20h às 22h30", "10h-12h" → [início, fim]. O "às" tem acento e o \b do
+   JavaScript não enxerga letra acentuada: "20h às 22h30" virava só 22:30 (28/10/2026) */
+const oyFaixaPartes = (v) => String(v || '').trim().split(/\s*(?:–|—|-)\s*|\s+(?:às|as|até|ate|a)\s+/i);
 function oySoma(hm, min) { if (!hm) return ''; const [h, m] = hm.split(':').map(Number); const t = Math.min(23 * 60 + 59, h * 60 + m + min); return String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0'); }
 /* "09h00 – 18h00" → ['09:00','18:00']; "4h" → começa às 09:00 e soma */
+/* NADA DE HORÁRIO INVENTADO (28/10/2026, ele: "veio informação errada inventada" na proposta):
+   antes o app fazia o fim pela duração ("10h" → 09:00–19:00) e a faixa fixa do catálogo passava
+   por cima da hora que ela deu. Agora: a hora dela manda e o fim só vem dela; sem hora dela, só a
+   faixa que ela mesma escreveu no passeio ("09h00 – 18h00"). */
 function oyHorasDe(x, hora) {
-  const d = String((x && x.duration) || '');
-  const par = d.match(/(\d{1,2}[:h]\d{2})\s*[–-]\s*(\d{1,2}[:h]\d{2})/);
-  if (par) return [oyHm(par[1]), oyHm(par[2])];
-  const h = d.match(/^(\d{1,2})(?:[,.](\d))?\s*h/i);
-  return [hora, h && hora ? oySoma(hora, +h[1] * 60 + (h[2] ? +h[2] * 6 : 0)) : ''];
+  if (hora) return [hora, ''];
+  const par = String((x && x.duration) || '').match(/(\d{1,2}[:h]\d{2})\s*[–-]\s*(\d{1,2}[:h]\d{2})/);
+  return par ? [oyHm(par[1]), oyHm(par[2])] : ['', ''];
 }
 const oyMoeda = () => OY_MOEDA;
 function oyM(v, m) {
@@ -132,6 +149,50 @@ function oyPaxTexto(o) {
   return [a ? a + (a > 1 ? ' adultos' : ' adulto') : '', c ? c + (c > 1 ? ' crianças' : ' criança') : ''].filter(Boolean).join(' + ');
 }
 const oyPorPessoa = (o) => { const p = oyPax(o); return p ? oyCent(Orc.total(o) / p) : 0; };
+/* POR ADULTO E POR CRIANÇA (28/10/2026, ele: "por casal não precisa; no por pessoa separe o valor
+   por adulto e por criança"). Em cada serviço a criança paga o preço de criança da tabela (na mesma
+   proporção, se ela mudou o valor); sem preço de criança, paga como adulto. A parte das crianças
+   passa pela mesma régua do total (desconto, VAT, total que ela fechou) e os adultos dividem o
+   resto — então adultos × por adulto + crianças × por criança = o total. */
+function oyPorTipo(o) {
+  const A = +o.adultos || 0, C = +o.criancas || 0, tot = Orc.total(o);
+  if (!C) { const p = A || oyPax(o); return { adulto: p ? oyCent(tot / p) : 0, crianca: 0 }; }
+  let soma = 0, partC = 0;
+  for (const i of o.itens || []) {
+    const v = +i.valor || 0; if (i.aParte || !v) continue;
+    soma += v;
+    const pax = Math.max(1, +i.pax || 1), x = i.tourId && Tours.get(i.tourId);
+    /* serviço livre ou traslado do grupo todo: as crianças do grupo estão nele */
+    const c = Math.min(pax, +i.criancas > 0 ? +i.criancas : (!x && pax >= oyPax(o) ? C : 0));
+    if (!c) continue;
+    let uc = v / pax;
+    const pc = x ? oyPrecoCrianca(x, i.opcao) : 0;
+    if (pc > 0) { const tab = oyPrecoItem(x, { ...i, criancas: c }).total || 0; uc = Math.min(v / c, pc * (tab > 0 ? v / tab : 1)); }
+    partC += uc * c;
+  }
+  partC = soma > 0 ? partC * tot / soma : 0;
+  return { adulto: A ? oyCent((tot - partC) / A) : 0, crianca: oyCent(partC / C) };
+}
+/* O LINK DE PAGAMENTO COBRA O TOTAL, POR PESSOA OU POR CASAL (28/10/2026, ele: "no link de pagamento
+   colocar para gerar link de pagamento: total, por casal ou por pessoa"). A plataforma dela (Pix e
+   cartão em 12x) ainda não conversa com o app: o app mostra o valor certo de cada jeito, ela cria o
+   link lá com esse valor e cola aqui; a proposta mostra o botão certo. Com criança, "por pessoa"
+   tem dois links (adulto e criança). */
+const OY_PAG = [['total', 'Total'], ['pessoa', 'Por pessoa'], ['casal', 'Por casal']];
+const oyPagModo = (o) => OY_PAG.some(x => x[0] === o.pagModo) ? o.pagModo : 'total';
+function oyPagValor(o) {
+  const t = oyPorTipo(o), modo = oyPagModo(o), cri = +o.criancas > 0;
+  if (modo === 'pessoa') return { modo, v: t.adulto, rot: cri ? 'por adulto' : 'por pessoa', vc: cri ? t.crianca : 0 };
+  if (modo === 'casal') return { modo, v: oyCent(t.adulto * 2), rot: 'por casal', vc: 0 };
+  const p = +o.pago > 0;
+  return { modo, v: p ? oyPendente(o) : Orc.total(o), rot: p ? 'o que falta pagar' : 'o total', vc: 0 };
+}
+/* "USD 1.050 por adulto · USD 525 por criança" (sem criança: "USD 1.050 por pessoa") */
+function oyPorTipoTexto(o, curto) {
+  const t = oyPorTipo(o), m = oyMoeda(o);
+  if (!(+o.criancas > 0)) return oyPax(o) > 1 ? oyM(t.adulto, m) + (curto ? '/pessoa' : ' por pessoa') : '';
+  return oyM(t.adulto, m) + (curto ? '/adulto · ' : ' por adulto · ') + oyM(t.crianca, m) + (curto ? '/criança' : ' por criança');
+}
 const oyPendente = (o) => Math.max(0, Orc.total(o) - (+o.pago || 0));
 const oyOrdena = (l) => [...l].sort((a, b) => ((a.data || '9999') + (a.hora || '99')).localeCompare((b.data || '9999') + (b.hora || '99')));
 function oyDiasDaViagem(o) {
@@ -159,7 +220,7 @@ const oyTemOpcoes = (x) => oyOpcoes(x).length > 1;
 const oyPrecoCrianca = (x, k) => +((oyOpcoes(x)[+k || 0] || {}).precoCrianca || (x && x.precoCrianca) || 0);
 function oyPrecoItem(x, i) {
   const pax = Math.max(1, +i.pax || 1), cri = Math.min(pax, Math.max(0, +i.criancas || 0));
-  const pr = Bookings.precoDe(x, x.id, i.data || isoToday(), i.hora || '09:00', pax, { opcao: +i.opcao || 0, idades: Array(cri).fill(0) });
+  const pr = Bookings.precoDe(x, x.id, i.data || isoToday(), i.hora || '09:00', pax, { opcao: +i.opcao || 0, idades: Array(cri).fill(0), horas: +i.horas || 0 });
   return pr || { total: 0 };
 }
 /* a opção pelo nome que ela diz: exato → palavra inteira ("prime" NÃO pega "non-prime") → trecho */
@@ -183,12 +244,13 @@ function oyDoCatalogo(o, tourId, extra) {
   const opcao = Math.max(0, Math.min(+extra.opcao || 0, Math.max(0, oyOpcoes(x).length - 1)));
   const criancas = Math.min(pax, extra.criancas != null ? +extra.criancas || 0 : (+o.criancas || 0));
   const base = Orc.itemDoCatalogo(tourId, { pax, data: extra.data || '', hora: extra.hora || '', opcao });
-  base.valor = oyPrecoItem(x, { pax, criancas, opcao, data: extra.data, hora: extra.hora }).total || base.valor;
+  const horas = x.priceMode === 'hora' ? Math.max(+x.minHoras || 1, Math.round(+extra.horas || 0)) : 0;
+  base.valor = oyPrecoItem(x, { pax, criancas, opcao, horas, data: extra.data, hora: extra.hora }).total || base.valor;
   /* hora só se for certa: a que ela disse, a do horário fixo do passeio ou a faixa da duração
      ("09h00 – 18h00"). Sem nada disso fica em branco — o 09:00 de reserva seria chute. */
   const regra = (DB.rules || []).find(r => r.tourId === tourId);
   const [h1, h2] = oyHorasDe(x, extra.hora || (regra && regra.time) || '');
-  return Orc._item({ ...base, obs: extra.obs || '', pax, criancas, opcao, desc: oyTituloDe(x, opcao), tipo: x.type === 'transfer' ? 'traslado' : 'passeio', auto: !(+extra.valor > 0),
+  return Orc._item({ ...base, obs: extra.obs || '', pax, criancas, opcao, horas, desc: oyTituloDe(x, opcao), tipo: x.type === 'transfer' ? 'traslado' : 'passeio', auto: !(+extra.valor > 0),
     valor: +extra.valor > 0 ? +extra.valor : base.valor, hora: h1 || '', horaFim: extra.horaFim || h2,
     texto: extra.texto || oyParagrafo(oyPt(x.desc)), incluso: extra.incluso || oyLista(x.includes).join(', '),
     foto: oyFotosDe(x)[0] || '' });
@@ -295,6 +357,7 @@ if (typeof kitServico === 'function') {
     if (b.orcTexto) sv.resumo = b.orcTexto;
     if (b.orcFoto) sv.foto = b.orcFoto;
     if (b.horaFim) sv.horaFim = b.horaFim;
+    if (b.semHora) sv.hora = '';
     if (b.orcObs) sv.obs = b.orcObs;
     const inc = String(b.orcIncluso || '').split(/\n|,\s*(?=[A-ZÀ-Ú])/).map(t => t.trim()).filter(Boolean);
     if (inc.length) sv.inclui = inc;
@@ -383,19 +446,30 @@ function ppDados(o) {
     chegada: o.chegada || null, partida: o.partida || null, moeda: m,
     itens: oyOrdena(o.itens).filter(i => !i.sugestao).map(i => {
       const x = i.tourId && Tours.get(i.tourId);
-      return { data: i.data || '', hora: i.hora || '', horaFim: i.horaFim || '', rotulo: i.rotulo || '', titulo: i.desc || '',
+      return { data: i.data || '', hora: i.hora || '', horaFim: i.horaFim || '', rotulo: i.rotulo || '', titulo: i.desc || '', horas: x && x.priceMode === 'hora' ? +i.horas || +x.minHoras || 1 : 0,
         texto: i.texto || '', incluso: i.incluso || '', naoIncluso: i.naoIncluso || '', aParte: !!i.aParte,
         obs: i.sugestao || /^Sem preço na tabela/.test(i.obs || '') ? '' : (i.obs || ''), foto: i.foto || '', tipo: i.tipo, voo: i.voo || '',
         cidade: x && regs[x.region] && !['deserto', 'oriente'].includes(x.region) ? regs[x.region] : '' };
     }),
     subtotal: Orc.subtotal(o), vatPct: oyVatPct(o), vat: Orc.vat(o),
-    total: Orc.total(o), porPessoa: oyPorPessoa(o), porCasal: oyPorCasal(o), pago: +o.pago || 0, pendente: oyPendente(o),
+    total: Orc.total(o), porPessoa: oyPorPessoa(o), porAdulto: oyPorTipo(o).adulto, porCrianca: oyPorTipo(o).crianca, criancas: +o.criancas || 0, pago: +o.pago || 0, pendente: oyPendente(o),
     validade: o.validade || '', obs: o.obs || '',
     pagar: /^https:\/\//i.test(String(o.linkPagamento || '').trim()) ? String(o.linkPagamento).trim() : '',
+    pagarCrianca: oyPagModo(o) === 'pessoa' && +o.criancas > 0 && /^https:\/\//i.test(String(o.linkPagamentoCrianca || '').trim()) ? String(o.linkPagamentoCrianca).trim() : '',
+    pagarModo: oyPagModo(o), pagarValor: oyPagValor(o).v, pagarValorCrianca: oyPagValor(o).vc,
     politica: o.politica != null ? o.politica : ppTextoPadrao('politica'),
     condicoes: o.condicoes != null ? o.condicoes : ppTextoPadrao('condicoes'),
     diferencial: o.diferencial != null ? o.diferencial : ppTextoPadrao('diferencial'),
   };
+}
+/* "Pagar agora · USD 2.817" / "Pagar por adulto · USD 971" + "Pagar por criança · USD 873" / "Pagar por casal · USD 1.943" */
+function ppBotoesPagar(d, cls, curto) {
+  if (!d.pagar) return '';
+  const m = d.moeda, modo = d.pagarModo || 'total', v = +d.pagarValor || 0, cri = +d.criancas > 0;
+  const rot = modo === 'pessoa' ? (cri ? 'Pagar por adulto' : 'Pagar por pessoa') : modo === 'casal' ? 'Pagar por casal' : 'Pagar agora';
+  const b = (href, txt) => `<a class="${cls}" data-pdf-fora href="${esc(href)}" target="_blank" rel="noopener">${esc(txt)}</a>`;
+  return b(d.pagar, rot + (v ? ' · ' + oyM(v, m) : '') + (curto ? '' : ' · Pix ou cartão'))
+    + (d.pagarCrianca ? b(d.pagarCrianca, 'Pagar por criança' + (+d.pagarValorCrianca ? ' · ' + oyM(+d.pagarValorCrianca, m) : '')) : '');
 }
 const PP_MES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
 const ppSemana = (iso) => new Date(iso + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long' });
@@ -419,7 +493,7 @@ function ppHtml(d) {
   /* os serviços por dia; sem dia vai para o fim */
   const dias = []; for (const i of d.itens) { const k = i.data || ''; let g = dias.find(x => x.d === k); if (!g) dias.push(g = { d: k, l: [] }); g.l.push(i); }
   dias.sort((a, b) => (a.d || '9999').localeCompare(b.d || '9999'));
-  const tag = (i) => [i.data ? ppSemana(i.data) : '', i.data ? i.data.slice(8, 10) + '/' + i.data.slice(5, 7) : '', ppHoras(i), i.rotulo, i.voo && i.tipo === 'traslado' ? 'voo ' + i.voo : ''].filter(Boolean).join(' | ');
+  const tag = (i) => [i.data ? ppSemana(i.data) : '', i.data ? i.data.slice(8, 10) + '/' + i.data.slice(5, 7) : '', ppHoras(i), i.horas ? i.horas + (i.horas > 1 ? ' horas' : ' hora') : '', i.rotulo, i.voo && i.tipo === 'traslado' ? 'voo ' + i.voo : ''].filter(Boolean).join(' | ');
   const cartao = (i) => `<section class="pp-card">
       ${tag(i) ? `<div class="pp-tag">${esc(tag(i))}</div>` : ''}
       <h3 class="pp-tit">${esc(i.titulo)}${i.aParte ? ' <span class="pp-aparte">(à parte)</span>' : ''}</h3>
@@ -457,14 +531,16 @@ function ppHtml(d) {
   ${d.obs ? `<section class="pp-box"><h3>Observações</h3><p>${ppEsc(d.obs)}</p></section>` : ''}
   ${(d.hoteis || []).length ? `<section class="pp-box"><h3>Hospedagem</h3>${d.hoteis.map(h => `<p class="pp-hot"><b>${esc(h.nome)}</b>${h.de || h.ate ? `<span>${esc([h.de, h.ate].filter(Boolean).map(x => x.slice(8, 10) + '/' + x.slice(5, 7)).join(' a '))}</span>` : ''}${h.situacao ? `<em>${h.situacao === 'incluso' ? 'incluso' : 'à parte'}</em>` : ''}</p>`).join('')}</section>` : ''}
   <section class="pp-inv">
-    <div class="pp-invg">
+    <div class="pp-invg${d.criancas > 0 ? ' pp-tres' : ''}">
       <div><small>Investimento total</small><b>${esc(oyM(d.total, d.moeda))}</b></div>
-      ${d.pax > 1 ? `<div><small>Por pessoa</small><b>${esc(oyM(d.porPessoa, d.moeda))}</b>${d.porCasal ? `<small class="pp-casal">por casal ${esc(oyM(d.porCasal, d.moeda))}</small>` : ''}</div>` : ''}
+      ${d.criancas > 0 ? `<div><small>Por adulto</small><b>${esc(oyM(d.porAdulto, d.moeda))}</b></div><div><small>Por criança</small><b>${esc(oyM(d.porCrianca, d.moeda))}</b></div>`
+        : d.pax > 1 ? `<div><small>Por pessoa</small><b>${esc(oyM(d.porPessoa, d.moeda))}</b></div>` : ''}
     </div>
     ${d.vatPct > 0 ? `<p class="pp-vat">Subtotal ${esc(oyM(d.subtotal, d.moeda))} + VAT ${esc(String(d.vatPct).replace('.', ','))}% ${esc(oyM(d.vat, d.moeda))}. O total já inclui o VAT.</p>` : ''}
     ${d.pago > 0 ? `<div class="pp-pago"><span>Pago <b>${esc(oyM(d.pago, d.moeda))}</b></span><span>Pendente <b>${esc(oyM(d.pendente, d.moeda))}</b></span></div>` : ''}
-    ${d.pax > 1 ? `<div class="pp-ind">Pagamento individual | ${esc(oyM(d.porPessoa, d.moeda))}</div>` : ''}
-    ${d.pagar ? `<a class="pp-pagar" data-pdf-fora href="${esc(d.pagar)}" target="_blank" rel="noopener">Pagar agora · Pix ou cartão</a>` : ''}
+    ${d.criancas > 0 ? `<div class="pp-ind">Pagamento individual | adulto ${esc(oyM(d.porAdulto, d.moeda))} · criança ${esc(oyM(d.porCrianca, d.moeda))}</div>`
+      : d.pax > 1 ? `<div class="pp-ind">Pagamento individual | ${esc(oyM(d.porPessoa, d.moeda))}</div>` : ''}
+    ${ppBotoesPagar(d, 'pp-pagar')}
   </section>
   ${d.politica || d.condicoes ? `<section class="pp-box"><h3>Condições e política de cancelamento</h3>
     ${d.politica ? `<p>${ppEsc(d.politica)}</p>` : ''}
@@ -519,13 +595,13 @@ function ppCss() {
   .pp-forte{font-weight:700;color:var(--pp-n)!important;font-size:13.5px!important}
   .pp-inv{background:var(--pp-n);border-radius:18px;padding:22px;margin-bottom:16px;color:#fff}
   .pp-invg{display:grid;grid-template-columns:1fr 1fr;align-items:end;gap:14px;margin:0 0 16px}
+  .pp-tres>div:first-child{grid-column:1/-1}
   .pp-invg small{display:block;color:var(--pp-ouro);font-weight:800;letter-spacing:.05em;text-transform:uppercase;font-size:12px}
   .pp-invg b{display:block;font-size:clamp(24px,6vw,34px);font-weight:800;margin-top:6px;color:#fff;letter-spacing:-.01em}
   .pp-vat{color:#E9DFC6!important;font-size:13px!important;margin:-6px 0 14px!important}
   .pp-obs{display:flex;gap:10px;align-items:flex-start;margin:6px 0 10px;padding:11px 14px;border-radius:14px 14px 14px 4px;background:#FBF3DC;border:1px solid #EAD9A6}
   .pp-obs svg{flex:none;width:18px;height:18px;margin-top:2px;color:var(--pp-ouro-t)}
   .pp-obs p{margin:0!important;color:var(--pp-n)!important;font-size:14px!important}
-  .pp-casal{color:#E9DFC6!important;letter-spacing:0!important;text-transform:none!important;font-weight:600!important;margin-top:6px}
   .pp-aparte{font-weight:500;color:var(--pp-t);font-size:14px}
   .pp-hot{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;padding:6px 0;border-top:1px solid #EFE6CF}
   .pp-hot:first-of-type{border-top:0}
@@ -553,6 +629,9 @@ function ppCss() {
   .pp-cta a:focus-visible,.pp-cta button:focus-visible{outline:3px solid var(--pp-ouro-t,#8A6D1E);outline-offset:3px}
   .pp-pg .pdfPronto{margin:12px auto}
   @media(min-width:700px){.pp-foto{height:300px}.pp-card,.pp-box{padding:22px 24px 14px}}
+  /* no papel a foto é mais baixa: cabe título + foto + texto na mesma folha, sem buraco */
+  .em-pdf .pp-foto{height:200px}
+  .em-pdf .pp-kick{margin-top:18px}.em-pdf .pp-h2{margin-bottom:10px}.em-pdf .pp-tag{margin-bottom:10px}
   @media print{.pp-cta,.pp-topo{display:none!important}}`;
   document.head.appendChild(s);
 }
@@ -597,7 +676,7 @@ function ppPagina(d) {
   app.innerHTML = `<div class="pp-pg">
     <header class="pp-topo"><img src="arte/logo-horizontal-escuro.png" alt="${esc(d.negocio || guiaNegocio())}"><button class="mini" id="ppPdf" type="button">Baixar PDF</button></header>
     <main class="pp" id="ppDoc">${ppHtml(d)}</main>
-    <div class="pp-cta" data-pdf-fora>${d.pagar ? `<a class="pp-pg-pagar" target="_blank" rel="noopener" href="${esc(d.pagar)}">Pagar agora</a>` : ''}<a class="pp-zap" target="_blank" rel="noopener" href="${esc(waLink(`Olá! Vi a proposta ${d.num || ''}${nome ? ' (' + nome + ')' : ''} e quero reservar.`))}">${ICONE_WA} ${d.pagar ? 'Falar' : 'Quero reservar'}</a></div>
+    <div class="pp-cta" data-pdf-fora>${ppBotoesPagar(d, 'pp-pg-pagar', true)}<a class="pp-zap" target="_blank" rel="noopener" href="${esc(waLink(`Olá! Vi a proposta ${d.num || ''}${nome ? ' (' + nome + ')' : ''} e quero reservar.`))}">${ICONE_WA} ${d.pagar ? 'Falar' : 'Quero reservar'}</a></div>
   </div>`;
   if (typeof pdfLiga === 'function') pdfLiga($('#ppPdf'), () => $('#ppDoc'), () => 'Yalla_Proposta_' + (nome || 'cliente').replace(/\s+/g, '_'));
   document.querySelectorAll('#vtZap').forEach(e => e.remove());
@@ -687,10 +766,10 @@ function oyTela(id) {
   /* os campos de um serviço; "so" = só o que não aparece na linha da planilha */
   const campos = (i, so) => {
     const x = i.tourId && Tours.get(i.tourId), fotos = x ? oyFotosDe(x) : [];
-    return `${so ? '' : `<div class="oy-g3">
+    return `${so ? '' : `<div class="oy-g3 oy-quando">
           <label class="fld">Dia<input type="date" data-k="data" value="${esc(i.data)}"></label>
-          <label class="fld">Início<input data-k="hora" value="${esc(i.hora)}" placeholder="09:00" inputmode="numeric"></label>
-          <label class="fld">Fim<input data-k="horaFim" value="${esc(i.horaFim)}" placeholder="17:00" inputmode="numeric"></label>
+          <label class="fld">Início<input type="time" data-k="hora" value="${esc(oyHm(i.hora) || '')}"></label>
+          <label class="fld">Fim<input type="time" data-k="horaFim" value="${esc(oyHm(i.horaFim) || '')}"></label>
         </div>
         <label class="fld">Título<input data-k="desc" value="${esc(i.desc)}"></label>
         <label class="fld">O que o cliente vai ler<textarea data-k="texto" rows="4">${esc(i.texto)}</textarea></label>`}
@@ -703,7 +782,9 @@ function oyTela(id) {
           ${oyTemOpcoes(x) ? `<label class="fld oy-opsel">Opção<select data-k="opcao">${oyOpcoes(x).map((op, k) => `<option value="${k}" ${+i.opcao === k ? 'selected' : ''}>${esc(oyOpNome(op) || 'Opção ' + (k + 1))} · ${esc(oyM(+op.preco || 0, m))}</option>`).join('')}</select></label>` : ''}
           <label class="fld">Adultos<input type="number" min="0" inputmode="numeric" data-k="adultosIt" value="${Math.max(0, (+i.pax || 1) - (+i.criancas || 0))}"></label>
           <label class="fld">Crianças<input type="number" min="0" inputmode="numeric" data-k="criancas" value="${+i.criancas || 0}"></label>
+          ${x.priceMode === 'hora' ? `<label class="fld">Horas<input type="number" min="${+x.minHoras || 1}" step="1" inputmode="numeric" data-k="horas" value="${+i.horas || +x.minHoras || 1}"></label>` : ''}
         </div>
+        ${x.priceMode === 'hora' ? `<p class="why oy-pcri">Por hora: ${esc(oyM(+x.price || 0, m))} a hora${+x.minHoras > 1 ? ', mínimo ' + x.minHoras + ' horas' : ''}. O valor refaz ao mudar as horas.</p>` : ''}
         <p class="why oy-pcri">${pc > 0 ? `Criança${idade ? ' até ' + idade + ' anos' : ''} paga ${esc(oyM(pc, m))}.` : 'Este passeio não tem preço de criança: criança paga como adulto.'} O valor refaz sozinho ao mudar a opção ou as pessoas.</p>`; })() : ''}
         <div class="oy-g3">
           ${i.tipo === 'traslado' ? `<label class="fld">Voo<input data-k="voo" value="${esc(i.voo)}" placeholder="EK323"></label>` : `<label class="fld">Destaque<input data-k="rotulo" value="${esc(i.rotulo)}" placeholder="manhã livre"></label>`}
@@ -798,7 +879,7 @@ function oyTela(id) {
         ${[['chegada', 'Chegada'], ['partida', 'Partida']].map(([k, n]) => `<fieldset class="oy-voo"><legend>${n}</legend>
           <div class="oy-vg">
             <label class="fld"><span class="sr">${n}: dia</span><input type="date" data-v="${k}.data" value="${esc(o[k].data)}" aria-label="${n}: dia"></label>
-            <label class="fld"><span class="sr">${n}: hora do voo</span><input data-v="${k}.hora" value="${esc(o[k].hora)}" placeholder="hora" inputmode="numeric" aria-label="${n}: hora do voo"></label>
+            <label class="fld"><span class="sr">${n}: hora do voo</span><input type="time" data-v="${k}.hora" value="${esc(oyHm(o[k].hora) || '')}" aria-label="${n}: hora do voo"></label>
             <label class="fld"><span class="sr">${n}: voo</span><input data-v="${k}.voo" value="${esc(o[k].voo)}" placeholder="voo" aria-label="${n}: número do voo"></label>
           </div></fieldset>`).join('')}
       </div>
@@ -833,7 +914,7 @@ function oyTela(id) {
       </div>
       <div class="oy-g2">
         <label class="fld">Sinal para reservar (%)<input type="number" min="0" max="100" inputmode="numeric" id="oyPct" value="${o.sinalPct}"></label>
-        <label class="fld">VAT (%)<input type="number" min="0" max="30" step="0.5" inputmode="decimal" id="oyVat" value="${oyVatPct(o)}"></label>
+        <label class="fld">VAT (%)<input type="number" min="0" max="30" step="0.5" inputmode="decimal" id="oyVat" value="${o.vatPct != null && o.vatPct !== '' ? +o.vatPct : OY_VAT}"></label>
         <div class="fld"><span>Sinal / sua margem</span><b class="oy-num">${esc(oyM(Orc.sinal(o), m))}${custoTot ? ' · ' + esc(oyM(Orc.total(o) - custoTot, m)) : ''}</b></div>
       </div>
       <label class="fld">Observação para o cliente (vai na proposta)<textarea id="oyObs" rows="2">${esc(o.obs)}</textarea></label>
@@ -850,29 +931,48 @@ function oyTela(id) {
     </details>
 
     <div class="savebar oy-barra">
-      <span class="sbwhat">${esc(oyM(Orc.total(o), m))}${oyPax(o) > 1 ? ' · ' + esc(oyM(oyPorPessoa(o), m)) + '/pessoa' : ''}</span>
+      <span class="sbwhat">${esc(oyBarraTexto(o))}</span>
       <div class="oy-barra-acs"><button type="button" class="mini strong oy-salvar" id="oySalvar">Salvar</button><a class="cta sm" href="#/adm/proposta/${esc(o.id)}">Ver e enviar a proposta</a></div>
     </div>
   </div>`);
+  S.pendente = false;
   oyLiga(o);
 }
 
+/* os três números do alto (sem campo dentro: refazem a cada mudança, mesmo com ela digitando ao lado) */
+function oyTotHtml(o) {
+  const m = oyMoeda(o), soma = o.itens.reduce((s, i) => s + (+i.valor || 0), 0), pv = String(oyVatPct(o)).replace('.', ',');
+  const t = oyPorTipo(o), cri = +o.criancas > 0;
+  return `<div><small>${oyTotInf(o) ? 'Total que você fechou' : oyVatPct(o) ? 'Total com VAT' : 'Total sem VAT'}</small><b>${esc(oyM(Orc.total(o), m))}</b><small>${oyTotInf(o)
+      ? (oyVatPct(o) ? 'já com VAT ' + esc(pv) + '% (' + esc(oyM(Orc.vat(o), m)) + ') dentro · ' : 'sem VAT · ') + 'serviços somam ' + esc(oyM(soma, m))
+      : esc(oyM(Orc.subtotal(o), m)) + (+o.desconto ? ' (com desconto)' : '') + (oyVatPct(o) ? ' + VAT ' + esc(pv) + '% ' + esc(oyM(Orc.vat(o), m)) : ' · sem VAT')}</small></div>
+    <div class="oy-pp"><small>Por pessoa</small>${!oyPax(o) ? '<b>—</b>' : cri
+      ? `<b>${esc(oyM(t.adulto, m))} <i>adulto</i></b><b>${esc(oyM(t.crianca, m))} <i>criança</i></b>`
+      : `<b>${esc(oyM(t.adulto, m))}</b>`}<small>${esc(oyPaxTexto(o) || 'informe as pessoas')}</small></div>
+    <div><small>Pendente</small><b>${esc(oyM(oyPendente(o), m))}</b></div>`;
+}
+function oyPagValHtml(o) {
+  const p = oyPagValor(o), m = oyMoeda(o);
+  const linha = (rot, v, k) => `<div class="oy-pagv"><span>Valor ${esc(rot)}</span><b>${esc(oyM(v, m))}</b><button type="button" class="mini" data-copia="${v.toFixed(2)}" aria-label="Copiar o valor ${esc(rot)}">copiar</button></div>`;
+  return linha(p.rot, p.v) + (p.vc ? linha('por criança', p.vc) : '');
+}
 function oyValoresHtml(o) {
-  const m = oyMoeda(o), soma = o.itens.reduce((s, i) => s + (+i.valor || 0), 0);
   return `<div class="oy-hrow"><h2 class="oy-h">Valores</h2></div>
-    <div class="oy-tot">
-      <div><small>${oyTotInf(o) ? 'Total que você fechou' : 'Total com VAT'}</small><b>${esc(oyM(Orc.total(o), m))}</b><small>${oyTotInf(o) ? 'já com VAT ' + esc(String(oyVatPct(o)).replace('.', ',')) + '% (' + esc(oyM(Orc.vat(o), m)) + ') dentro · serviços somam ' + esc(oyM(soma, m)) : esc(oyM(Orc.subtotal(o), m)) + (+o.desconto ? ' (com desconto)' : '') + ' + VAT ' + esc(String(oyVatPct(o)).replace('.', ',')) + '% ' + esc(oyM(Orc.vat(o), m))}</small></div>
-      <div><small>Por pessoa</small><b>${oyPax(o) ? esc(oyM(oyPorPessoa(o), m)) : '—'}</b><small>${esc(oyPaxTexto(o) || 'informe as pessoas')}${oyPorCasal(o) ? ' · por casal ' + esc(oyM(oyPorCasal(o), m)) : ''}</small></div>
-      <div><small>Pendente</small><b>${esc(oyM(oyPendente(o), m))}</b></div>
-    </div>
+    <div class="oy-tot" id="oyTot">${oyTotHtml(o)}</div>
+    <label class="optin oy-vatck"><input type="checkbox" id="oyComVat" ${o.semVat ? '' : 'checked'}><span><b>Incluir VAT de ${esc(String(o.vatPct != null && o.vatPct !== '' ? +o.vatPct : OY_VAT).replace('.', ','))}%</b><small>desmarque quando este orçamento for sem VAT</small></span></label>
     <div class="oy-g3v">
       <label class="fld">Já pago (USD)<input type="number" min="0" inputmode="decimal" id="oyPago" value="${+o.pago || ''}" placeholder="0"></label>
       <label class="fld">Desconto (USD)<input type="number" min="0" inputmode="decimal" id="oyDesc" value="${+o.desconto || ''}" placeholder="0"></label>
       <label class="fld" title="o total que você fecha com o cliente; em branco, o app soma os serviços e põe o VAT">Total que você fecha (USD)<input type="number" min="0" step="0.01" inputmode="decimal" id="oyTotInf" value="${oyTotInf(o) || ''}" placeholder="soma dos serviços"></label>
       <label class="fld">Válida até<input type="date" id="oyVal2" value="${esc(o.validade)}"></label>
     </div>
-    <label class="fld">Link de pagamento (Pix e cartão — da sua plataforma)<input type="url" inputmode="url" id="oyLinkPag" value="${esc(o.linkPagamento || '')}" placeholder="https://…" autocomplete="off"></label>
-    <p class="why oy-usd">Tudo em dólar (USD). Com o link, a proposta mostra o botão "Pagar agora".</p>`;
+    <div class="oy-pag"><span class="op-lbl">Link de pagamento cobra</span>
+      <div class="chips" role="group" aria-label="O link de pagamento cobra">${OY_PAG.map(([k, n]) => `<button type="button" class="chip ${oyPagModo(o) === k ? 'on' : ''}" data-pagmodo="${k}" aria-pressed="${oyPagModo(o) === k}">${n}</button>`).join('')}</div>
+      <div id="oyPagV">${oyPagValHtml(o)}</div>
+      <label class="fld">Link ${esc(oyPagValor(o).rot)} (Pix e cartão — da sua plataforma)<input type="url" inputmode="url" id="oyLinkPag" value="${esc(o.linkPagamento || '')}" placeholder="https://…" autocomplete="off"></label>
+      ${oyPagModo(o) === 'pessoa' && +o.criancas > 0 ? `<label class="fld">Link por criança<input type="url" inputmode="url" id="oyLinkPagC" value="${esc(o.linkPagamentoCrianca || '')}" placeholder="https://…" autocomplete="off"></label>` : ''}
+    </div>
+    <p class="why oy-usd">Tudo em dólar (USD). Crie o link na sua plataforma com o valor acima e cole aqui: a proposta mostra o botão "Pagar".</p>`;
 }
 
 /* salva o que está na tela (sem redesenhar) */
@@ -886,7 +986,7 @@ function oyLe(o) {
   $$('[data-v]').forEach(e => { const [k, c] = e.dataset.v.split('.'); o[k] = o[k] || {}; o[k][c] = c === 'hora' ? (oyHm(e.value) || e.value.trim()) : e.value.trim(); });
   document.querySelectorAll('.oy [data-it]').forEach(box => {
     const i = o.itens.find(z => z.id === box.dataset.it); if (!i) return;
-    const antes = { opcao: +i.opcao || 0, pax: +i.pax || 1, cri: +i.criancas || 0 }, x = i.tourId && Tours.get(i.tourId);
+    const antes = { opcao: +i.opcao || 0, pax: +i.pax || 1, cri: +i.criancas || 0, horas: +i.horas || 0 }, x = i.tourId && Tours.get(i.tourId);
     const tituloAuto = x && i.desc === oyTituloDe(x, antes.opcao);
     const ad = box.querySelector('[data-k="adultosIt"]'), cr = box.querySelector('[data-k="criancas"]');
     if (ad && cr && ad.closest('[data-it]') === box) { const a = Math.max(0, +ad.value || 0), c = Math.max(0, +cr.value || 0); i.pax = Math.max(1, a + c); i.criancas = Math.min(c, i.pax); }
@@ -898,14 +998,16 @@ function oyLe(o) {
       else if (k === 'custo') i.custo = +e.value || 0;
       else if (k === 'hora' || k === 'horaFim') i[k] = oyHm(e.value) || e.value.trim();
       /* "09:00–17:00", "9h às 17h", "19:30" */
-      else if (k === 'faixa') { const [a, b] = String(e.value).split(/\s*(?:–|—|-|às|as|até|ate|a)\s*/i); i.hora = oyHm(a) || ''; i.horaFim = oyHm(b) || ''; }
+      else if (k === 'faixa') { const v = String(e.value).trim(); if (!v) { i.hora = ''; i.horaFim = ''; } else { const [a, b] = oyFaixaPartes(v); i.hora = oyHm(a) || String(a || '').trim(); i.horaFim = b ? (oyHm(b) || String(b).trim()) : ''; } }
       else if (k === 'opcao') i.opcao = Math.max(0, +e.value || 0);
+      else if (k === 'horas') i.horas = Math.max(x && +x.minHoras || 1, Math.round(+e.value || 1));
       else if (k === 'aParte') { i.aParte = !!e.checked; if (i.aParte) { i.valor = 0; i.auto = false; } }
       else if (k === 'adultosIt' || k === 'criancas') { /* já lidos acima */ }
       else i[k] = e.value;
     });
     /* mudou a opção ou as pessoas: o preço da tabela refaz (e o título leva a opção nova) */
-    if (x && (i.opcao !== antes.opcao || i.pax !== antes.pax || (+i.criancas || 0) !== antes.cri)) {
+    if (x && (i.opcao !== antes.opcao || i.pax !== antes.pax || (+i.criancas || 0) !== antes.cri || (+i.horas || 0) !== antes.horas)) {
+      if ((+i.horas || 0) !== antes.horas) i.auto = true;
       if (i.opcao !== antes.opcao) i.auto = true;
       if (i.auto) i.valor = oyPrecoItem(x, i).total || i.valor;
       if (tituloAuto && i.opcao !== antes.opcao) i.desc = oyTituloDe(x, i.opcao);
@@ -914,10 +1016,12 @@ function oyLe(o) {
   const n = (s, d) => { const x = v(s); return x == null ? d : (+x || 0); };
   o.pago = n('#oyPago', o.pago); o.desconto = n('#oyDesc', o.desconto); o.totalInformado = n('#oyTotInf', o.totalInformado || 0);
   if (v('#oyLinkPag') != null) o.linkPagamento = String(v('#oyLinkPag')).trim();
+  if (v('#oyLinkPagC') != null) o.linkPagamentoCrianca = String(v('#oyLinkPagC')).trim();
   o.moeda = OY_MOEDA; o.validade = v('#oyVal2') || o.validade;
   if (v('#oySt')) o.status = v('#oySt');
   if (v('#oyPct') != null) o.sinalPct = +v('#oyPct') || 0;
   if (v('#oyVat') != null && v('#oyVat') !== '') o.vatPct = Math.max(0, +v('#oyVat') || 0);
+  const cv = document.getElementById('oyComVat'); if (cv) o.semVat = !cv.checked;
   if (v('#oyObs') != null) o.obs = v('#oyObs');
   if (v('#oyPol') != null) { o.politica = v('#oyPol'); o.condicoes = v('#oyCond'); o.diferencial = v('#oyDif'); }
   if (o.status === 'novo') o.status = 'rascunho';
@@ -937,12 +1041,42 @@ function oySalva(o, redesenha) {
   const d = new Date(); o.salvoEm = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
   Orc.salva(o); ppRepublica(o);
   const s = $('#oySalvo'); if (s) s.textContent = 'salvo às ' + o.salvoEm;
-  if (redesenha) { oyRedesenha(o); return; }
-  const val = $('#oyVal'); if (val && !val.contains(document.activeElement)) { val.innerHTML = oyValoresHtml(o); oyLigaValores(o); }
-  const bar = document.querySelector('.oy-barra .sbwhat'); if (bar) bar.textContent = oyM(Orc.total(o), oyMoeda(o)) + (oyPax(o) > 1 ? ' · ' + oyM(oyPorPessoa(o), oyMoeda(o)) + '/pessoa' : '');
+  const tot = $('#oyTot'); if (tot) tot.innerHTML = oyTotHtml(o);
+  const pv = $('#oyPagV'); if (pv) { pv.innerHTML = oyPagValHtml(o); oyLigaCopia(); }
+  const bar = document.querySelector('.oy-barra .sbwhat'); if (bar) bar.textContent = oyBarraTexto(o);
+  if (redesenha === 'quieto') { const S = oyTela._s; if (S) S.pendente = true; oyQuieto(o); }
+  else if (redesenha) oyRedesenha(o);
 }
+/* DATA E HORÁRIO (28/10/2026, ele: "data e horário não estava dando pra mudar"): ela mudava a hora,
+   tocava na data e o app redesenhava a tela na hora — o campo em que ela acabara de tocar era trocado
+   por outro (no celular o calendário fechava; no computador "23" virava "03"). Agora o que só muda a
+   ORDEM (dia, hora, faixa, valor do cartão) espera ela sair de todos os campos para reorganizar.
+   O que muda o preço (opção, pessoas, à parte) continua redesenhando na hora. */
+const oyNumCampo = () => { const a = document.activeElement; return !!(a && a.closest && a.closest('.oy') && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)); };
+/* dedo (ou mouse) apertado: espera soltar — redesenhar no meio do clique engolia o toque no botão */
+let oyDedo = false;
+if (typeof addEventListener === 'function') {
+  addEventListener('pointerdown', () => { oyDedo = true; }, true);
+  for (const ev of ['pointerup', 'pointercancel']) addEventListener(ev, () => { oyDedo = false; }, true);
+}
+function oyQuieto(o) {
+  setTimeout(() => {
+    const S = oyTela._s; if (!S || !S.pendente || oyNumCampo()) return;
+    if (oyDedo) return oyQuieto(o);
+    if (!document.querySelector('.oy') || location.hash !== '#/adm/consulta/' + o.id) { S.pendente = false; return; }
+    S.pendente = false; oyRedesenha(o);
+  }, 220);
+}
+const oyBarraTexto = (o) => oyM(Orc.total(o), oyMoeda(o)) + (oyPorTipoTexto(o, true) ? ' · ' + oyPorTipoTexto(o, true) : '');
 function oyLigaValores(o) {
   $$('#oyVal input').forEach(e => { e.onchange = () => oySalva(o, false); });
+  $$('[data-pagmodo]').forEach(b => b.onclick = () => { oyLe(o); o.pagModo = b.dataset.pagmodo; oySalva(o, true); });
+  oyLigaCopia();
+}
+function oyLigaCopia() {
+  $$('[data-copia]').forEach(b => b.onclick = async () => {
+    try { await navigator.clipboard.writeText(b.dataset.copia); toast('Valor copiado: ' + b.dataset.copia); } catch (e) { toast('Valor: ' + b.dataset.copia); }
+  });
 }
 function oyLiga(o) {
   const S = oyTela._s, re = () => oySalva(o, true);
@@ -954,19 +1088,17 @@ function oyLiga(o) {
        data dispara "change" a cada dígito do ano (0002 → 0020 → 0202 → 2026); redesenhar ali
        tirava o cursor no meio e a data ficava errada. Agora: enquanto mexe, só guarda; ao SAIR do
        campo, reorganiza os dias uma vez. */
-    if (e.type === 'date') {
-      e.onchange = () => { e._mudou = true; oySalva(o, false); };
-      e.onblur = () => { if (!e._mudou) return; e._mudou = false; if (/^\d{4}-\d{2}-\d{2}$/.test(e.value) && +e.value.slice(0, 4) < 2000) return; oySalva(o, true); };
-      return;
-    }
+    if (e.type === 'date' || e.type === 'time') { e.onchange = () => oySalva(o, 'quieto'); return; }
     e.onchange = () => {
       if (['oyNome', 'oyWhats', 'oyEmail'].includes(e.id)) { oyLe(o); Orc.salva(o); oyLigaCliente(o); }
       /* só o que muda a ordem ou o preço redesenha; o valor na planilha só refaz os totais */
       const naPlanilha = !!e.closest('.oy-row');
-      const muda = e.matches('[data-k="aParte"],[data-k="data"],[data-k="hora"],[data-k="faixa"],[data-k="pax"],[data-k="opcao"],[data-k="adultosIt"],[data-k="criancas"],[data-v$=".data"]') || (!naPlanilha && e.matches('[data-k="valor"]'));
-      oySalva(o, muda);
+      const muda = e.matches('[data-k="aParte"],[data-k="pax"],[data-k="opcao"],[data-k="adultosIt"],[data-k="criancas"],[data-k="horas"],#oyVat');
+      const ordem = e.matches('[data-k="faixa"]') || (!naPlanilha && e.matches('[data-k="valor"]'));
+      oySalva(o, muda ? true : ordem ? 'quieto' : false);
     };
   });
+  const raiz = document.querySelector('.oy'); if (raiz) raiz.addEventListener('focusout', () => { if (S.pendente) oyQuieto(o); });
   /* os detalhes crescem com o texto, como a célula do Excel */
   const cresce = (t) => { t.style.height = 'auto'; t.style.height = (t.scrollHeight + 2) + 'px'; };
   $$('.oy-cx').forEach(t => { cresce(t); t.addEventListener('input', () => cresce(t)); });
@@ -1000,7 +1132,7 @@ function oyLiga(o) {
   $('#oyAddP').onclick = () => { oyLe(o); Orc.salva(o); oyCatalogo(o); };
   $$('[data-adddia]').forEach(b => b.onclick = () => { oyLe(o); Orc.salva(o); S.ultimoDia = b.dataset.adddia; oyCatalogo(o, b.dataset.adddia); });
   /* SALVAR (28/10/2026, "onde está o botão de salvar?"): o app já salva sozinho; o botão confirma */
-  $('#oySalvar').onclick = () => { oySalva(o, false); oyLigaCliente(o); toast('Orçamento salvo ✓'); };
+  $('#oySalvar').onclick = () => { oySalva(o, S.pendente ? true : false); oyLigaCliente(o); toast('Orçamento salvo ✓'); };
   $('#oyHotAdd').onclick = () => { oyLe(o); o.hoteis = [...oyHoteis(o, true), { nome: '', de: '', ate: '', situacao: '' }]; Orc.salva(o); re(); };
   $$('[data-hrm]').forEach(b => b.onclick = () => { oyLe(o); o.hoteis = oyHoteis(o, true).filter((_, k) => k !== +b.dataset.hrm); o.hotel = (o.hoteis.find(h => String(h.nome || '').trim()) || {}).nome || ''; Orc.salva(o); re(); });
   const det = document.querySelector('.oy-mais'); if (det) det.ontoggle = () => { S.mais = det.open; };
@@ -1080,6 +1212,9 @@ function oyCatalogo(o, diaFixo) {
   if (typeof matchMedia === 'function' && matchMedia('(pointer: fine)').matches) setTimeout(() => d.querySelector('#oyCQ').focus(), 30);
   d.querySelectorAll('[data-creg]').forEach(b => b.onclick = () => { C.r = b.dataset.creg; d.querySelectorAll('[data-creg]').forEach(c => c.classList.toggle('on', c === b)); pinta(); });
   d.querySelectorAll('[data-cdia]').forEach(b => b.onclick = () => { C.dia = b.dataset.cdia; S0.ultimoDia = C.dia; d.querySelectorAll('[data-cdia]').forEach(c => c.classList.toggle('on', c === b)); });
+  /* o dia escolhido aparece na tela (no celular o "+ neste dia" de um dia lá do fim ficava escondido à direita) */
+  const diaOn = d.querySelector('#oyCDias .chip.on'), fila = d.querySelector('#oyCDias');
+  if (diaOn && fila) fila.scrollLeft += diaOn.getBoundingClientRect().left - fila.getBoundingClientRect().left - (fila.clientWidth - diaOn.offsetWidth) / 2;
   const di = d.querySelector('#oyCDia'); if (di) di.onchange = () => { C.dia = di.value; S0.ultimoDia = C.dia; };
   d.querySelector('#oyCOk').onclick = () => d.close();
   d.addEventListener('close', () => { if (location.hash.includes(o.id)) { const y = scrollY; oyTela(o.id); scrollTo(0, y); } });
@@ -1129,7 +1264,10 @@ function oyCss() {
   .oy-step button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   .oy-step output{font-weight:700;font-size:var(--fs-4,18px);min-width:24px;text-align:center}
   .oy-voo{border:0;margin:0;padding:0;min-width:0}
-  .oy-vg{display:grid;grid-template-columns:1.35fr .8fr 1fr;gap:0 8px}
+  /* chegada/partida: o dia numa linha, hora e voo embaixo (o voo "EK262" aparecia cortado em "EK") */
+  .oy-vg{display:grid;grid-template-columns:1fr 1fr;gap:0 8px}
+  .oy-vg .fld:first-child{grid-column:1/-1}
+  .oy .fld{min-width:0}.oy .fld input{min-width:0}
   .oy-voo legend{font-size:var(--fs-2);font-weight:var(--t-strong);color:var(--ink-2);padding:0;margin-bottom:2px}
   .oy-dia{margin:6px 0 10px}
   .oy-diah{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin:12px 0 6px;font-weight:700}
@@ -1166,6 +1304,13 @@ function oyCss() {
   .oy-tot small{display:block;color:var(--ink-3);font-size:12px}
   .oy-tot b{display:block;font-size:clamp(17px,4.4vw,22px);font-variant-numeric:tabular-nums;margin:2px 0}
   .oy-tot .oy-de{text-decoration:line-through}
+  .oy-pp b + b{margin-top:0}
+  .oy-pp b i{font-style:normal;font-size:12px;font-weight:600;color:var(--ink-3)}
+  .oy-vatck{margin:0 0 12px}
+  .oy-pag{display:grid;gap:8px;margin:4px 0 8px}
+  .oy-pag .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .oy-pagv{display:flex;align-items:center;gap:10px;background:var(--surface-2);border-radius:var(--r-md,12px);padding:8px 12px}
+  .oy-pagv span{color:var(--ink-3);font-size:13px}.oy-pagv b{margin-left:auto;font-variant-numeric:tabular-nums}
   .oy-num{display:block;margin-top:12px;font-variant-numeric:tabular-nums}
   .oy-mais summary{cursor:pointer;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;min-height:32px}
   .oy-mais summary small{color:var(--ink-3)}
@@ -1259,10 +1404,10 @@ function oyCss() {
     .oy-g3v{grid-template-columns:1fr 1fr}
     .oy-g3v .fld:last-child{grid-column:1/-1}
     .oy-g3{grid-template-columns:1.4fr 1fr 1fr}
-    .oy-vg{grid-template-columns:1fr 1fr}
     .oy-hot{grid-template-columns:1fr 1fr 40px}
     .oy-hot .fld:first-child{grid-column:1/-1}
-    .oy-vg .fld:first-child{grid-column:1/-1}
+    .oy-quando{grid-template-columns:1fr 1fr}
+    .oy-quando .fld:first-child{grid-column:1/-1}
     .oy-tot{grid-template-columns:1fr 1fr}
     .oy-tot > div:first-child{grid-column:1/-1}
     .oy-add{grid-template-columns:1fr 1fr}
@@ -1294,15 +1439,19 @@ opDocOrc = (id) => go('/adm/proposta/' + id);
     desconto: { type: 'number' }, validade: { type: 'string', description: 'AAAA-MM-DD' },
     link_pagamento: { type: 'string', description: 'link de pagamento da plataforma dela (https://…): vira o botão Pagar agora na proposta' },
     total_informado: { type: 'number', description: 'o TOTAL que ela fechou (USD, com centavos). Vale exatamente esse número; o VAT fica dentro.' },
+    pagamento_por: { type: 'string', enum: ['total', 'pessoa', 'casal'], description: 'o que o link de pagamento cobra (padrão: total)' },
+    com_vat: { type: 'boolean', description: 'false = orçamento SEM VAT (ela disse "sem VAT", "não cobrar VAT"); sem este campo fica como está (novo nasce com VAT de 5%)' },
     hoteis: { type: 'array', description: 'hotéis por período, como ela escreve ("07-11/11 Sofitel Downtown *a parte")', items: { type: 'object', properties: { nome: { type: 'string' }, de: { type: 'string', description: 'AAAA-MM-DD' }, ate: { type: 'string', description: 'AAAA-MM-DD' }, situacao: { type: 'string', enum: ['incluso', 'a parte'] } } } },
   };
-  const ITEM_EXTRA = { hora_fim: { type: 'string' }, texto: { type: 'string', description: 'o que o cliente lê sobre o serviço (passeio do catálogo já vem preenchido)' },
+  const ITEM_EXTRA = { hora_fim: { type: 'string', description: 'SÓ se ela disse o horário de término' }, texto: { type: 'string', description: 'SOMENTE o texto que ELA escreveu, copiado. Nunca escreva um texto seu. Passeio do catálogo já vem com o texto dele; serviço fora do catálogo sem texto dela fica sem texto.' },
     incluso: { type: 'string' }, destaque: { type: 'string', description: 'ex.: manhã livre, à noite' }, voo: { type: 'string' },
     nao_incluso: { type: 'string', description: 'o NÃO INCLUSO do serviço, como ela escreveu' },
     obs: { type: 'string', description: 'observação do serviço (vira um balão na proposta), ex.: "Não incluso volta para o hotel (por conta da cliente)", "Sugestão: jantar em Dubai Marina"' },
     a_parte: { type: 'boolean', description: 'serviço "(a parte)": entra no roteiro, por conta do cliente, sem valor' },
     opcao: { type: 'string', description: 'a opção do passeio, pelo nome (ex.: "prime", "17 minutos", "com serviço de mesa") — ver_passeios mostra as opções' },
     criancas: { type: 'integer', description: 'quantas das pessoas são crianças (o preço de criança entra sozinho)' },
+    horas: { type: 'integer', description: 'passeio POR HORA (ex.: iate): quantas horas ela disse; o preço é a hora × horas (nunca menos que o mínimo do passeio)' },
+    hora: { type: 'string', description: 'HH:MM — SÓ o horário que ela disse; não disse = deixe sem' },
     tipo: { type: 'string', enum: ['passeio', 'traslado', 'livre'] }, traslado: { type: 'string', enum: ['chegada', 'saida'], description: 'traslado de aeroporto pronto, com o texto e o voo da chegada/partida' } };
   for (const n of ['criar_orcamento', 'editar_orcamento']) {
     const t = acha(n); if (!t) continue;
@@ -1324,6 +1473,8 @@ opDocOrc = (id) => go('/adm/proposta/' + id);
     if (isoOk(i.validade)) o.validade = i.validade;
     if (/^https:\/\//i.test(String(i.link_pagamento || ''))) o.linkPagamento = String(i.link_pagamento).trim();
     if (i.total_informado != null) o.totalInformado = Math.max(0, +i.total_informado || 0);
+    if (i.com_vat != null) o.semVat = i.com_vat === false;
+    if (['total', 'pessoa', 'casal'].includes(i.pagamento_por)) o.pagModo = i.pagamento_por;
     if (Array.isArray(i.hoteis)) { o.hoteis = i.hoteis.map(h => ({ nome: String(h.nome || '').trim(), de: isoOk(h.de) ? h.de : '', ate: isoOk(h.ate) ? h.ate : '', situacao: /incl/i.test(h.situacao || '') ? 'incluso' : /parte/i.test(h.situacao || '') ? 'a parte' : '' })).filter(h => h.nome); o.hotel = (o.hoteis[0] || {}).nome || o.hotel || ''; }
     if (i.adultos != null || i.criancas != null) { o.pax = oyPax(o); o.paxNota = oyPaxTexto(o); }
     return antes;
@@ -1334,7 +1485,7 @@ opDocOrc = (id) => go('/adm/proposta/' + id);
     const x = it.passeio_id && Tours.get(it.passeio_id);
     if (x) {
       const k = oyAchaOpcao(x, it.opcao);
-      return oyDoCatalogo(o, it.passeio_id, { data: isoOk(it.data) ? it.data : '', hora: oyHm(it.hora), horaFim: oyHm(it.hora_fim), pax: it.pessoas, criancas: it.criancas, opcao: Math.max(0, k), valor: it.valor, texto: it.texto, incluso: it.incluso });
+      return oyDoCatalogo(o, it.passeio_id, { data: isoOk(it.data) ? it.data : '', hora: oyHm(it.hora), horaFim: oyHm(it.hora_fim), pax: it.pessoas, criancas: it.criancas, opcao: Math.max(0, k), horas: it.horas, valor: it.valor, texto: it.texto, incluso: it.incluso });
     }
     return null;
   };
@@ -1343,9 +1494,87 @@ opDocOrc = (id) => go('/adm/proposta/' + id);
     ...(it.hora_fim ? { horaFim: oyHm(it.hora_fim) } : {}), ...(it.texto ? { texto: it.texto } : {}), ...(it.incluso ? { incluso: it.incluso } : {}),
     ...(it.destaque ? { rotulo: it.destaque } : {}), ...(it.voo ? { voo: it.voo } : {}), ...(it.tipo ? { tipo: it.tipo } : {}) });
 
+  /* SÓ O QUE VEIO DELA (28/10/2026, ele: "veio informação errada inventada" na proposta). O
+     assistente escrevia um texto de propaganda para serviço fora do catálogo (o SeaWorld do
+     ORC-0007) e punha horário que ninguém deu. Agora o app confere ANTES de gravar: texto, incluso,
+     não incluso, observação, destaque e horário de cada serviço só entram se estão no que ela
+     escreveu no chat, num orçamento que já existe ou no catálogo dela. Veio de imagem? Não dá para
+     conferir aqui: entra, mas o cartão mostra o texto para ela ver antes do sim. */
+  let falaAgora = { texto: '', imagem: false };
+  if (typeof iaConversa === 'function') {
+    const _conv = iaConversa;
+    iaConversa = function (texto, fotos) {
+      falaAgora = { texto: String(texto || ''), imagem: Array.isArray(fotos) ? fotos.length > 0 : !!fotos };
+      return _conv.apply(this, arguments);
+    };
+  }
+  const oyN = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+  const horasDe = (t) => new Set([...String(t || '').matchAll(/(\d{1,2})\s*(?:[:h.]\s*(\d{2})|h\b|hs\b|horas?\b)/gi)].map(m => oyHm(m[1] + ':' + (m[2] || '00'))).filter(Boolean));
+  function fonteDela(i) {
+    let txt = falaAgora.texto, img = falaAgora.imagem;
+    try {
+      const us = (typeof iaLe === 'function' && typeof IA_HIST !== 'undefined' ? iaLe(IA_HIST, []) : []).filter(m => m && m.role === 'user');
+      us.forEach((m, k) => {
+        if (typeof m.content === 'string') { txt += '\n' + m.content; return; }
+        for (const b of m.content || []) {
+          if (b.type === 'text') txt += '\n' + b.text;
+          else if (b.type === 'tool_result') txt += '\n' + (typeof b.content === 'string' ? b.content : JSON.stringify(b.content));
+          else if ((b.type === 'image' || b.type === 'document') && k >= us.length - 3) img = true;
+        }
+      });
+    } catch (e) {}
+    /* os orçamentos de que ela falou (número ou nome do cliente) e o que está sendo mudado: dá para copiar deles */
+    const nt = ' ' + oyN(txt) + ' ';
+    const alvo = i && i.numero && typeof ingAchaOrc === 'function' ? ingAchaOrc(i.numero).o : null;
+    const refs = (DB.orcamentos || []).filter(o => o === alvo || (o.num && nt.includes(' ' + oyN(o.num) + ' ')) || (oyN(o.cliente && o.cliente.nome).length > 2 && nt.includes(' ' + oyN(o.cliente.nome) + ' ')));
+    const deOrc = refs.flatMap(o => (o.itens || []).map(x => [x.desc, x.texto, x.incluso, x.naoIncluso, x.obs, x.rotulo, x.hora, x.horaFim].join(' \n '))).join(' \n ');
+    const cat = Tours.all().map(x => [oyPt(x.name), oyPt(x.desc), oyLista(x.includes).join(', ')].join(' \n ')).join(' \n ');
+    return { n: ' ' + oyN(txt + ' \n ' + deOrc + ' \n ' + cat) + ' ', horas: horasDe(txt + ' \n ' + deOrc), imagem: img };
+  }
+  /* o texto está no que ela deu? (3 palavras seguidas batendo em pelo menos 60% do texto) */
+  function deEla(t, f) {
+    const w = oyN(t).split(' ').filter(Boolean); if (!w.length) return true;
+    if (w.length < 3) return f.n.includes(' ' + w.join(' ') + ' ');
+    let ok = 0; for (let k = 0; k + 2 < w.length; k++) if (f.n.includes(' ' + w.slice(k, k + 3).join(' ') + ' ')) ok++;
+    return ok / (w.length - 2) >= 0.6;
+  }
+  const CAMPOS_TXT = [['texto', 'texto'], ['incluso', 'incluso'], ['nao_incluso', 'não incluso'], ['obs', 'observação'], ['destaque', 'destaque']];
+  function soDela(i) {
+    if (!Array.isArray(i.itens) || !i.itens.length) return { i, fora: [], conferir: [] };
+    const f = fonteDela(i), fora = [], conferir = [];
+    const itens = i.itens.map(it => {
+      const n = { ...it }, x = it.passeio_id && Tours.get(it.passeio_id);
+      const nome = it.descricao || (x ? oyPt(x.name) : it.traslado ? 'traslado de ' + it.traslado : it.item || 'serviço');
+      for (const [k, rot] of CAMPOS_TXT) {
+        if (!String(n[k] || '').trim()) continue;
+        if (f.imagem) { if (k === 'texto' && !x) conferir.push([`Texto de "${nome}"`, String(n[k]).slice(0, 140) + (String(n[k]).length > 140 ? '…' : '') + ' (lido da imagem — confira)']); continue; }
+        if (!deEla(n[k], f)) { fora.push(`${rot} de "${nome}"`); delete n[k]; }
+      }
+      for (const k of ['hora', 'hora_fim']) {
+        if (!n[k] || f.imagem) continue;
+        if (!f.horas.has(oyHm(n[k]))) { fora.push(`${k === 'hora' ? 'início' : 'fim'} ${n[k]} de "${nome}"`); delete n[k]; }
+      }
+      return n;
+    });
+    return { i: { ...i, itens }, fora, conferir };
+  }
+  const avisaFora = (p, sd) => {
+    p.linhas = p.linhas.map(l => [l[0], String(l[1]).replace(/US\$\s?/g, 'USD ')]);   /* tudo em dólar escrito do jeito dela */
+    if (sd.fora.length) p.linhas.push(['Não entrou', sd.fora.join(' · ') + ' — não veio de você']);
+    if (sd.conferir.length) p.linhas.push(...sd.conferir);
+    if (sd.fora.length) { const f0 = p.fazer; p.fazer = () => { const r = f0(); return { ...r, nao_entrou: sd.fora, aviso: 'o app tirou o que não veio dela (' + sd.fora.join('; ') + '). Diga isso em uma linha e pergunte se ela quer passar esses dados — nunca invente.' }; }; }
+    return p;
+  };
+
   const _plano = iaPlano;
   iaPlano = function (nome, i) {
     i = i || {};
+    let sd = null;
+    if (nome === 'criar_orcamento' || nome === 'editar_orcamento') { sd = soDela(i); i = sd.i; }
+    const p = iaPlanoOrc(nome, i);
+    return sd && p && p.fazer ? avisaFora(p, sd) : p;
+  };
+  function iaPlanoOrc(nome, i) {
     if (nome === 'proposta_orcamento') {
       const r = ingAchaOrc(i.numero); if (!r.o) return r;
       return { titulo: 'Abrir a proposta', assumiu: [], linhas: [['Orçamento', `${r.o.num} · ${r.o.cliente.nome || '—'}`], ['Total', oyM(Orc.total(r.o), oyMoeda(r.o))]],
@@ -1360,7 +1589,7 @@ opDocOrc = (id) => go('/adm/proposta/' + id);
       const ehServ = (l) => l[0] === '—' || /^\d{2}\/\d{2}/.test(String(l[0]));
       const k0 = p.linhas.findIndex(ehServ);
       if (k0 >= 0) {
-        const serv = (i.itens || []).slice(0, 12).map(it => [it.data ? ingData(it.data) : '—', `${it.traslado ? (it.traslado === 'chegada' ? 'Traslado de chegada' : 'Traslado de saída') : (it.descricao || (Tours.get(it.passeio_id) ? oyPt(Tours.get(it.passeio_id).name) + (it.opcao ? ' · ' + it.opcao : '') : '?'))} · ${it.pessoas || grupo || 2}p · ${it.a_parte ? 'à parte' : +it.valor > 0 ? oyM(+it.valor, OY_MOEDA) : 'preço da tabela'}`]);
+        const serv = (i.itens || []).slice(0, 12).map(it => [it.data ? ingData(it.data) : '—', `${it.traslado ? (it.traslado === 'chegada' ? 'Traslado de chegada' : 'Traslado de saída') : (it.descricao || (Tours.get(it.passeio_id) ? oyPt(Tours.get(it.passeio_id).name) + (it.opcao ? ' · ' + it.opcao : '') : '?'))} · ${it.pessoas || grupo || 2}p · ${it.a_parte ? 'à parte' : +it.valor > 0 ? oyM(+it.valor, OY_MOEDA) : it.passeio_id || it.traslado ? 'preço da tabela' : 'sem valor'}`]);
         p.linhas = [...p.linhas.slice(0, k0), ...serv, ...p.linhas.filter((l, k) => k > k0 && !ehServ(l))];
       }
       const fazer0 = p.fazer;
@@ -1370,16 +1599,21 @@ opDocOrc = (id) => go('/adm/proposta/' + id);
       if (i.chegada && i.chegada.data) p.linhas.splice(1, 0, ['Viagem', `${ingData(i.chegada.data)}${i.partida && i.partida.data ? ' a ' + ingData(i.partida.data) : ''}`]);
       if (Array.isArray(i.hoteis) && i.hoteis.length) p.linhas.splice(1, 0, ['Hotéis', i.hoteis.map(h => h.nome + (h.situacao ? ' (' + h.situacao + ')' : '')).join(' · ')]);
       /* o total que ela fechou é o que aparece (nada de soma recalculada) */
-      if (+i.total_informado > 0) p.linhas = p.linhas.filter(l => l[0] !== 'Sinal').map(l => l[0] === 'Total' ? ['Total', oyM(+i.total_informado, OY_MOEDA) + ' (o que você fechou, VAT dentro)'] : l);
+      if (+i.total_informado > 0) p.linhas = p.linhas.filter(l => l[0] !== 'Sinal').map(l => l[0] === 'Total' ? ['Total', oyM(+i.total_informado, OY_MOEDA) + (i.com_vat === false ? ' (o que você fechou, sem VAT)' : ' (o que você fechou, VAT dentro)')] : l);
+      if (i.com_vat === false) p.linhas.push(['VAT', 'sem VAT neste orçamento']);
       p.fazer = () => {
         const res = fazer0(); const o = Orc.all().find(x => x.num === res.numero); if (!o) return res;
         campos(o, i);
         /* refaz os serviços do catálogo e os traslados no formato novo (foto, texto, incluso) */
-        const novos = [];
-        (i.itens || []).forEach((it, k) => {
+        /* a base só cria os serviços com preco_ref, passeio_id ou descricao (o traslado pronto ela pula):
+           conta a posição de cada um nela — antes o índice era o da lista dela, e um traslado no começo
+           fazia o texto/obs/hora de um serviço cair no seguinte (28/10/2026) */
+        const novos = []; let j = -1;
+        (i.itens || []).forEach((it) => {
+          const naBase = !!(it.preco_ref || it.passeio_id || it.descricao); if (naBase) j++;
           const n = servico(o, it);
           if (n) novos.push(enriquece(n, it));
-          else if (o.itens[k]) novos.push(enriquece(o.itens[k], it));
+          else if (naBase && o.itens[j]) novos.push(enriquece(o.itens[j], it));
         });
         if (novos.length) o.itens = novos;
         o.moeda = OY_MOEDA;
@@ -1400,6 +1634,7 @@ opDocOrc = (id) => go('/adm/proposta/' + id);
       if (i.hotel) p.linhas.push(['Hotel', i.hotel]);
       if (i.adultos != null || i.criancas != null) p.linhas.push(['Pessoas', oyPaxTexto({ adultos: i.adultos ?? o.adultos, criancas: i.criancas ?? o.criancas })]);
       if (i.pago != null) p.linhas.push(['Já pago', oyM(+i.pago, i.moeda || oyMoeda(o))]);
+      if (i.com_vat != null) p.linhas.push(['VAT', i.com_vat === false ? 'tirar o VAT' : 'cobrar o VAT de ' + (o.vatPct != null && o.vatPct !== '' ? +o.vatPct : OY_VAT) + '%']);
       extras.forEach(it => p.linhas.push(['Adiciona', it.traslado ? (it.traslado === 'chegada' ? 'Traslado de chegada' : 'Traslado de saída') : ((Tours.get(it.passeio_id) || { name: { pt: it.passeio_id } }).name.pt)]));
       const fazer0 = p.fazer;
       p.fazer = () => {
@@ -1420,7 +1655,7 @@ opDocOrc = (id) => go('/adm/proposta/' + id);
       return p;
     }
     return _plano(nome, i);
-  };
+  }
 
   /* ver_passeios mostra as opções de cada passeio (nome, preço, preço de criança) */
   if (typeof iaLeitura === 'function') {
@@ -1439,7 +1674,7 @@ opDocOrc = (id) => go('/adm/proposta/' + id);
      certo de primeira, com as opções e os preços, sem precisar consultar */
   const catalogo = () => Tours.all().filter(x => x.status !== 'draft').map(x => {
     const ops = oyOpcoes(x);
-    return `${x.id}: ${oyPt(x.name)} — ${ops.length > 1 ? ops.map(op => `${oyOpNome(op)} USD ${+op.preco || 0}${+op.precoCrianca ? ' (criança ' + op.precoCrianca + ')' : ''}`).join(' | ') : (+x.price ? 'USD ' + x.price : 'sob consulta')}${x.priceMode === 'session' ? ' por grupo' : x.priceMode === 'pp' ? ' por pessoa' : ''}${+x.precoCrianca ? ' · criança ' + x.precoCrianca : ''}`;
+    return `${x.id}: ${oyPt(x.name)} — ${ops.length > 1 ? ops.map(op => `${oyOpNome(op)} USD ${+op.preco || 0}${+op.precoCrianca ? ' (criança ' + op.precoCrianca + ')' : ''}`).join(' | ') : (+x.price ? 'USD ' + x.price : 'sob consulta')}${x.priceMode === 'session' ? ' por grupo' : x.priceMode === 'hora' ? ' por hora (mínimo ' + (+x.minHoras || 1) + 'h)' : x.priceMode === 'pp' ? ' por pessoa' : ''}${+x.precoCrianca ? ' · criança ' + x.precoCrianca : ''}`;
   }).join('\n');
   const _sis = iaSistema;
   iaSistema = function () {
@@ -1447,9 +1682,10 @@ opDocOrc = (id) => go('/adm/proposta/' + id);
     b.push({ type: 'text', text: `## O CATÁLOGO DELA (id: nome — preço). Use o id em passeio_id.\n${catalogo()}` });
     b.push({ type: 'text', text: `## ORÇAMENTO E PROPOSTA (o jeito dela, desde 28/10/2026)
 - Antes de criar, tenha o BÁSICO: nome do cliente, WhatsApp, quantas pessoas (adultos e crianças), hotel e os dias de chegada e partida (com hora e voo, se ela souber). Falta algum? Pergunte UMA coisa por vez — mas não trave: com nome e pessoas já dá para criar e completar depois com editar_orcamento.
-- Monte o roteiro DIA A DIA: cada serviço com data e hora. Passeio do catálogo SEMPRE com passeio_id (de ver_passeios): traz preço, foto, texto e incluso. Passeio com opções (prime/non-prime, minutos de voo, com/sem serviço de mesa): passe opcao com o nome; tem criança no grupo? passe criancas — o preço de criança entra sozinho. Traslado de aeroporto: item com traslado:"chegada" ou "saida" (pega o voo e o hotel). O resto: descricao + texto.
+- Monte o roteiro DIA A DIA: cada serviço com data e hora. Passeio do catálogo SEMPRE com passeio_id (de ver_passeios): traz preço, foto, texto e incluso. Passeio com opções (prime/non-prime, minutos de voo, com/sem serviço de mesa): passe opcao com o nome; tem criança no grupo? passe criancas — o preço de criança entra sozinho. Traslado de aeroporto: item com traslado:"chegada" ou "saida" (pega o voo e o hotel). Fora do catálogo: descricao com o nome que ELA deu (texto só se ela escreveu).
+- NUNCA ESCREVA NADA SEU NO ORÇAMENTO (vai para o cliente como verdade): nada de descrição, incluso, não incluso, horário ou dia que ela não deu. Não sabe o horário? Deixe sem — nada de 09:00/10:00 por conta própria, nem fim calculado. Dia: exatamente o que ela disse; nunca mova um serviço de dia. Observação dela num serviço ("Início às 15:00", "Término no Dubai Mall", "sem guia brasileiro") vai em obs, sempre — e se for horário de início, também em hora. Refazendo um orçamento que já existe: copie os serviços, dias, horários e observações dele, sem tirar nada. O app confere e tira o que não veio dela.
 - RESPEITE O QUE ELA MANDOU, SEM RECRIAR NADA: se ela passou os serviços, os dias, os horários, os textos (descrição, INCLUSO, NÃO INCLUSO), os valores ou o TOTAL, use EXATAMENTE isso. Valor de cada serviço que ela disse → valor; o total dela → total_informado (o app usa esse número e põe o VAT dentro). NUNCA recalcule pela tabela o que ela deu, nunca acrescente nem tire serviço, nunca troque data, hora ou texto, nunca resuma o texto dela. Do catálogo, só complete o que ela NÃO disse (foto; texto/incluso se ela não escreveu). Serviço "(a parte)" → a_parte:true, sem valor. Hotéis por período ("07-11/11 Sofitel *a parte") → hoteis. Cola uma planilha/texto inteiro? Monte tudo de uma vez num criar_orcamento só.
-- Moeda: SOMENTE DÓLAR (USD), sempre. Nunca escreva valor em dirham, real ou euro. Os valores dos serviços são SEM imposto: o app soma 5% de VAT no fim sozinho (nunca some de novo). Total e por pessoa saem sozinhos.
+- Moeda: SOMENTE DÓLAR (USD), sempre. Nunca escreva valor em dirham, real ou euro. Os valores dos serviços são SEM imposto: o app soma 5% de VAT no fim sozinho (nunca some de novo). Ela disse "sem VAT" / "não cobrar VAT"? com_vat:false (e com_vat:true volta). Total, por adulto e por criança saem sozinhos (não existe "por casal").
 - "(Indicação: CÓDIGO)" na conversa = veio pelo link de um parceiro: o app liga o orçamento a ele sozinho e a comissão entra em Indicações e cupons.
 - Depois de criar ou mudar, ofereça em uma linha: "Quer que eu abra a proposta para gerar o PDF ou mandar o link?" → proposta_orcamento. Quem manda é ela.` });
     return b;

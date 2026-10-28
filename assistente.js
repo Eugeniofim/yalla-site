@@ -534,7 +534,7 @@ const IA_LEITURA = new Set(['ver_passeios', 'ver_agenda', 'ver_reservas', 'ver_c
 function iaLeitura(nome, i) {
   if (nome === 'ver_passeios') return Tours.all().map(x => ({
     id: x.id, nome: nomeTour(x), publicado: x.status !== 'draft', preco: +x.price || 0,
-    por: x.priceMode === 'session' ? 'sessão' : 'pessoa', preco_crianca: +x.priceChild || 0,
+    por: x.priceMode === 'session' ? 'sessão' : x.priceMode === 'hora' ? 'hora (mínimo ' + (+x.minHoras || 1) + 'h)' : 'pessoa', preco_crianca: +x.priceChild || 0,
     grupo: { min: +x.min || 0, max: +x.max || 0 }, duracao: x.duration || null, ponto_encontro: tl(x.meeting),
     horarios: Cal.rulesFor(x.id).map(r => ({ id: r.id, dias: r.weekdays.map(nomeDia).join(', '), hora: r.time, vagas: r.capacity, de: r.from, ate: r.until })) }));
   if (nome === 'ver_agenda') {

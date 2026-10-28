@@ -301,6 +301,8 @@ const STR = {
   bigGroupBtn: { pt: 'Pedir valor no WhatsApp', en: 'Ask for a quote on WhatsApp' },
   perPerson:   { pt: 'por pessoa', en: 'per person' },
   perSession:  { pt: 'pela sessão', en: 'per session' },
+  /* 28/10/2026, ele: "tinha que ter a opção ali também de POR HORA" (o iate da Milla: USD 209 a hora) */
+  perHour:     { pt: 'por hora', en: 'per hour', es: 'por hora' },
   soldOut:     { pt: 'Esgotado neste mês', en: 'Sold out this month' },
   emptyFilter: { pt: 'Nada aqui neste filtro. Veja todos os passeios.', en: 'Nothing under this filter. See all tours.' },
   back:        { pt: 'Voltar', en: 'Back' },

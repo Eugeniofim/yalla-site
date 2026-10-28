@@ -25,7 +25,9 @@ const rtDiaCurto = (iso) => iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) : '';
 const rtH = (hm) => { const m = String(hm || '').match(/(\d{1,2}):(\d{2})/); return m ? String(+m[1]).padStart(2, '0') + 'h' + (m[2] === '00' ? '' : m[2]) : ''; };
 function rtFaixa(s) {
   const ini = rtH(s.hora); if (!ini) return '';
-  const fim = s.horaFim ? rtH(s.horaFim) : (s.durMin && typeof kitSoma === 'function' ? rtH(kitSoma(s.hora, s.durMin)) : '');
+  /* o fim só se veio dela (28/10/2026): calcular pela duração ("10h" → 09h às 19h) punha no
+     roteiro do cliente um horário que ninguém combinou */
+  const fim = s.horaFim ? rtH(s.horaFim) : '';
   return fim && fim !== ini ? `${ini} às ${fim}` : ini;
 }
 const RT_CHEGA = /aeroporto\s*(→|->|-|–|para|x)\s*hotel|chegada|arrival/i;

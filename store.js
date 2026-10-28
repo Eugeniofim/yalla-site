@@ -476,7 +476,7 @@ function _seed() {
     const time = rule ? rule.time : '10:00';
     const total = x.priceMode === 'transfer' ? transferPreco(x, pax, 0, time)
                 : x.priceMode === 'tabela' ? tabelaPreco(x, pax)
-                : x.priceMode === 'session' ? x.price : x.price * pax;
+                : x.priceMode === 'session' ? x.price : x.priceMode === 'hora' ? x.price * Math.max(1, +x.minHoras || 1) : x.price * pax;
     const created = addDays(date, -(7 + (n % 9)));
     const payments = [];
     if (x.payPolicy === 'split') {
@@ -853,6 +853,8 @@ const Bookings = {
       return { total: v, linhas: [{ qtd: pax, valor: v, fechado: true }], consultar: v === 0 };
     }
     if (x.priceMode === 'session') return { total: cheio, linhas: [{ qtd: 1, valor: cheio }] };
+    /* POR HORA (28/10/2026, o iate da Milla): preço da hora × horas, nunca menos que o mínimo dela */
+    if (x.priceMode === 'hora') { const h = Math.max(+x.minHoras || 1, +(opt && opt.horas) || 0); return { total: cheio * h, linhas: [{ qtd: h, valor: cheio }], horas: h }; }
     /* preço de criança (o deserto da Milla: até 7 anos paga menos). Conta pelas
        idades escolhidas; criança sem idade marcada ainda paga como adulto. */
     if (+x.precoCrianca > 0 && opt && Array.isArray(opt.idades) && opt.idades.length) {
