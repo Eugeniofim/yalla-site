@@ -2177,7 +2177,8 @@ const ADM_IC = {
 };
 const ADM_MENU = [
   /* 28/10/2026, ele: "cadê a AGENDA no menu" — o item se chama Agenda; dentro, Hoje · Calendário · Tarefas */
-  { id: 'hoje',     nome: 'Agenda',   subs: [['today', 'Hoje'], ['agenda', 'Calendário'], ['tarefas', 'Tarefas']] },
+  /* e as tarefas DENTRO da agenda, numa tela só (ele, 28/10: "juntar TAREFAS dentro de AGENDA") */
+  { id: 'hoje',     nome: 'Agenda',   subs: [['today', 'Hoje'], ['agenda', 'Agenda']] },
   { id: 'vendas',   nome: 'Vendas',   subs: [['consulta', 'Orçamentos'], ['pipeline', 'Pipeline'], ['planilha', 'Planilha'], ['bookings', 'Reservas'], ['transfer', 'Transfers']] },
   { id: 'clientes', nome: 'Clientes', subs: [['clients', 'Clientes']] },
   /* o atendimento automático (WhatsApp e Instagram): só no app de quem contratou */
@@ -2191,12 +2192,13 @@ const admMenuDe = (tab) => ADM_MENU.find(g => g.subs.some(([id]) => id === tab))
 const ADM_NOMES = { today: 'admToday', agenda: 'admAgenda', tarefas: 'admTarefas', consulta: 'admConsulta', pipeline: 'admPipeline', planilha: 'admPlanilha', bookings: 'admBookings', transfer: 'admTransfer',
   clients: 'admClients', inbox: 'admInbox', tours: 'admTours', precos: 'admPrecos', guias: 'admGuias', parceiros: 'admParceiros', money: 'admMoney', reports: 'admReports', coupons: 'admCoupons',
   settings: 'admSettings', look: 'temaTit', voucher: 'admVoucher' };
-const ADM_TABS = ADM_MENU.flatMap(g => g.subs.map(([id]) => [id, ADM_NOMES[id] || id]));
+const ADM_TABS = [...ADM_MENU.flatMap(g => g.subs.map(([id]) => [id, ADM_NOMES[id] || id])), ['tarefas', 'admTarefas']];
 /* a barrinha das partes de cada item (no topo da tela) */
 function subNav(tab) {
-  const g = admMenuDe(tab); if (!g || g.subs.length < 2) return '';
+  const g = admMenuDe(tab === 'tarefas' ? 'agenda' : tab); if (!g || g.subs.length < 2) return '';
+  if (tab === 'tarefas') tab = 'agenda';
   const pend = g.id === 'hoje' && typeof Tarefas !== 'undefined' ? (() => { const G = Tarefas.grupos(isoToday()); return { n: G.atrasadas.length + G.hoje.length, atras: G.atrasadas.length }; })() : null;
-  return `<nav class="subnav" aria-label="${esc(g.nome)}">${g.subs.map(([id, nome]) => `<a href="#/adm/${id}" class="${id === tab ? 'on' : ''}" ${id === tab ? 'aria-current="page"' : ''}>${esc(nome)}${id === 'tarefas' && pend && pend.n ? ` <span class="agBadge ${pend.atras ? 'bad' : ''}" aria-label="${pend.n} para fazer">${pend.n}</span>` : ''}</a>`).join('')}</nav>`;
+  return `<nav class="subnav" aria-label="${esc(g.nome)}">${g.subs.map(([id, nome]) => `<a href="#/adm/${id}" class="${id === tab ? 'on' : ''}" ${id === tab ? 'aria-current="page"' : ''}>${esc(nome)}${id === 'agenda' && pend && pend.n ? ` <span class="agBadge ${pend.atras ? 'bad' : ''}" aria-label="${pend.n} para fazer">${pend.n}</span>` : ''}</a>`).join('')}</nav>`;
 }
 
 /* ---- aviso de painel destravado ----
@@ -2241,11 +2243,11 @@ function admShell(tab, inner) {
   <div class="adm">
     <aside class="rail">
       <div class="brand">${logoFull({ mark: 26, sub: 'ADM' })}</div>
-      <button class="nb nb-ia" id="nbAssist" type="button">⚡ Assistente</button>
+      <button class="nb nb-ia" id="nbAssist" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:18px;height:18px"><path d="M12 3l1.8 4.6L18.5 9.5l-4.7 1.9L12 16l-1.8-4.6L5.5 9.5l4.7-1.9L12 3Z"/><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8.8-2Z"/></svg>Assistente</button>
       <nav class="menu5">${ADM_MENU.map(g => { const on = g.subs.some(([id]) => id === tab);
         return `<button class="nb nb5 ${on ? 'on' : ''}" data-tab="${g.subs[0][0]}" id="nb-${g.subs[0][0]}" ${on ? 'aria-current="page"' : ''}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ADM_IC[g.id] || ''}</svg><span>${esc(g.nome)}</span></button>`; }).join('')}</nav>
       <div class="railfoot">
-        <button class="nb ghost" id="viewSite">👁 ${t('viewSite')}</button>
+        <button class="nb ghost" id="viewSite"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:17px;height:17px;vertical-align:-3px;margin-right:6px"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3"/></svg>${t('viewSite')}</button>
         <button class="nb ghost" id="exitAdm">← ${t('exit')}</button>
       </div>
     </aside>
@@ -3833,7 +3835,15 @@ function admAgenda() {
         <div class="ag-lista">${linhasDia.length ? linhasDia.map(l => l[1]).join('') : '<p class="empty">Nada neste dia. Anote uma tarefa no campo acima.</p>'}</div>
         <a class="mini" href="#/adm/today/${sel}">ver o dia completo (clientes, guias, pagamentos)</a>
       </section>
-    </div>`);
+    </div>
+    ${(() => { const G = Tarefas.grupos(isoToday()), hj = isoToday();
+      const grupo = (tit, l, cls) => l.length ? `<div class="ag-tfg ${cls || ''}"><h4>${tit} <span class="tf-n">${l.length}</span></h4>${l.map(tt => tfLinha(tt, hj)).join('')}</div>` : '';
+      const corpo = grupo('Atrasadas', G.atrasadas, 'bad') + grupo('Hoje', G.hoje, 'hoje') + grupo('Próximos 7 dias', G.semana) + grupo('Mais para frente', G.depois) + grupo('Sem data', G.semData);
+      return `<section class="card ag-fazer" id="agFazer">
+        <div class="ag-diacab"><h3>Para fazer</h3><a class="mini" href="#/adm/tarefas">anotações e filtros</a></div>
+        ${corpo || '<p class="empty">Nada para fazer. Anote no dia do calendário, acima.</p>'}
+        ${G.feitas.length ? `<details class="ag-feitas"><summary>Feitas · ${G.feitas.length}</summary>${G.feitas.slice(0, 15).map(tt => tfLinha(tt, hj)).join('')}</details>` : ''}
+      </section>`; })()}`);
   tfLigaMini(() => admAgenda());
   $('#agTfForm').onsubmit = (e) => {
     e.preventDefault();

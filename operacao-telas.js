@@ -1395,12 +1395,15 @@ function admConsulta(arg, modo) {
   const rotSemOrc = Roteiros.all().filter(p => !Orc.all().some(o => o.pedidoId === p.id));
   const doMes = todas.filter(r => !S.mes || String(r.dataServ || '').slice(0, 7) === S.mes);
   const pn = crmPainel(doMes, hoje);
-  const ICO = { repescar: '🔁', montar: '✍️', sinal: '💵', avaliar: '⭐' };
+  /* 28/10/2026: ícones de traço no lugar dos emojis (skill de UI/UX) */
+  const icT = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+  const ICO = { repescar: icT('<path d="M20 11a8 8 0 0 0-14.5-4.5L4 8M4 4v4h4M4 13a8 8 0 0 0 14.5 4.5L20 16M20 20v-4h-4"/>'), montar: icT('<path d="M4 20h4L19 9l-4-4L4 16v4Z"/><path d="M13.5 6.5l4 4"/>'),
+    sinal: icT('<circle cx="12" cy="12" r="8.5"/><path d="M14.5 9.5c-.5-1-1.5-1.5-2.5-1.5-1.4 0-2.5.8-2.5 2s1.1 1.7 2.5 2 2.5.8 2.5 2-1.1 2-2.5 2c-1 0-2-.5-2.5-1.5M12 6.5V8M12 16v1.5"/>'), avaliar: icT('<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8L3.5 9.7l5.9-.9L12 3.5Z"/>') };
   const agoraAcao = (a) => {
     if (a.tipo === 'montar') return `<a class="mini strong" href="#/adm/consulta/${esc(a.o.id)}">montar e mandar</a>`;
     if (a.tipo === 'repescar') return a.o.cliente.whats ? `<a class="mini strong" target="_blank" rel="noopener" data-repesca="${esc(a.o.id)}" href="${waLink(`Oi ${opPrimeiro(a.o.cliente.nome)}! Tudo bem? Conseguiu ver o orçamento que te mandei (${a.o.num})? Se quiser, ajusto alguma coisa. ${guiaNome()}`, opNum(a.o.cliente.whats))}">💬 repescar</a>` : `<a class="mini" href="#/adm/consulta/${esc(a.o.id)}">abrir</a>`;
     if (a.tipo === 'sinal') return `<a class="mini" href="#/adm/clients/${encodeURIComponent('c:' + (a.r.b.clienteId || ''))}">ficha</a>${a.r.whats ? `<a class="mini strong" target="_blank" rel="noopener" href="${waLink(`Oi ${opPrimeiro(a.r.nome)}! Para garantir a sua reserva (${nomeDoServico(a.r.b)}, ${opCurta(a.r.dataServ)}), falta só o sinal. Te mando os dados para pagamento? ${guiaNome()}`, opNum(a.r.whats))}">💬 cobrar sinal</a>` : ''}`;
-    return a.r.whats ? `<a class="mini strong" target="_blank" rel="noopener" data-avalia="${esc(a.ids.join(','))}" href="${waLink(msgAvaliacao(a.r.b), opNum(a.r.whats))}">⭐ pedir avaliação</a>` : `<button class="mini" data-final="${esc(a.ids.join(','))}">já pedi</button>`;
+    return a.r.whats ? `<a class="mini strong" target="_blank" rel="noopener" data-avalia="${esc(a.ids.join(','))}" href="${waLink(msgAvaliacao(a.r.b), opNum(a.r.whats))}">pedir avaliação</a>` : `<button class="mini" data-final="${esc(a.ids.join(','))}">já pedi</button>`;
   };
   const mesNome = S.mes ? CRM_MESES[+S.mes.slice(5, 7) - 1] + ' ' + S.mes.slice(0, 4) : 'todos os meses';
   const painel = P ? `<section class="crm-painel crm-painel-p" aria-label="Painel">
@@ -1409,7 +1412,7 @@ function admConsulta(arg, modo) {
       <button class="crm-tile t-ok" data-e="confirmado"><small>Confirmados a fazer</small><b>${eur(pn.confirmados.valor)}</b><span>${pn.confirmados.n} pedidos</span></button>
       <button class="crm-tile" data-e="confirmado"><small>Falta receber</small><b>${eur(pn.confirmados.falta)}</b><span>sinal recebido ${eur(pn.confirmados.recebido)}</span></button>
       <button class="crm-tile" data-e="todos"><small>Fechamento</small><b>${pn.fecha.taxa == null ? '—' : Math.round(pn.fecha.taxa * 100) + '%'}</b><span>${pn.fecha.fechados} fechados · ${pn.fecha.perdidos} perdidos</span></button>
-      <a class="crm-tile" href="#/adm/consulta"><small>⚡ Precisa de você</small><b>${pn.agora.length}</b><span>ver na aba Orçamentos</span></a>
+      <a class="crm-tile" href="#/adm/consulta"><small>Precisa de você</small><b>${pn.agora.length}</b><span>ver na aba Orçamentos</span></a>
     </div></section>` : `<section class="crm-painel" aria-label="Painel do CRM">
     <div class="crm-painel-top"><h2>Painel · ${esc(mesNome)}</h2><small class="why">toque num quadro para ver os pedidos</small></div>
     <div class="crm-tiles">
@@ -1419,7 +1422,7 @@ function admConsulta(arg, modo) {
       <button class="crm-tile" data-e="todos"><small>Taxa de fechamento</small><b>${pn.fecha.taxa == null ? '—' : Math.round(pn.fecha.taxa * 100) + '%'}</b><span>${pn.fecha.fechados} fechados · ${pn.fecha.perdidos} perdidos</span>${pn.fecha.motivo ? `<em>perde mais por: ${esc(pn.fecha.motivo[0])}</em>` : ''}</button>
       <a class="crm-tile" href="#/adm/coupons"><small>Comissões a pagar</small><b>${eur(pn.comissoes.valor)}</b><span>${pn.comissoes.n ? pn.comissoes.n + (pn.comissoes.n === 1 ? ' parceiro' : ' parceiros') : 'tudo em dia'}</span></a>
     </div>
-    <div class="crm-agora"><h3>⚡ Precisa de você ${pn.agora.length ? `<b>${pn.agora.length}</b>` : ''}</h3>
+    <div class="crm-agora"><h3>Precisa de você ${pn.agora.length ? `<b>${pn.agora.length}</b>` : ''}</h3>
       ${pn.agora.length ? `<ul>${pn.agora.slice(0, S.agoraTudo ? 99 : 5).map(a => `<li><span class="crm-ag-i" aria-hidden="true">${ICO[a.tipo]}</span><div><b>${esc(a.nome || 'Sem nome')}</b><small>${esc(a.txt)}</small></div><div class="tacts">${agoraAcao(a)}</div></li>`).join('')}</ul>
         ${pn.agora.length > 5 ? `<button class="mini ghost" id="crmAgoraTudo">${S.agoraTudo ? 'mostrar menos' : `ver os ${pn.agora.length}`}</button>` : ''}` : '<p class="why">Nada esperando por você. 🎉</p>'}
     </div></section>`;
@@ -1434,7 +1437,7 @@ function admConsulta(arg, modo) {
     if (r.tipo === 'orcamento' && r.etapa === 'perdido') return `<span class="why">${esc(o.motivoPerda || '')}</span><button class="mini ghost" data-reabre="${esc(o.id)}">reabrir</button>`;
     const ficha = `<a class="mini" href="#/adm/clients/${encodeURIComponent('c:' + (b.clienteId || ''))}">ficha</a>`;
     if (r.etapa === 'confirmado') return `${ficha}<a class="mini" href="#/adm/voucher/${esc(b.id)}">voucher</a>`;
-    if (r.etapa === 'avaliar') return `${ficha}${b.whats ? `<a class="mini strong" target="_blank" rel="noopener" data-avalia="${esc(p.linhas.map(x => x.id).join(','))}" href="${waLink(msgAvaliacao(b), opNum(b.whats))}">⭐ pedir avaliação</a>` : ''}
+    if (r.etapa === 'avaliar') return `${ficha}${b.whats ? `<a class="mini strong" target="_blank" rel="noopener" data-avalia="${esc(p.linhas.map(x => x.id).join(','))}" href="${waLink(msgAvaliacao(b), opNum(b.whats))}">pedir avaliação</a>` : ''}
       <button class="mini ghost" data-final="${esc(p.linhas.map(x => x.id).join(','))}">finalizado</button>`;
     return ficha;
   };
@@ -1469,7 +1472,7 @@ function admConsulta(arg, modo) {
       </div></div>
     ${painel}
     <div class="crm-etapas" role="tablist">${[...CRM_ETAPAS, ['todos', 'Todos']].map(([e, nome], k) =>
-      `${k && k < CRM_ETAPAS.length - 1 ? '<span class="crm-seta" aria-hidden="true">→</span>' : ''}<button class="crm-etapa ${S.e === e ? 'on' : ''}" data-e="${e}" role="tab" aria-selected="${S.e === e}">${e === 'aberto' ? '📨 Em aberto' : nome}${e !== 'todos' ? ` <b>${conta[e]}</b>` : ''}</button>`).join('')}</div>
+      `${k && k < CRM_ETAPAS.length - 1 ? '<span class="crm-seta" aria-hidden="true">→</span>' : ''}<button class="crm-etapa ${S.e === e ? 'on' : ''}" data-e="${e}" role="tab" aria-selected="${S.e === e}">${e === 'aberto' ? 'Em aberto' : nome}${e !== 'todos' ? ` <b>${conta[e]}</b>` : ''}</button>`).join('')}</div>
     <div class="crm-filtros">
       <input id="crmQ" type="search" placeholder="🔎 nome, WhatsApp, serviço, hotel…" value="${esc(S.q)}">
       <select id="crmMes"><option value="">todos os meses</option>${meses.map(m => `<option value="${m}" ${S.mes === m ? 'selected' : ''}>${MESN[+m.slice(5, 7) - 1]} ${m.slice(0, 4)}</option>`).join('')}</select>

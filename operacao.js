@@ -1913,7 +1913,7 @@ function linkMapa(p) { return p.mapa || (p.endereco ? 'https://www.google.com/ma
    AVALIAR (o servico passou: pedir a avaliacao) -> FINALIZADO, ou PERDIDO
    com o motivo. Aqui as linhas saem do que o app ja sabe: orcamentos em
    aberto e reservas. */
-const CRM_ETAPAS = [['aberto', 'CRM'], ['confirmado', 'Confirmado'], ['avaliar', '⭐ Avaliar'], ['finalizado', '💚 Finalizado'], ['perdido', 'Perdido']];
+const CRM_ETAPAS = [['aberto', 'CRM'], ['confirmado', 'Confirmado'], ['avaliar', 'Avaliar'], ['finalizado', 'Finalizado'], ['perdido', 'Perdido']];
 const MOTIVOS_PERDA = ['Preço', 'Data não serve', 'Fechou com outro', 'Não respondeu', 'Desistiu da viagem', 'Outro'];
 function etapaDaReserva(b, hoje) {
   hoje = hoje || isoToday();

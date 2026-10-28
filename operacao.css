@@ -819,3 +819,96 @@ p.ag-leg{display:flex;flex-wrap:wrap;gap:6px 18px}
 .ag-k{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);margin-bottom:2px}
 .ag-k.trf{color:var(--ink-2)}
 .card .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* ---- "Para fazer" dentro da Agenda (28/10/2026) ---- */
+.ag-fazer{margin-top:14px}
+.ag-tfg{margin-top:8px}
+.ag-tfg h4{display:flex;align-items:center;gap:8px;margin:14px 0 6px;font-size:12px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3)}
+.ag-tfg.bad h4{color:var(--danger)}
+.ag-tfg.hoje h4{color:var(--accent)}
+.ag-feitas summary{cursor:pointer;margin-top:12px;color:var(--ink-3);min-height:32px}
+
+/* =====================================================
+   PAINEL PREMIUM (28/10/2026, ele: "skill de UI e UX… deixa o app foda visualmente")
+   Da skill de UI/UX: preto + ouro sobre marfim, contraste alto, a tipografia
+   da marca (Playfair nos títulos, Montserrat no resto), cartões limpos com
+   respiro, menu escuro, foco visível, transições curtas (150–200 ms) e
+   respeito a "reduzir movimento". Só no painel ([data-painel]); a cor de
+   destaque continua a que ela escolhe em "Visual do painel".
+   ===================================================== */
+:root[data-painel="1"]{--pn-ink:#14120F;--pn-ink-2:#211D17;--pn-ouro:#E3C46B;--pn-ouro-2:#F3E0A2;--pn-txt:#EDE6D6}
+:root[data-painel="1"]:not([data-theme="dark"]){--paper:#F6F2EA;--surface:#FFFFFF;--surface-2:#F1ECE1;--line:#E8E0D0;--line-2:#D6CCB8;
+  --sh-1:0 1px 2px rgba(20,18,15,.04),0 10px 28px -18px rgba(20,18,15,.22);--sh-2:0 2px 8px rgba(20,18,15,.06),0 24px 48px -26px rgba(20,18,15,.32)}
+@media (prefers-color-scheme:dark){:root[data-painel="1"]:not([data-theme="light"]){--sh-1:0 1px 2px rgba(0,0,0,.3)}}
+
+/* o fundo e o palco */
+:root[data-painel="1"] body{background:var(--paper)}
+:root[data-painel="1"] .adm .stage{padding-top:28px}
+
+/* títulos: Playfair, o tom da marca */
+:root[data-painel="1"] .adm .pageh{font-family:"Playfair Display",Georgia,serif;font-weight:600;font-size:clamp(26px,3.2vw,34px);letter-spacing:-.01em;line-height:1.12;color:var(--ink)}
+:root[data-painel="1"] .adm .card h3,:root[data-painel="1"] .adm .oy-h{font-family:var(--f-ui);font-weight:700;font-size:16px;letter-spacing:-.005em;color:var(--ink)}
+:root[data-painel="1"] .adm .op-lbl{letter-spacing:.08em}
+
+/* cartões: brancos, borda fina, sombra macia, cantos 18 */
+:root[data-painel="1"] .adm .card{border-radius:18px;border-color:var(--line);box-shadow:var(--sh-1)}
+:root[data-painel="1"] .adm .card:has(> .ag-diacab),:root[data-painel="1"] .adm .oy-card{padding:20px 22px}
+
+/* o menu lateral escuro (computador) */
+@media (min-width:821px){
+  :root[data-painel="1"] .adm .rail{background:var(--pn-ink);border-right:0;color:var(--pn-txt);padding-left:14px;padding-right:14px}
+  :root[data-painel="1"] .adm .rail .brand b{color:#F7F1E3}
+  :root[data-painel="1"] .adm .rail .brand small{color:var(--pn-ouro);opacity:.9}
+  :root[data-painel="1"] .adm .rail .lg-claro{display:none!important}
+  :root[data-painel="1"] .adm .rail .lg-escuro{display:inline-block!important}
+  :root[data-painel="1"] .adm .rail .nb{color:rgba(237,230,214,.70);border-radius:12px;transition:background .15s ease,color .15s ease}
+  :root[data-painel="1"] .adm .rail .nb:hover{background:rgba(255,255,255,.06);color:#fff}
+  :root[data-painel="1"] .adm .rail .nb.on{background:rgba(227,196,107,.13);color:var(--pn-ouro);box-shadow:inset 3px 0 0 var(--pn-ouro)}
+  :root[data-painel="1"] .adm .rail .nb:focus-visible{outline:2px solid var(--pn-ouro);outline-offset:2px}
+  :root[data-painel="1"] .adm .rail .nb-ia{background:transparent;color:var(--pn-ouro);box-shadow:inset 0 0 0 1px rgba(227,196,107,.45);margin:6px 0 10px}
+  :root[data-painel="1"] .adm .rail .nb-ia:hover{background:rgba(227,196,107,.10)}
+  :root[data-painel="1"] .adm .rail .nb.ghost{color:rgba(237,230,214,.48)}
+  :root[data-painel="1"] .adm .rail .nb.ghost:hover{color:var(--pn-txt)}
+}
+/* a barra de baixo (celular): escura também, ouro no item aberto */
+@media (max-width:820px){
+  :root[data-painel="1"] .adm .rail{background:var(--pn-ink);border-top:0;box-shadow:0 -10px 30px -18px rgba(0,0,0,.5)}
+  :root[data-painel="1"] .adm .rail .nb5{color:rgba(237,230,214,.66)}
+  :root[data-painel="1"] .adm .rail .nb5.on{color:var(--pn-ouro);background:rgba(227,196,107,.12);box-shadow:inset 0 2px 0 var(--pn-ouro)}
+}
+
+/* botões: o principal em preto + ouro (a regra da marca), os outros limpos */
+:root[data-painel="1"] .adm .cta,:root[data-painel="1"] .adm .at-b.at-forte,:root[data-painel="1"] .adm .oy-addf,:root[data-painel="1"] .op-dlg .cta,:root[data-painel="1"] .pp-adbar .cta{
+  background:var(--pn-ink);border-color:var(--pn-ink);color:var(--pn-ouro-2);box-shadow:0 8px 20px -14px rgba(20,18,15,.7);transition:transform .15s ease,background .15s ease,box-shadow .15s ease}
+:root[data-painel="1"] .adm .cta:hover,:root[data-painel="1"] .adm .at-b.at-forte:hover,:root[data-painel="1"] .adm .oy-addf:hover,:root[data-painel="1"] .op-dlg .cta:hover{background:var(--pn-ink-2);filter:none;transform:translateY(-1px)}
+:root[data-painel="1"] .adm .cta:focus-visible,:root[data-painel="1"] .op-dlg .cta:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+:root[data-painel="1"] .adm .mini{border-radius:999px;transition:background .15s ease,border-color .15s ease}
+:root[data-painel="1"] .adm .mini.strong{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+:root[data-painel="1"] .adm .at-b{background:var(--surface);border-color:var(--line);box-shadow:0 1px 2px rgba(20,18,15,.04)}
+:root[data-painel="1"] .adm .at-b svg{color:var(--accent)}
+:root[data-painel="1"] .adm .at-b.at-forte svg{color:var(--pn-ouro)}
+
+/* fichas (chips) e a barrinha de seções */
+:root[data-painel="1"] .adm .chip{border-radius:999px;transition:background .15s ease,color .15s ease}
+:root[data-painel="1"] .adm .chip.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+:root[data-painel="1"] .adm .subnav{background:var(--surface-2);box-shadow:inset 0 0 0 1px var(--line)}
+:root[data-painel="1"] .adm .subnav a.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(20,18,15,.08),0 6px 14px -10px rgba(20,18,15,.35)}
+
+/* campos: 44 px, cantos 12, foco em ouro */
+:root[data-painel="1"] .adm .fld input,:root[data-painel="1"] .adm .fld select,:root[data-painel="1"] .adm .fld textarea,:root[data-painel="1"] .op-dlg .fld input,:root[data-painel="1"] .op-dlg .fld select{border-radius:12px;border-color:var(--line-2);background:var(--surface);transition:border-color .15s ease,box-shadow .15s ease}
+:root[data-painel="1"] .adm .fld input:focus,:root[data-painel="1"] .adm .fld select:focus,:root[data-painel="1"] .adm .fld textarea:focus,:root[data-painel="1"] .op-dlg .fld input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash);outline:none}
+
+/* números grandes (painéis, totais) */
+:root[data-painel="1"] .adm .kpi b,:root[data-painel="1"] .adm .rp-tile b,:root[data-painel="1"] .adm .crm-tile b,:root[data-painel="1"] .adm .oy-tot b{font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+
+/* o assistente flutuante: preto + ouro */
+:root[data-painel="1"] #iaFab{background:var(--pn-ink);color:var(--pn-ouro-2);box-shadow:0 14px 34px -14px rgba(20,18,15,.75)}
+
+/* a janelinha */
+:root[data-painel="1"] .op-dlg{border-radius:20px;border:1px solid var(--line)}
+
+@media (prefers-reduced-motion:reduce){:root[data-painel="1"] .adm *{transition:none!important}:root[data-painel="1"] .adm .cta:hover{transform:none}}
+
+/* os ícones da lista "Precisa de você" (no lugar dos emojis) */
+.crm-ag-i{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--accent-wash);color:var(--accent);flex:none}
+.crm-ag-i svg{width:16px;height:16px}
