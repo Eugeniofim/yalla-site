@@ -106,3 +106,85 @@ if (typeof admSettings === 'function') {
     return r;
   };
 }
+
+/* ---------- 6. FOTOS: galeria do passeio pelo chat e foto leve (28/10/2026) ----------
+   A Milla: "mandei as fotos individuais do iate e não baixou… daí incluí a de capa só". Eram três
+   furos: o clipe pegava só 4 fotos; cada foto do chat ficava inteira (1600 px) na memória do
+   aparelho, que enche em poucas e descartava as seguintes sem aviso; e o assistente não tinha como
+   pôr foto na galeria (criar_passeio só tinha a capa e alterar_passeio nenhuma foto).
+   fotoNaNuvem: reduz e sobe para a pasta da sala no Storage (yalla-fotos, leitura pública, só a
+   dona sobe); sem nuvem ou sem a pasta, devolve a foto reduzida (1100 px) — nunca perde a foto. */
+function oyImg(src) { return new Promise((ok, falha) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => falha(new Error('foto ilegível')); i.src = src; }); }
+async function oyReduz(src, lado, q) {
+  const img = await oyImg(src), k = Math.min(1, lado / Math.max(img.width, img.height)), c = document.createElement('canvas');
+  c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  return { url: c.toDataURL('image/jpeg', q), blob: await new Promise(ok => c.toBlob(ok, 'image/jpeg', q)) };
+}
+async function fotoNaNuvem(src, pasta) {
+  src = String(src || '');
+  if (!/^data:image\//.test(src)) return src;                       /* já é endereço (arte/…, https://…) */
+  try {
+    if (typeof temNuvem === 'function' && temNuvem() && typeof isLoggedIn === 'function' && isLoggedIn() && typeof SUPA_URL !== 'undefined' && SUPA_URL) {
+      const { blob } = await oyReduz(src, 1600, 0.84);
+      const sala = (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.sala) || '', balde = (sala ? sala + '-' : '') + 'fotos';
+      const nome = String(pasta || 'geral').replace(/[^a-z0-9-]/gi, '').slice(0, 40) + '/' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8) + '.jpg';
+      const r = await fetch(SUPA_URL + '/storage/v1/object/' + balde + '/' + nome, { method: 'POST',
+        headers: { apikey: SUPA_KEY, authorization: 'Bearer ' + authToken(), 'content-type': 'image/jpeg' }, body: blob });
+      if (r.ok) return SUPA_URL + '/storage/v1/object/public/' + balde + '/' + nome;
+    }
+  } catch (e) {}
+  try { return (await oyReduz(src, 1100, 0.78)).url; } catch (e) { return src; }
+}
+/* a foto do chat: fica na conversa NA HORA (o assistente já usa o ref) e, em segundos, vira leve */
+if (typeof guardaFoto === 'function' && typeof Mkt !== 'undefined') {
+  guardaFoto = function (src, nome) {
+    const f = { id: 'foto-' + uid(), src, nome: nome || 'foto enviada', criado: hojeIso() };
+    Mkt.get().fotos.unshift(f);
+    fotoNaNuvem(src, 'chat').then(leve => { f.src = leve; try { Mkt.salva(); } catch (e) {} }).catch(() => {});
+    return f;
+  };
+}
+
+/* o assistente põe fotos na GALERIA e troca a CAPA, inclusive de passeio que já existe */
+(function () {
+  if (typeof IA_FERRAMENTAS === 'undefined' || typeof iaPlano !== 'function') return;
+  const acha = (n) => IA_FERRAMENTAS.find(t => t.name === n);
+  const REFS = { type: 'array', items: { type: 'string' } };
+  const cp = acha('criar_passeio'), ap = acha('alterar_passeio');
+  if (cp) { cp.input_schema.properties.fotos = { ...REFS, description: 'refs de TODAS as fotos que ela mandou para este passeio: vão para a galeria (a capa vai em foto)' }; cp.description += ' Com fotos: todas vão para a galeria.'; }
+  if (ap) {
+    Object.assign(ap.input_schema.properties, { fotos: { ...REFS, description: 'refs das fotos para ACRESCENTAR na galeria do passeio' }, capa: { type: 'string', description: 'ref da foto que vira a capa' } });
+    ap.description = ap.description.replace('Altera nome,', 'Altera fotos (galeria e capa), nome,');
+  }
+  const _plano = iaPlano;
+  iaPlano = function (nome, i) {
+    i = i || {};
+    const ehCria = nome === 'criar_passeio', ehMuda = nome === 'alterar_passeio';
+    if (!ehCria && !ehMuda) return _plano(nome, i);
+    const fotos = (Array.isArray(i.fotos) ? i.fotos : []).filter(Boolean), capa = ehCria ? (i.foto || fotos[0] || '') : (i.capa || '');
+    if (!fotos.length && !capa) return _plano(nome, i);
+    const refs = [...new Set([capa, ...fotos].filter(Boolean))], faltam = refs.filter(r => !fotoSrc(r));
+    if (faltam.length) return E_('foto não encontrada: ' + faltam.join(', ') + ' — use os refs das fotos guardadas (ver_fotos)');
+    let p;
+    if (ehCria) p = _plano(nome, { ...i, foto: capa });
+    else {
+      const x = Tours.get(i.passeio_id); if (!x) return E_('passeio não encontrado');
+      const resto = { ...i }; delete resto.fotos; delete resto.capa;
+      const outro = ['nome', 'descricao', 'ponto_encontro', 'duracao', 'min', 'max', 'publicado'].some(k => resto[k] != null && resto[k] !== '');
+      p = outro ? _plano(nome, resto) : { titulo: 'Fotos do passeio', assumiu: [], linhas: [['Passeio', nomeTour(x)]], fazer: () => ({ ok: true }) };
+    }
+    if (!p || !p.fazer) return p;
+    p.linhas.push(['Fotos', `${fotos.length ? fotos.length + (fotos.length > 1 ? ' fotos na galeria' : ' foto na galeria') : ''}${fotos.length && capa ? ' · ' : ''}${capa ? 'capa nova' : ''}`]);
+    const f0 = p.fazer;
+    p.fazer = async () => {
+      const r = await f0(); const id = ehCria ? r && r.passeio_id : i.passeio_id; const y = id && Tours.get(id); if (!y) return r;
+      const url = {}; for (const ref of refs) url[ref] = await fotoNaNuvem(fotoSrc(ref), id);
+      const antes = Array.isArray(y.fotos) ? y.fotos : (y.photo && y.photo !== 'capa.jpg' && !ehCria ? [y.photo] : []);
+      const gal = [...new Set([...(capa ? [url[capa]] : []), ...antes, ...fotos.map(f => url[f])].filter(Boolean))];
+      Tours.update(id, { fotos: gal, ...(capa ? { photo: url[capa] } : {}) });
+      return { ...r, ok: true, fotos_na_galeria: gal.length };
+    };
+    return p;
+  };
+})();

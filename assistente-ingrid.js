@@ -1067,7 +1067,8 @@ iaDesenha = function () {
   if (arq && !arq.dataset.pdf) {
     arq.dataset.pdf = '1'; arq.accept = 'image/*,application/pdf';
     arq.onchange = async () => {
-      const files = [...arq.files].slice(0, 4 - iaFoto.length); arq.value = '';
+      const todos = [...arq.files], files = todos.slice(0, (typeof IA_MAX_FOTOS !== 'undefined' ? IA_MAX_FOTOS : 4) - iaFoto.length); arq.value = '';
+      if (todos.length > files.length) iaBolha('erro', `Coube ${files.length} de ${todos.length} arquivos — mande o resto em seguida.`);
       for (const file of files) {
         try {
           if (/pdf/.test(file.type)) { if (file.size > 5e6) throw new Error('PDF grande demais (máx. 5 MB).'); iaFoto.push(await new Promise((ok, falha) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = () => falha(new Error('não li o PDF')); r.readAsDataURL(file); })); }

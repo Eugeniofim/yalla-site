@@ -2519,10 +2519,11 @@ function admTourEdit(id) {
             </div>
           </div>
         </div>
-        ${(x.fotos || []).length ? `<div class="fld">${L3('Galeria', 'Gallery', 'Galería')} <small class="why">${L3('Todas aparecem na página do passeio. × tira a foto; "Capa" põe no topo.', 'All of them show on the tour page. × removes a photo; "Cover" puts it on top.', 'Todas aparecen en la página del paseo. × quita la foto; "Portada" la pone arriba.')}</small>
-          <div class="galed" id="galEd">${x.fotos.map(f => `<span class="galed-it ${f === x.photo ? 'capa' : ''}" data-f="${esc(f)}"><img src="${esc(f)}" alt="">
+        ${`<div class="fld">${L3('Galeria', 'Gallery', 'Galería')} <small class="why">${L3('Todas aparecem na página do passeio. × tira a foto; "Capa" põe no topo.', 'All of them show on the tour page. × removes a photo; "Cover" puts it on top.', 'Todas aparecen en la página del paseo. × quita la foto; "Portada" la pone arriba.')}</small>
+          <label class="mini galed-mais">${L3('+ fotos', '+ photos', '+ fotos')}<input type="file" accept="image/*" multiple id="fGal" hidden></label><small class="why" id="fGalSt" aria-live="polite"></small>
+          <div class="galed" id="galEd">${(x.fotos || []).map(f => `<span class="galed-it ${f === x.photo ? 'capa' : ''}" data-f="${esc(f)}"><img src="${esc(f)}" alt="">
             <button type="button" class="galed-x" data-galdel aria-label="${L3('Tirar foto', 'Remove photo', 'Quitar foto')}">×</button>
-            <button type="button" class="galed-capa" data-galcapa>${L3('Capa', 'Cover', 'Portada')}</button></span>`).join('')}</div></div>` : ''}
+            <button type="button" class="galed-capa" data-galcapa>${L3('Capa', 'Cover', 'Portada')}</button></span>`).join('')}</div></div>`}
       </section>
       <section class="card">
         <h3>${t('edMoney')}</h3>
@@ -2763,6 +2764,8 @@ function admTourEdit(id) {
     const f = e.target.files[0]; if (!f) return;
     try {
       newPhoto = await readImageResized(f);
+      /* a capa vai para a nuvem (arquivo), não para dentro do catálogo que o site inteiro baixa */
+      if (typeof fotoNaNuvem === 'function') newPhoto = await fotoNaNuvem(newPhoto, x.id || 'novo');
       $('#pPrev').style.backgroundImage = `url(${newPhoto})`;
       $('#pPrev').innerHTML = '';
       toast(t('tPhotoOk'));
@@ -2779,6 +2782,21 @@ function admTourEdit(id) {
   $('#verEn')?.addEventListener('change', aplicaEn);
   aplicaEn();
 
+  /* "+ FOTOS" NA GALERIA (28/10/2026, a Milla: as fotos do iate "não baixaram" — o editor só tinha a capa) */
+  if ($('#fGal')) $('#fGal').onchange = async (e) => {
+    const fs = [...e.target.files]; e.target.value = ''; if (!fs.length) return;
+    const st = $('#fGalSt'); let n = 0;
+    for (const f of fs) {
+      if (st) st.textContent = L3(`Subindo ${n + 1} de ${fs.length}…`, `Uploading ${n + 1} of ${fs.length}…`, `Subiendo ${n + 1} de ${fs.length}…`);
+      try {
+        let src = await readImageResized(f, 1400, 0.82);
+        if (typeof fotoNaNuvem === 'function') src = await fotoNaNuvem(src, x.id || 'novo');
+        $('#galEd').insertAdjacentHTML('beforeend', `<span class="galed-it" data-f="${esc(src)}"><img src="${esc(src)}" alt=""><button type="button" class="galed-x" data-galdel aria-label="${L3('Tirar foto', 'Remove photo', 'Quitar foto')}">×</button><button type="button" class="galed-capa" data-galcapa>${L3('Capa', 'Cover', 'Portada')}</button></span>`);
+        n++;
+      } catch (err) {}
+    }
+    if (st) st.textContent = n ? L3(`${n} foto(s) na galeria — toque em Salvar.`, `${n} photo(s) added — tap Save.`, `${n} foto(s) en la galería — toca Guardar.`) : L3('Não consegui ler essas fotos.', 'Could not read these photos.', 'No pude leer esas fotos.');
+  };
   if ($('#galEd')) $('#galEd').addEventListener('click', (e) => {
     const it = e.target.closest('.galed-it'); if (!it) return;
     if (e.target.closest('[data-galdel]')) it.remove();

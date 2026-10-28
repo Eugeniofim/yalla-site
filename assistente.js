@@ -492,9 +492,9 @@ const IA_FERRAMENTAS = [
   { name: 'ver_bloqueios', description: 'Períodos bloqueados na agenda.', input_schema: obj() },
   { name: 'ver_fotos', description: 'Fotos disponíveis para criativos, com a ref de cada uma.', input_schema: obj() },
   { name: 'ver_marketing', description: 'Plano de postagem (mês AAAA-MM opcional), anúncios e criativos salvos.', input_schema: obj({ mes: S_() }) },
-  { name: 'criar_passeio', description: 'Cria passeio novo como RASCUNHO.', input_schema: obj({ nome: S_(), descricao: S_(), preco: N_(), por: { type: 'string', enum: ['pessoa', 'sessao'] }, min: { type: 'integer' }, max: { type: 'integer' }, duracao: S_(), ponto_encontro: S_(), foto: { type: 'string', description: 'ref da foto de capa (das fotos enviadas no chat ou de ver_fotos)' } }, ['nome', 'preco']) },
+  { name: 'criar_passeio', description: 'Cria passeio novo como RASCUNHO.', input_schema: obj({ nome: S_(), descricao: S_(), preco: N_(), por: { type: 'string', enum: ['pessoa', 'sessao', 'hora'], description: 'hora = preço da HORA (ex.: iate a USD 209 a hora)' }, min_horas: { type: 'integer', description: 'só no "por hora": mínimo de horas que ela vende' }, min: { type: 'integer' }, max: { type: 'integer' }, duracao: S_(), ponto_encontro: S_(), foto: { type: 'string', description: 'ref da foto de capa (das fotos enviadas no chat ou de ver_fotos)' } }, ['nome', 'preco']) },
   { name: 'alterar_passeio', description: 'Altera nome, descrição, encontro, duração, grupo ou publicação de um passeio.', input_schema: obj({ passeio_id: S_(), nome: S_(), descricao: S_(), ponto_encontro: S_(), duracao: S_(), min: { type: 'integer' }, max: { type: 'integer' }, publicado: { type: 'boolean' } }, ['passeio_id']) },
-  { name: 'mudar_preco', description: 'Muda o preço (adulto e/ou criança) de um passeio.', input_schema: obj({ passeio_id: S_(), preco: N_(), preco_crianca: N_() }, ['passeio_id']) },
+  { name: 'mudar_preco', description: 'Muda o preço (adulto e/ou criança) de um passeio e como ele é cobrado (por pessoa, por sessão ou POR HORA, com o mínimo de horas).', input_schema: obj({ passeio_id: S_(), preco: N_(), preco_crianca: N_(), por: { type: 'string', enum: ['pessoa', 'sessao', 'hora'] }, min_horas: { type: 'integer' } }, ['passeio_id']) },
   { name: 'adicionar_horario', description: 'Adiciona horário fixo: dias da semana, hora, vagas, período.', input_schema: obj({ passeio_id: S_(), dias: { type: 'array', items: { type: 'string', enum: DIAS } }, hora: S_('HH:MM'), vagas: { type: 'integer' }, de: S_(), ate: S_() }, ['passeio_id', 'dias', 'hora']) },
   { name: 'remover_horario', description: 'Remove um horário fixo (id de ver_passeios).', input_schema: obj({ horario_id: S_() }, ['horario_id']) },
   { name: 'bloquear_datas', description: 'Bloqueia um período: nenhum passeio sai. Não cancela reservas.', input_schema: obj({ de: S_(), ate: S_(), motivo: S_() }, ['de']) },
@@ -600,13 +600,14 @@ function iaPlano(nome, i) {
   const m = Mkt.get();
   if (nome === 'criar_passeio') {
     const preco = +i.preco; if (!i.nome || !(preco > 0)) return E_('faltou nome ou preço');
-    const porSessao = i.por === 'sessao';
+    /* POR HORA (28/10/2026, a Milla: "por HORA, não por sessão" — e o assistente respondia que o app só aceitava pessoa ou sessão) */
+    const porHora = i.por === 'hora', porSessao = i.por === 'sessao' || porHora, minHoras = porHora ? Math.max(1, Math.round(+i.min_horas || 1)) : 0;
     const min = Math.max(1, +i.min || (porSessao ? 1 : 2)), max = Math.max(min, +i.max || (porSessao ? 4 : 12));
     return { titulo: ia('cCriarPasseio'), assumiu: (!i.min || !i.max) ? [`${ia('cGrupo')} ${min}–${max}`] : [],
-      linhas: [[ia('cNome'), i.nome], [ia('cPreco'), `${eur(preco)} ${ia(porSessao ? 'cPorSessao' : 'cPorPessoa')}`], [ia('cGrupo'), `${min}–${max}`], ...(i.duracao ? [[ia('cDuracao'), i.duracao]] : []), ...(i.foto && fotoSrc(i.foto) ? [[ia('fotoRot'), '📷']] : [])],
+      linhas: [[ia('cNome'), i.nome], [ia('cPreco'), `${eur(preco)} ${porHora ? 'por hora' + (minHoras > 1 ? ` (mínimo ${minHoras} horas)` : '') : ia(porSessao ? 'cPorSessao' : 'cPorPessoa')}`], [ia('cGrupo'), `${min}–${max}`], ...(i.duracao ? [[ia('cDuracao'), i.duracao]] : []), ...(i.foto && fotoSrc(i.foto) ? [[ia('fotoRot'), '📷']] : [])],
       fazer: () => { const nt = Tours.create({ type: 'walk', region: (regioes()[0] || ['cidade'])[0], name: { pt: i.nome, en: i.nome },
         desc: { pt: i.descricao || '', en: '' }, meeting: i.ponto_encontro || '', duration: i.duracao || '', photo: (i.foto && fotoSrc(i.foto)) || 'capa.jpg',
-        price: preco, priceMode: porSessao ? 'session' : 'pp', min, max, payPolicy: 'split', status: 'draft' }); return { ok: true, passeio_id: nt.id }; } };
+        price: preco, priceMode: porHora ? 'hora' : porSessao ? 'session' : 'pp', ...(porHora ? { minHoras } : {}), min, max, payPolicy: 'split', status: 'draft' }); return { ok: true, passeio_id: nt.id }; } };
   }
   if (nome === 'alterar_passeio') {
     const x = Tours.get(i.passeio_id); if (!x) return E_('passeio não encontrado');
@@ -627,6 +628,9 @@ function iaPlano(nome, i) {
       if (v === undefined || v === null || v === '' || !(+v >= 0) || +v === (+x[k] || 0)) continue;
       muda[k] = +v; linhas.push([rot, `${eur(+x[k] || 0)} → ${eur(+v)}`]);
     }
+    const MODO = { pessoa: 'pp', sessao: 'session', hora: 'hora' }, NOME = { pp: 'por pessoa', session: 'por sessão', hora: 'por hora' };
+    if (MODO[i.por] && MODO[i.por] !== (x.priceMode || 'pp')) { muda.priceMode = MODO[i.por]; linhas.push(['Cobrança', `${NOME[x.priceMode] || x.priceMode || 'por pessoa'} → ${NOME[muda.priceMode]}`]); }
+    if ((muda.priceMode || x.priceMode) === 'hora' && i.min_horas != null && Math.max(1, Math.round(+i.min_horas || 1)) !== (+x.minHoras || 1)) { muda.minHoras = Math.max(1, Math.round(+i.min_horas || 1)); linhas.push(['Mínimo', muda.minHoras + ' horas']); }
     if (!Object.keys(muda).length) return E_('nada muda');
     if (muda.price === 0) return E_('preço zero não é permitido');
     return { titulo: ia('cMudarPreco'), linhas, assumiu: [], fazer: () => { Tours.update(x.id, muda); return { ok: true, mudou: muda }; } };
@@ -1025,7 +1029,7 @@ Reel: cena por cena com tempo, imagem, fala literal e direção; gancho nos 3 pr
 Story: uma frase e uma imagem; urgência só com fato e data verdadeiros.
 Resposta a cliente: na língua do cliente, começando pela resposta; concreta (data, hora, preço); termina com uma pergunta que facilita o próximo passo; junto, a versão no idioma do guia.
 Plano de postagem: olhe a agenda; saída com vaga sobrando e data chegando puxa post antes; sem frequência pedida, três por semana. Salve com salvar_posts, legenda pronta.
-Passeio a partir de fotos: quando mandarem fotos pedindo um passeio, descreva o que vê, escolha você mesmo um nome e uma descrição curta com base só no que aparece (sem inventar história do lugar; o guia troca depois) e a melhor foto de capa — não pergunte isso. Pergunte numa mensagem só apenas o que falta de verdade: preço (obrigatório, nunca se inventa) e, se não disseram, duração e ponto de encontro. Com o preço, chame criar_passeio com a melhor foto como capa (foto = ref). As outras fotos servem para criativos.
+Passeio a partir de fotos: quando mandarem fotos pedindo um passeio, descreva o que vê, escolha você mesmo um nome e uma descrição curta com base só no que aparece (sem inventar história do lugar; o guia troca depois) e a melhor foto de capa — não pergunte isso. Pergunte numa mensagem só apenas o que falta de verdade: preço (obrigatório, nunca se inventa) e, se não disseram, duração e ponto de encontro. Com o preço, chame criar_passeio com a melhor foto como capa (foto = ref) e TODAS as fotos que ela mandou em fotos (galeria do passeio). Fotos para um passeio que JÁ EXISTE ("as fotos do iate", "põe na galeria", "troca a capa"): alterar_passeio com fotos (acrescenta na galeria) e/ou capa — nunca diga que não dá.
 Criativo: foto do app num molde (ver_fotos; a fotografia do próprio guia tem prioridade) ou "nenhuma" para fundo na cor da marca com texto explicativo.
 Imagem por IA (gerar_imagem): permitida para fundo, ilustração, conceito ou textura. Nunca para representar um lugar real, o passeio ou pessoas como se fosse foto — isso engana o cliente. Quando usar, diga que a imagem foi gerada por IA.
 Anúncio (Meta): objetivo, público, verba diária e duração com o porquê em uma linha, 2 a 3 versões de texto, qual foto. Ligue à agenda. Nunca prometa resultado. Salve com salvar_anuncio.
@@ -1090,7 +1094,7 @@ async function iaConversa(texto, fotos) {
   iaOcupado = true; iaTravado(true);
   const hist = iaAparaHist(iaLe(IA_HIST, []));
   const refs = fotos.map(f => guardaFoto(f)).filter(Boolean).map(f => f.id);
-  const nota = refs.length ? `\n\n[${refs.length > 1 ? 'fotos guardadas' : 'foto guardada'}; refs (para criativo ou capa de passeio): ${refs.join(', ')}]` : '';
+  const nota = refs.length ? `\n\n[${refs.length > 1 ? 'fotos guardadas' : 'foto guardada'}; refs (para a galeria ou a capa de um passeio, ou criativo): ${refs.join(', ')}]` : '';
   const pergunta = texto || (fotos.length > 1 ? 'O que dá para fazer com estas fotos?' : 'Escreva uma legenda para esta foto.');
   hist.push({ role: 'user', dia: hojeLocalIso(), content: fotos.length ? [...fotos.map(f => {
     const mt = (String(f).match(/^data:([^;]+)/) || [])[1] || 'image/jpeg';
@@ -1127,6 +1131,8 @@ async function iaConversa(texto, fotos) {
    ficava com ~600 px de largura e a letra sumia — o modelo chutava. Agora: imagem normal vai
    com até 1600 px; print COMPRIDO (planilha, conversa) vai em FATIAS na ordem, cada uma com
    largura boa (até 1400 px) e um pedacinho repetido entre elas, para nenhuma linha sumir no corte. */
+/* até 10 fotos por mensagem (28/10/2026: eram 4, e as fotos do iate passavam disso — as outras sumiam sem aviso) */
+const IA_MAX_FOTOS = 10;
 function iaFotosLer(file) {
   return new Promise((ok, falha) => {
     const img = new Image();
@@ -2458,11 +2464,11 @@ function iaDesenha() {
     ta.onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey && !('ontouchstart' in window)) { e.preventDefault(); f.requestSubmit(); } };
     ta.oninput = () => { ta.style.height = ''; ta.style.height = Math.min(140, ta.scrollHeight) + 'px'; };
     corpo.querySelector('#iaClip').onclick = () => arq.click();
-    arq.onchange = async () => { const files = [...arq.files].slice(0, 4 - iaFoto.length); arq.value = ''; for (const file of files) { try { iaFoto.push(...(await iaFotosLer(file))); } catch (e) { iaBolha('erro', e.message); } } iaMostraAnexo(); };
+    arq.onchange = async () => { const todos = [...arq.files], files = todos.slice(0, IA_MAX_FOTOS - iaFoto.length); arq.value = ''; if (todos.length > files.length) iaBolha('erro', `Coube ${files.length} de ${todos.length} fotos — mande o resto em seguida.`); for (const file of files) { try { iaFoto.push(...(await iaFotosLer(file))); } catch (e) { iaBolha('erro', e.message); } } iaMostraAnexo(); };
     /* arrastar/soltar em qualquer lugar da tela e Cmd+V de print: a foto vai pro assistente, igual ao clipe
        (pedido do Eugênio, 01/10/2026 — vale pra todos os apps com assistente) */
     if (!window.__iaSoltaOk) { window.__iaSoltaOk = true;
-      const pega = async (lista) => { const files = [...lista].filter(f => /^image\//.test(f.type)).slice(0, 4 - iaFoto.length); if (!files.length) return;
+      const pega = async (lista) => { const files = [...lista].filter(f => /^image\//.test(f.type)).slice(0, IA_MAX_FOTOS - iaFoto.length); if (!files.length) return;
         if (iaEl && iaEl.g && !iaEl.g.classList.contains('aberta')) iaAbre();
         for (const file of files) { try { iaFoto.push(...(await iaFotosLer(file))); } catch (e) {} }
         iaMostraAnexo(); const t = document.querySelector('#iaTxt'); if (t) t.focus(); };

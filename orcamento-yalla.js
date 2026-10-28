@@ -178,14 +178,26 @@ function oyPorTipo(o) {
    cartão em 12x) ainda não conversa com o app: o app mostra o valor certo de cada jeito, ela cria o
    link lá com esse valor e cola aqui; a proposta mostra o botão certo. Com criança, "por pessoa"
    tem dois links (adulto e criança). */
-const OY_PAG = [['total', 'Total'], ['pessoa', 'Por pessoa'], ['casal', 'Por casal']];
+const OY_PAG = [['total', 'Grupo'], ['casal', 'Casal'], ['pessoa', 'Individual']];   /* as palavras dela (28/10): "dividir o valor total por grupo, casal, individual" */
 const oyPagModo = (o) => OY_PAG.some(x => x[0] === o.pagModo) ? o.pagModo : 'total';
 function oyPagValor(o) {
   const t = oyPorTipo(o), modo = oyPagModo(o), cri = +o.criancas > 0;
   if (modo === 'pessoa') return { modo, v: t.adulto, rot: cri ? 'por adulto' : 'por pessoa', vc: cri ? t.crianca : 0 };
   if (modo === 'casal') return { modo, v: oyCent(t.adulto * 2), rot: 'por casal', vc: 0 };
   const p = +o.pago > 0;
-  return { modo, v: p ? oyPendente(o) : Orc.total(o), rot: p ? 'o que falta pagar' : 'o total', vc: 0 };
+  return { modo, v: p ? oyPendente(o) : Orc.total(o), rot: p ? 'do grupo (o que falta pagar)' : 'do grupo (total)', vc: 0 };
+}
+/* "NÃO INCLUSO" DE UM TOQUE (28/10/2026, a Milla: "dá pra colocar 'Acompanhamento de guia' como opção de
+   só clicar? É muito usado"). O botão põe ou tira a frase do campo. Além do pedido dela, aparecem as
+   frases que ela mesma mais escreveu nos orçamentos (2+ vezes) — nada inventado. */
+const OY_RAP_FIXO = ['Acompanhamento de guia'];
+const oyFrases = (t) => String(t || '').split(/\n|[,;]/).map(x => x.trim().replace(/\.$/, '')).filter(Boolean);
+const oyTemFrase = (t, f) => oyFrases(t).some(x => x.toLowerCase() === f.toLowerCase());
+function oyRapidos() {
+  const n = {};
+  for (const o of DB.orcamentos || []) for (const i of o.itens || []) for (const f of oyFrases(i.naoIncluso)) if (f.length <= 40) { const k = f.toLowerCase(); n[k] = n[k] || { f, c: 0 }; n[k].c++; }
+  const deEla = Object.values(n).filter(x => x.c >= 2).sort((a, b) => b.c - a.c).map(x => x.f);
+  return [...OY_RAP_FIXO, ...deEla].filter((f, k, l) => l.findIndex(y => y.toLowerCase() === f.toLowerCase()) === k).slice(0, 6);
 }
 /* "USD 1.050 por adulto · USD 525 por criança" (sem criança: "USD 1.050 por pessoa") */
 function oyPorTipoTexto(o, curto) {
@@ -446,7 +458,7 @@ function ppDados(o) {
     chegada: o.chegada || null, partida: o.partida || null, moeda: m,
     itens: oyOrdena(o.itens).filter(i => !i.sugestao).map(i => {
       const x = i.tourId && Tours.get(i.tourId);
-      return { data: i.data || '', hora: i.hora || '', horaFim: i.horaFim || '', rotulo: i.rotulo || '', titulo: i.desc || '', horas: x && x.priceMode === 'hora' ? +i.horas || +x.minHoras || 1 : 0,
+      return { ...(o.mostraValores ? { valor: i.aParte ? null : +i.valor || 0 } : {}), data: i.data || '', hora: i.hora || '', horaFim: i.horaFim || '', rotulo: i.rotulo || '', titulo: i.desc || '', horas: x && x.priceMode === 'hora' ? +i.horas || +x.minHoras || 1 : 0,
         texto: i.texto || '', incluso: i.incluso || '', naoIncluso: i.naoIncluso || '', aParte: !!i.aParte,
         obs: i.sugestao || /^Sem preço na tabela/.test(i.obs || '') ? '' : (i.obs || ''), foto: i.foto || '', tipo: i.tipo, voo: i.voo || '',
         cidade: x && regs[x.region] && !['deserto', 'oriente'].includes(x.region) ? regs[x.region] : '' };
@@ -461,6 +473,25 @@ function ppDados(o) {
     condicoes: o.condicoes != null ? o.condicoes : ppTextoPadrao('condicoes'),
     diferencial: o.diferencial != null ? o.diferencial : ppTextoPadrao('diferencial'),
   };
+}
+/* O QUADRO DO INVESTIMENTO mostra SÓ o jeito de cobrar que ela escolheu no orçamento (28/10/2026, a
+   Milla: "aqui aparecer só a opção clicada na montagem do orçamento — o link que gerei é total, então é
+   irrelevante a info do quadro mostarda"). Total: só o total. Por pessoa: por adulto/criança e o
+   quadro "Pagamento individual". Por casal: por casal e "Pagamento por casal". */
+function ppInvestimento(d) {
+  const m = d.moeda, modo = d.pagarModo || 'total', cri = +d.criancas > 0, vat = d.vatPct > 0
+    ? `<p class="pp-vat">${d.itens.some(i => 'valor' in i) ? 'Valores dos serviços sem VAT. ' : ''}Subtotal ${esc(oyM(d.subtotal, m))} + VAT ${esc(String(d.vatPct).replace('.', ','))}% ${esc(oyM(d.vat, m))}. O total já inclui o VAT.</p>` : '';
+  const pago = d.pago > 0 ? `<div class="pp-pago"><span>Pago <b>${esc(oyM(d.pago, m))}</b></span><span>Pendente <b>${esc(oyM(d.pendente, m))}</b></span></div>` : '';
+  const caixa = (rot, v) => `<div><small>${rot}</small><b>${esc(oyM(v, m))}</b></div>`;
+  let extra = '', ind = '';
+  if (modo === 'pessoa' && d.pax > 1) {
+    extra = cri ? caixa('Por adulto', d.porAdulto) + caixa('Por criança', d.porCrianca) : caixa('Por pessoa', d.porPessoa);
+    ind = `<div class="pp-ind">Pagamento individual | ${cri ? `adulto ${esc(oyM(d.porAdulto, m))} · criança ${esc(oyM(d.porCrianca, m))}` : esc(oyM(d.porPessoa, m))}</div>`;
+  } else if (modo === 'casal') {
+    extra = caixa('Por casal', d.pagarValor);
+    ind = `<div class="pp-ind">Pagamento por casal | ${esc(oyM(d.pagarValor, m))}</div>`;
+  }
+  return `<div class="pp-invg${modo === 'pessoa' && cri ? ' pp-tres' : ''}">${caixa('Investimento total', d.total)}${extra}</div>${vat}${pago}${ind}`;
 }
 /* "Pagar agora · USD 2.817" / "Pagar por adulto · USD 971" + "Pagar por criança · USD 873" / "Pagar por casal · USD 1.943" */
 function ppBotoesPagar(d, cls, curto) {
@@ -496,7 +527,7 @@ function ppHtml(d) {
   const tag = (i) => [i.data ? ppSemana(i.data) : '', i.data ? i.data.slice(8, 10) + '/' + i.data.slice(5, 7) : '', ppHoras(i), i.horas ? i.horas + (i.horas > 1 ? ' horas' : ' hora') : '', i.rotulo, i.voo && i.tipo === 'traslado' ? 'voo ' + i.voo : ''].filter(Boolean).join(' | ');
   const cartao = (i) => `<section class="pp-card">
       ${tag(i) ? `<div class="pp-tag">${esc(tag(i))}</div>` : ''}
-      <h3 class="pp-tit">${esc(i.titulo)}${i.aParte ? ' <span class="pp-aparte">(à parte)</span>' : ''}</h3>
+      <h3 class="pp-tit">${esc(i.titulo)}${i.aParte ? ' <span class="pp-aparte">(à parte)</span>' : ''}${'valor' in i && !i.aParte && +i.valor > 0 ? ` <span class="pp-preco">${esc(oyM(+i.valor, d.moeda))}</span>` : ''}</h3>
       ${i.foto ? `<div class="pp-foto" role="img" aria-label="${esc(i.titulo)}" style="background-image:url('${esc(ppFotoUrl(i.foto))}')"></div>` : ''}
       ${i.texto ? `<p>${ppEsc(i.texto)}</p>` : ''}
       ${i.incluso ? `<p class="pp-inc"><b>INCLUSO:</b> ${ppEsc(i.incluso)}</p>` : ''}
@@ -531,15 +562,7 @@ function ppHtml(d) {
   ${d.obs ? `<section class="pp-box"><h3>Observações</h3><p>${ppEsc(d.obs)}</p></section>` : ''}
   ${(d.hoteis || []).length ? `<section class="pp-box"><h3>Hospedagem</h3>${d.hoteis.map(h => `<p class="pp-hot"><b>${esc(h.nome)}</b>${h.de || h.ate ? `<span>${esc([h.de, h.ate].filter(Boolean).map(x => x.slice(8, 10) + '/' + x.slice(5, 7)).join(' a '))}</span>` : ''}${h.situacao ? `<em>${h.situacao === 'incluso' ? 'incluso' : 'à parte'}</em>` : ''}</p>`).join('')}</section>` : ''}
   <section class="pp-inv">
-    <div class="pp-invg${d.criancas > 0 ? ' pp-tres' : ''}">
-      <div><small>Investimento total</small><b>${esc(oyM(d.total, d.moeda))}</b></div>
-      ${d.criancas > 0 ? `<div><small>Por adulto</small><b>${esc(oyM(d.porAdulto, d.moeda))}</b></div><div><small>Por criança</small><b>${esc(oyM(d.porCrianca, d.moeda))}</b></div>`
-        : d.pax > 1 ? `<div><small>Por pessoa</small><b>${esc(oyM(d.porPessoa, d.moeda))}</b></div>` : ''}
-    </div>
-    ${d.vatPct > 0 ? `<p class="pp-vat">Subtotal ${esc(oyM(d.subtotal, d.moeda))} + VAT ${esc(String(d.vatPct).replace('.', ','))}% ${esc(oyM(d.vat, d.moeda))}. O total já inclui o VAT.</p>` : ''}
-    ${d.pago > 0 ? `<div class="pp-pago"><span>Pago <b>${esc(oyM(d.pago, d.moeda))}</b></span><span>Pendente <b>${esc(oyM(d.pendente, d.moeda))}</b></span></div>` : ''}
-    ${d.criancas > 0 ? `<div class="pp-ind">Pagamento individual | adulto ${esc(oyM(d.porAdulto, d.moeda))} · criança ${esc(oyM(d.porCrianca, d.moeda))}</div>`
-      : d.pax > 1 ? `<div class="pp-ind">Pagamento individual | ${esc(oyM(d.porPessoa, d.moeda))}</div>` : ''}
+    ${ppInvestimento(d)}
     ${ppBotoesPagar(d, 'pp-pagar')}
   </section>
   ${d.politica || d.condicoes ? `<section class="pp-box"><h3>Condições e política de cancelamento</h3>
@@ -596,6 +619,7 @@ function ppCss() {
   .pp-inv{background:var(--pp-n);border-radius:18px;padding:22px;margin-bottom:16px;color:#fff}
   .pp-invg{display:grid;grid-template-columns:1fr 1fr;align-items:end;gap:14px;margin:0 0 16px}
   .pp-tres>div:first-child{grid-column:1/-1}
+  .pp-preco{float:right;margin-left:12px;font-weight:800;white-space:nowrap;color:#141414}
   .pp-invg small{display:block;color:var(--pp-ouro);font-weight:800;letter-spacing:.05em;text-transform:uppercase;font-size:12px}
   .pp-invg b{display:block;font-size:clamp(24px,6vw,34px);font-weight:800;margin-top:6px;color:#fff;letter-spacing:-.01em}
   .pp-vat{color:#E9DFC6!important;font-size:13px!important;margin:-6px 0 14px!important}
@@ -775,6 +799,7 @@ function oyTela(id) {
         <label class="fld">O que o cliente vai ler<textarea data-k="texto" rows="4">${esc(i.texto)}</textarea></label>`}
         <label class="fld">Incluso<textarea data-k="incluso" rows="2">${esc(i.incluso)}</textarea></label>
         <label class="fld">Não incluso<textarea data-k="naoIncluso" rows="2">${esc(i.naoIncluso || '')}</textarea></label>
+        <div class="oy-rap" role="group" aria-label="Não incluso de um toque">${oyRapidos().map(t => `<button type="button" class="chip ${oyTemFrase(i.naoIncluso, t) ? 'on' : ''}" data-rap="${esc(t)}" aria-pressed="${oyTemFrase(i.naoIncluso, t)}">${esc(t)}</button>`).join('')}</div>
         <label class="fld">Observação <small class="why">(aparece num balão na proposta e no roteiro)</small><textarea data-k="obs" rows="2" placeholder="Ex.: volta para o hotel por conta do cliente · Sugestão: jantar em Dubai Marina">${esc(/^Sem preço na tabela/.test(i.obs || '') ? '' : (i.obs || ''))}</textarea></label>
         <label class="optin oy-aparte"><input type="checkbox" data-k="aParte" ${i.aParte ? 'checked' : ''}><span><b>À parte</b><small>entra no roteiro, por conta do cliente, sem valor (ex.: Beach Club, brunch)</small></span></label>
         ${x ? (() => { const pc = oyPrecoCrianca(x, i.opcao), idade = +((oyOpcoes(x)[+i.opcao || 0] || {}).idadeCrianca || x.idadeCrianca || 0);
@@ -792,9 +817,9 @@ function oyTela(id) {
           ${so ? `<label class="fld oy-custo2" title="o que você paga a quem faz o serviço — nunca vai para o cliente">Custo (só você vê)<input type="number" min="0" inputmode="decimal" data-k="custo" value="${i.custo || ''}" placeholder="0"></label>`
             : `<label class="fld">Valor ${esc(m)}<input type="number" min="0" inputmode="decimal" data-k="valor" value="${i.valor || ''}" placeholder="0"></label>`}
         </div>
-        ${fotos.length > 1 || (fotos.length && !i.foto) ? `<div class="oy-fotos" role="group" aria-label="Foto na proposta">
+        ${fotos.length || i.foto ? `<span class="op-lbl">Foto na proposta</span><div class="oy-fotos" role="group" aria-label="Foto na proposta">
           <button type="button" class="oy-ft oy-ftno ${!i.foto ? 'on' : ''}" data-foto="" aria-pressed="${!i.foto}">sem foto</button>
-          ${fotos.slice(0, 10).map(f => `<button type="button" class="oy-ft ${i.foto === f ? 'on' : ''}" data-foto="${esc(f)}" aria-pressed="${i.foto === f}" aria-label="usar esta foto" style="background-image:url('${esc(f)}')"></button>`).join('')}
+          ${(i.foto && !fotos.includes(i.foto) ? [i.foto, ...fotos] : fotos).slice(0, 12).map(f => `<button type="button" class="oy-ft ${i.foto === f ? 'on' : ''}" data-foto="${esc(f)}" aria-pressed="${i.foto === f}" aria-label="usar esta foto" style="background-image:url('${esc(f)}')"></button>`).join('')}
         </div>` : ''}
         <div class="oy-itacs">
           ${so ? '' : `<label class="fld oy-custo" title="o que você paga a quem faz o serviço — nunca vai para o cliente">Custo (só você vê)<input type="number" min="0" inputmode="decimal" data-k="custo" value="${i.custo || ''}" placeholder="0"></label>`}
@@ -809,7 +834,7 @@ function oyTela(id) {
     return `<article class="oy-it ${aberto ? 'aberto' : ''}" data-it="${esc(i.id)}">
       <button type="button" class="oy-itcab" data-oyabre="${esc(i.id)}" aria-expanded="${aberto}">
         <span class="oy-ithr">${esc(ppHoras(i) || 'sem horário')}</span>
-        <span class="oy-itn"><b>${esc(i.desc || 'Sem título')}</b>${i.tipo === 'traslado' && i.voo ? `<small>voo ${esc(i.voo)}</small>` : ''}${i.aParte ? '<small>à parte</small>' : !i.valor ? '<small class="oy-alerta">sem valor</small>' : ''}</span>
+        <span class="oy-itn">${i.foto ? `<span class="oy-itf" style="background-image:url('${esc(i.foto)}')" aria-hidden="true"></span>` : ''}<b>${esc(i.desc || 'Sem título')}</b>${i.tipo === 'traslado' && i.voo ? `<small>voo ${esc(i.voo)}</small>` : ''}${i.aParte ? '<small>à parte</small>' : !i.valor ? '<small class="oy-alerta">sem valor</small>' : ''}</span>
         <span class="oy-itv">${i.aParte ? 'à parte' : i.valor ? esc(oyM(i.valor, m)) : '—'}</span>
         <span class="oy-chev">${oyIc('seta')}</span>
       </button>
@@ -834,6 +859,7 @@ function oyTela(id) {
           <div class="oy-c oy-cs" role="cell">
             <input class="oy-ct" data-k="desc" value="${esc(i.desc)}" placeholder="Serviço (ex.: Tour de até 8 horas em Dubai)" aria-label="Serviço">
             <textarea class="oy-cx" data-k="texto" rows="${Math.min(10, Math.max(2, nl + 1))}" placeholder="Detalhes, um por linha (* Visita ao Miracle Garden…)" aria-label="Detalhes">${esc(i.texto)}</textarea>
+            ${i.foto ? `<button type="button" class="oy-cfoto" data-oyabre="${esc(i.id)}" style="background-image:url('${esc(i.foto)}')" aria-label="Foto deste serviço na proposta (toque para trocar)" title="foto na proposta"></button>` : ''}
             ${i.tipo === 'traslado' && i.voo ? `<small class="oy-cvoo">voo ${esc(i.voo)}</small>` : ''}
             ${i.obs && !/^Sem preço na tabela/.test(i.obs) ? `<small class="oy-cobs" title="${esc(i.obs)}">obs: ${esc(i.obs.length > 60 ? i.obs.slice(0, 60) + '…' : i.obs)}</small>` : ''}
           </div>
@@ -966,8 +992,9 @@ function oyValoresHtml(o) {
       <label class="fld" title="o total que você fecha com o cliente; em branco, o app soma os serviços e põe o VAT">Total que você fecha (USD)<input type="number" min="0" step="0.01" inputmode="decimal" id="oyTotInf" value="${oyTotInf(o) || ''}" placeholder="soma dos serviços"></label>
       <label class="fld">Válida até<input type="date" id="oyVal2" value="${esc(o.validade)}"></label>
     </div>
-    <div class="oy-pag"><span class="op-lbl">Link de pagamento cobra</span>
-      <div class="chips" role="group" aria-label="O link de pagamento cobra">${OY_PAG.map(([k, n]) => `<button type="button" class="chip ${oyPagModo(o) === k ? 'on' : ''}" data-pagmodo="${k}" aria-pressed="${oyPagModo(o) === k}">${n}</button>`).join('')}</div>
+    <label class="optin oy-vatck"><input type="checkbox" id="oyMostraVal" ${o.mostraValores ? 'checked' : ''}><span><b>Mostrar o valor de cada serviço na proposta</b><small>desmarcado, a proposta mostra só o total</small></span></label>
+    <div class="oy-pag"><span class="op-lbl">Dividir o valor por</span>
+      <div class="chips" role="group" aria-label="Dividir o valor por">${OY_PAG.map(([k, n]) => `<button type="button" class="chip ${oyPagModo(o) === k ? 'on' : ''}" data-pagmodo="${k}" aria-pressed="${oyPagModo(o) === k}">${n}</button>`).join('')}</div>
       <div id="oyPagV">${oyPagValHtml(o)}</div>
       <label class="fld">Link ${esc(oyPagValor(o).rot)} (Pix e cartão — da sua plataforma)<input type="url" inputmode="url" id="oyLinkPag" value="${esc(o.linkPagamento || '')}" placeholder="https://…" autocomplete="off"></label>
       ${oyPagModo(o) === 'pessoa' && +o.criancas > 0 ? `<label class="fld">Link por criança<input type="url" inputmode="url" id="oyLinkPagC" value="${esc(o.linkPagamentoCrianca || '')}" placeholder="https://…" autocomplete="off"></label>` : ''}
@@ -1022,6 +1049,7 @@ function oyLe(o) {
   if (v('#oyPct') != null) o.sinalPct = +v('#oyPct') || 0;
   if (v('#oyVat') != null && v('#oyVat') !== '') o.vatPct = Math.max(0, +v('#oyVat') || 0);
   const cv = document.getElementById('oyComVat'); if (cv) o.semVat = !cv.checked;
+  const mv = document.getElementById('oyMostraVal'); if (mv) o.mostraValores = !!mv.checked;
   if (v('#oyObs') != null) o.obs = v('#oyObs');
   if (v('#oyPol') != null) { o.politica = v('#oyPol'); o.condicoes = v('#oyCond'); o.diferencial = v('#oyDif'); }
   if (o.status === 'novo') o.status = 'rascunho';
@@ -1079,7 +1107,14 @@ function oyLigaCopia() {
   });
 }
 function oyLiga(o) {
-  const S = oyTela._s, re = () => oySalva(o, true);
+  /* BOTÕES (28/10/2026, ela: "não está me dando a opção de adicionar mais hotel"): cada botão já lê a
+     tela (oyLe) ANTES de mexer; depois só grava e redesenha. Antes o "re" relia a tela velha e
+     desfazia o que o botão tinha acabado de fazer — "+ hotel" sumia, o ✕ do hotel voltava, o "preço
+     da tabela" e o −/+ de adultos não refaziam o valor na planilha. */
+  const S = oyTela._s, re = () => {
+    const d = new Date(); o.salvoEm = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+    Orc.salva(o); ppRepublica(o); oyRedesenha(o);
+  };
   /* digitou: guarda; saiu do campo: redesenha o que depende (valores, ordem dos dias) */
   $$('.oy input, .oy textarea, .oy select').forEach(e => {
     if (e.closest('#oyVal') || e.id === 'orLkNome' || e.id === 'orLkUrl') return;
@@ -1109,6 +1144,12 @@ function oyLiga(o) {
     o[k] = Math.max(0, (+o[k] || 0) + +b.dataset.d);
     if (k === 'adultos' && !o.adultos && !o.criancas) o.adultos = 1;
     oyMudaPax(o, antes); Orc.salva(o); ppRepublica(o); re();
+  });
+  $$('[data-rap]').forEach(b => b.onclick = () => {
+    const box = b.closest('[data-it]'), ta = box && box.querySelector('[data-k="naoIncluso"]'); if (!ta) return;
+    const l = oyFrases(ta.value), f = b.dataset.rap, tem = l.some(x => x.toLowerCase() === f.toLowerCase());
+    ta.value = (tem ? l.filter(x => x.toLowerCase() !== f.toLowerCase()) : [...l, f]).join(', ');
+    b.classList.toggle('on', !tem); b.setAttribute('aria-pressed', String(!tem)); oySalva(o, false);
   });
   $$('[data-foto]').forEach(b => b.onclick = () => { oyLe(o); const i = o.itens.find(z => z.id === S.aberto); if (i) i.foto = b.dataset.foto; Orc.salva(o); re(); });
   $$('[data-rmi]').forEach(b => b.onclick = () => {
@@ -1308,6 +1349,10 @@ function oyCss() {
   .oy-pp b i{font-style:normal;font-size:12px;font-weight:600;color:var(--ink-3)}
   .oy-vatck{margin:0 0 12px}
   .oy-pag{display:grid;gap:8px;margin:4px 0 8px}
+  .oy-rap{display:flex;flex-wrap:wrap;gap:6px;margin:-4px 0 12px}
+  .oy-cfoto{display:block;width:96px;height:64px;margin:6px 0 2px;border:0;border-radius:8px;background-size:cover;background-position:center;background-color:var(--surface-2);cursor:pointer}
+  .oy-itf{float:left;width:40px;height:40px;margin-right:10px;border-radius:8px;background-size:cover;background-position:center}
+  .oy-rap .chip{min-height:36px}
   .oy-pag .chips{display:flex;flex-wrap:wrap;gap:6px}
   .oy-pagv{display:flex;align-items:center;gap:10px;background:var(--surface-2);border-radius:var(--r-md,12px);padding:8px 12px}
   .oy-pagv span{color:var(--ink-3);font-size:13px}.oy-pagv b{margin-left:auto;font-variant-numeric:tabular-nums}
