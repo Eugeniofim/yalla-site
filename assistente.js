@@ -1122,6 +1122,31 @@ async function iaConversa(texto, fotos) {
   finally { pensando.remove(); iaOcupado = false; iaTravado(false); }
 }
 
+/* A IMAGEM QUE O ASSISTENTE LÊ (28/10/2026, ele: "não está lendo direito as imagens e está
+   inventando"). Antes toda foto do chat encolhia para 1280 px: um print de planilha comprido
+   ficava com ~600 px de largura e a letra sumia — o modelo chutava. Agora: imagem normal vai
+   com até 1600 px; print COMPRIDO (planilha, conversa) vai em FATIAS na ordem, cada uma com
+   largura boa (até 1400 px) e um pedacinho repetido entre elas, para nenhuma linha sumir no corte. */
+function iaFotosLer(file) {
+  return new Promise((ok, falha) => {
+    const img = new Image();
+    img.onload = () => {
+      const W = img.width, H = img.height, url = img.src;
+      const fatia = (sy, sh, k) => { const c = document.createElement('canvas'); c.width = Math.round(W * k); c.height = Math.round(sh * k);
+        const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, sy, W, sh, 0, 0, c.width, c.height); return c.toDataURL('image/jpeg', 0.9); };
+      const k = Math.min(1, 1400 / W);
+      /* não é comprida: uma imagem só, com até 1600 px no lado maior */
+      if (H * k <= 1600) { URL.revokeObjectURL(url); return ok([fatia(0, H, Math.min(1, 1600 / Math.max(W, H)))]); }
+      let alt = Math.round(1500 / k), sobra = Math.round(60 / k);
+      while (Math.ceil((H - sobra) / (alt - sobra)) > 8) alt = Math.round(alt * 1.25);
+      const kk = Math.min(k, 1500 / alt) || k, l = [];
+      for (let y = 0; y < H; y += alt - sobra) { const sh = Math.min(alt, H - y); l.push(fatia(y, sh, kk)); if (y + sh >= H) break; }
+      URL.revokeObjectURL(url); ok(l);
+    };
+    img.onerror = () => falha(new Error(ia('eFoto')));
+    img.src = URL.createObjectURL(file);
+  });
+}
 function iaReduzFoto(file, lado) {
   lado = lado || 1280;
   return new Promise((ok, falha) => {
@@ -2433,13 +2458,13 @@ function iaDesenha() {
     ta.onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey && !('ontouchstart' in window)) { e.preventDefault(); f.requestSubmit(); } };
     ta.oninput = () => { ta.style.height = ''; ta.style.height = Math.min(140, ta.scrollHeight) + 'px'; };
     corpo.querySelector('#iaClip').onclick = () => arq.click();
-    arq.onchange = async () => { const files = [...arq.files].slice(0, 4 - iaFoto.length); arq.value = ''; for (const file of files) { try { iaFoto.push(await iaReduzFoto(file)); } catch (e) { iaBolha('erro', e.message); } } iaMostraAnexo(); };
+    arq.onchange = async () => { const files = [...arq.files].slice(0, 4 - iaFoto.length); arq.value = ''; for (const file of files) { try { iaFoto.push(...(await iaFotosLer(file))); } catch (e) { iaBolha('erro', e.message); } } iaMostraAnexo(); };
     /* arrastar/soltar em qualquer lugar da tela e Cmd+V de print: a foto vai pro assistente, igual ao clipe
        (pedido do Eugênio, 01/10/2026 — vale pra todos os apps com assistente) */
     if (!window.__iaSoltaOk) { window.__iaSoltaOk = true;
       const pega = async (lista) => { const files = [...lista].filter(f => /^image\//.test(f.type)).slice(0, 4 - iaFoto.length); if (!files.length) return;
         if (iaEl && iaEl.g && !iaEl.g.classList.contains('aberta')) iaAbre();
-        for (const file of files) { try { iaFoto.push(await iaReduzFoto(file)); } catch (e) {} }
+        for (const file of files) { try { iaFoto.push(...(await iaFotosLer(file))); } catch (e) {} }
         iaMostraAnexo(); const t = document.querySelector('#iaTxt'); if (t) t.focus(); };
       const temArq = (e) => !!(e.dataTransfer && e.dataTransfer.types && [...e.dataTransfer.types].includes('Files'));
       let tt = null;

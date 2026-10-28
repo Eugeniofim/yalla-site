@@ -1433,8 +1433,8 @@ function admConsulta(arg, modo) {
     const r = p.r, b = r.b, o = r.o;
     if (r.tipo === 'orcamento' && r.etapa === 'aberto') return `<a class="mini strong" href="#/adm/consulta/${esc(o.id)}">${o.status === 'enviado' ? 'abrir' : 'montar e mandar'}</a>
       ${o.cliente.whats && o.status === 'enviado' ? `<a class="mini" target="_blank" rel="noopener" data-repesca="${esc(o.id)}" href="${waLink(`Oi ${opPrimeiro(o.cliente.nome)}! Tudo bem? Conseguiu ver o orçamento que te mandei (${o.num})? Se quiser, ajusto alguma coisa. ${guiaNome()}`, opNum(o.cliente.whats))}">💬 repescar</a>` : ''}
-      <button class="mini" data-fecha="${esc(o.id)}">fechou ✓</button><button class="mini ghost" data-perde="${esc(o.id)}">perdido</button>`;
-    if (r.tipo === 'orcamento' && r.etapa === 'perdido') return `<span class="why">${esc(o.motivoPerda || '')}</span><button class="mini ghost" data-reabre="${esc(o.id)}">reabrir</button>`;
+      <button class="mini" data-fecha="${esc(o.id)}">fechou ✓</button><button class="mini ghost" data-perde="${esc(o.id)}">perdido</button><button class="mini ghost danger" data-orcrm="${esc(o.id)}" aria-label="Apagar o orçamento ${esc(o.num)}">apagar</button>`;
+    if (r.tipo === 'orcamento' && r.etapa === 'perdido') return `<span class="why">${esc(o.motivoPerda || '')}</span><button class="mini ghost" data-reabre="${esc(o.id)}">reabrir</button><button class="mini ghost danger" data-orcrm="${esc(o.id)}" aria-label="Apagar o orçamento ${esc(o.num)}">apagar</button>`;
     const ficha = `<a class="mini" href="#/adm/clients/${encodeURIComponent('c:' + (b.clienteId || ''))}">ficha</a>`;
     if (r.etapa === 'confirmado') return `${ficha}<a class="mini" href="#/adm/voucher/${esc(b.id)}">voucher</a>`;
     if (r.etapa === 'avaliar') return `${ficha}${b.whats ? `<a class="mini strong" target="_blank" rel="noopener" data-avalia="${esc(p.linhas.map(x => x.id).join(','))}" href="${waLink(msgAvaliacao(b), opNum(b.whats))}">pedir avaliação</a>` : ''}
@@ -1513,6 +1513,12 @@ function admConsulta(arg, modo) {
   };
   $$('tr[data-ir]').forEach(tr => tr.onclick = (e) => { if (!e.target.closest('a')) location.hash = tr.dataset.ir; });
   $$('[data-fecha]').forEach(b => b.onclick = () => go('/adm/consulta/' + b.dataset.fecha));
+  /* apagar um orçamento que deu errado (28/10/2026, "como a Milla apaga algo que deu errado?") */
+  $$('[data-orcrm]').forEach(b => b.onclick = () => {
+    const o = Orc.get(b.dataset.orcrm); if (!o) return;
+    if (!confirm(`Apagar o orçamento ${o.num}${o.cliente.nome ? ' de ' + o.cliente.nome : ''}? Não dá para desfazer.`)) return;
+    Orc.remove(o.id); toast(`Orçamento ${o.num} apagado`); admConsulta();
+  });
   $$('[data-perde]').forEach(b => b.onclick = () => {
     const box = b.closest('.tacts');
     box.innerHTML = `<select class="crm-motivo">${MOTIVOS_PERDA.map(m => `<option>${m}</option>`).join('')}</select><button class="mini strong" data-perdeok="${esc(b.dataset.perde)}">marcar perdido</button>`;

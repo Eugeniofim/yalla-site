@@ -52,6 +52,8 @@ Orc._item = function (i) {
       : (i.tourId ? 'passeio' : RE_TRANSFER.test(String(i.desc || '')) || /traslado/i.test(String(i.desc || '')) ? 'traslado' : 'livre'),
     auto: !!i.auto,                                /* o valor veio da tabela: muda junto com o nº de pessoas */
     criancas: Math.max(0, Math.min(+i.criancas || 0, Math.max(1, +i.pax || 1))),   /* das pessoas, quantas são crianças */
+    naoIncluso: String(i.naoIncluso || '').trim(),
+    aParte: !!i.aParte,                            /* "(a parte)": entra no roteiro, por conta do cliente, sem valor */
   });
 };
 /* O TOTAL (o que o resto do app já usa: CRM, painel, assistente):
@@ -62,9 +64,18 @@ const OY_VAT = 5;
 const oyCent = (v) => Math.round((+v || 0) * 100) / 100;
 const oyVatPct = (o) => o && o.vatPct != null && o.vatPct !== '' ? Math.max(0, +o.vatPct || 0) : OY_VAT;
 const _oyTotalBase = Orc.total;
-Orc.subtotal = function (o) { return Math.max(0, _oyTotalBase(o) - (+(o && o.desconto) || 0)); };
-Orc.vat = function (o) { return oyCent(Orc.subtotal(o) * oyVatPct(o) / 100); };
-Orc.total = function (o) { return oyCent(Orc.subtotal(o) + Orc.vat(o)); };
+/* O TOTAL QUE ELA INFORMA vale (28/10/2026, ele: "não pode recriar nada, tem que respeitar o
+   que ela pede"): com totalInformado, o total é esse número e o VAT de 5% fica DENTRO dele. */
+const oyTotInf = (o) => +(o && o.totalInformado) || 0;
+Orc.subtotal = function (o) { return oyTotInf(o) > 0 ? oyCent(oyTotInf(o) / (1 + oyVatPct(o) / 100)) : Math.max(0, _oyTotalBase(o) - (+(o && o.desconto) || 0)); };
+Orc.vat = function (o) { return oyTotInf(o) > 0 ? oyCent(oyTotInf(o) - Orc.subtotal(o)) : oyCent(Orc.subtotal(o) * oyVatPct(o) / 100); };
+Orc.total = function (o) { return oyTotInf(o) > 0 ? oyCent(oyTotInf(o)) : oyCent(Orc.subtotal(o) + Orc.vat(o)); };
+/* os hotéis por período ("07-11/11 Sofitel *a parte · 11-12/11 Conrad Abu Dhabi *incluso") */
+function oyHoteis(o, comVazios) {
+  const l = Array.isArray(o.hoteis) ? o.hoteis.filter(h => h && (comVazios || String(h.nome || '').trim())) : [];
+  return l.length ? l : (o.hotel ? [{ de: '', ate: '', nome: o.hotel, situacao: '' }] : []);
+}
+const oyPorCasal = (o) => (+o.adultos || 0) >= 2 ? oyCent(oyPorPessoa(o) * 2) : 0;
 /* SÓ DÓLAR (28/10/2026, pedido dele: "deixar tudo em dólares, somente
    dólares"): o orçamento, a proposta e as reservas que saem dele são em USD */
 const OY_MOEDA = 'USD';
@@ -73,6 +84,7 @@ const OY_MOEDA = 'USD';
 const _oyFechaBase = Orc.fecha;
 Orc.fecha = function (id, opts) {
   const o = Orc.get(id);
+  if (o) oyLigaCliente(o);
   const soma = o ? o.itens.reduce((t, i) => t + (+i.valor || 0), 0) : 0;
   const k = o && soma > 0 ? Orc.total(o) / soma : 1;
   /* os serviços que viram reserva, na mesma ordem e com a mesma regra do Orc.fecha */
@@ -81,7 +93,7 @@ Orc.fecha = function (id, opts) {
   bs.forEach((b, n) => {
     /* o roteiro depois da compra (kit) mostra o que ela escreveu no orçamento */
     const i = usados[n]; if (!i) return;
-    Object.assign(b, { orcTitulo: i.desc || '', orcTexto: i.texto || '', orcIncluso: i.incluso || '', orcFoto: i.foto || '' });
+    Object.assign(b, { orcTitulo: i.desc || '', orcTexto: i.texto || '', orcIncluso: i.incluso || '', orcFoto: i.foto || '', orcObs: /^Sem preço na tabela/.test(i.obs || '') ? '' : (i.obs || '') });
     const par = oyParceiroDe(o); if (par && !b.parceiroId) b.parceiroId = par.id;
     if (i.horaFim) b.horaFim = i.horaFim;
   });
@@ -150,6 +162,17 @@ function oyPrecoItem(x, i) {
   const pr = Bookings.precoDe(x, x.id, i.data || isoToday(), i.hora || '09:00', pax, { opcao: +i.opcao || 0, idades: Array(cri).fill(0) });
   return pr || { total: 0 };
 }
+/* a opção pelo nome que ela diz: exato → palavra inteira ("prime" NÃO pega "non-prime") → trecho */
+function oyAchaOpcao(x, nome) {
+  const n = (v) => String(v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+  const q = n(nome); if (!q) return 0;
+  const l = oyOpcoes(x).map(op => n(oyOpNome(op)));
+  const qe = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  let k = l.findIndex(v => v === q);
+  if (k < 0) k = l.findIndex(v => new RegExp('(^|[^a-z0-9-])' + qe + '($|[^a-z0-9-])').test(v));
+  if (k < 0) k = l.findIndex(v => v.includes(q));
+  return Math.max(0, k);
+}
 /* o nome do serviço com a opção ("Burj Khalifa – At The Top · Após 16:00 (prime)") */
 const oyTituloDe = (x, k) => oyPt(x.name) + (oyTemOpcoes(x) && oyOpNome(oyOpcoes(x)[+k || 0]) ? ' · ' + oyOpNome(oyOpcoes(x)[+k || 0]) : '');
 /* um passeio do catálogo, já com o preço da tabela dela, a opção, o texto, o incluso e a foto */
@@ -165,7 +188,7 @@ function oyDoCatalogo(o, tourId, extra) {
      ("09h00 – 18h00"). Sem nada disso fica em branco — o 09:00 de reserva seria chute. */
   const regra = (DB.rules || []).find(r => r.tourId === tourId);
   const [h1, h2] = oyHorasDe(x, extra.hora || (regra && regra.time) || '');
-  return Orc._item({ ...base, pax, criancas, opcao, desc: oyTituloDe(x, opcao), tipo: x.type === 'transfer' ? 'traslado' : 'passeio', auto: !(+extra.valor > 0),
+  return Orc._item({ ...base, obs: extra.obs || '', pax, criancas, opcao, desc: oyTituloDe(x, opcao), tipo: x.type === 'transfer' ? 'traslado' : 'passeio', auto: !(+extra.valor > 0),
     valor: +extra.valor > 0 ? +extra.valor : base.valor, hora: h1 || '', horaFim: extra.horaFim || h2,
     texto: extra.texto || oyParagrafo(oyPt(x.desc)), incluso: extra.incluso || oyLista(x.includes).join(', '),
     foto: oyFotosDe(x)[0] || '' });
@@ -272,9 +295,78 @@ if (typeof kitServico === 'function') {
     if (b.orcTexto) sv.resumo = b.orcTexto;
     if (b.orcFoto) sv.foto = b.orcFoto;
     if (b.horaFim) sv.horaFim = b.horaFim;
+    if (b.orcObs) sv.obs = b.orcObs;
     const inc = String(b.orcIncluso || '').split(/\n|,\s*(?=[A-ZÀ-Ú])/).map(t => t.trim()).filter(Boolean);
     if (inc.length) sv.inclui = inc;
     return sv;
+  };
+}
+
+/* ---------- A FICHA DO CLIENTE (28/10/2026, ele: "cada cliente precisa ter uma FICHA com todas
+   as infos do passeio e os dados de contato") ----------
+   O orçamento acha ou cria o cadastro (WhatsApp, e-mail ou nome) e guarda o clienteId. Não liga
+   a cada letra digitada (criaria "Ro", "Ros"…): liga quando ela sai do campo, abre a proposta,
+   fecha, ou quando o assistente cria o orçamento. */
+function oyLigaCliente(o) {
+  if (!o || typeof Cadastro === 'undefined') return null;
+  const nome = String((o.cliente && o.cliente.nome) || '').trim(); if (nome.length < 2) return null;
+  let c = o.clienteId && Cadastro.get(o.clienteId);
+  if (!c) { const par = oyParceiroDe(o); c = Cadastro.garante({ nome, whats: o.cliente.whats || '', email: o.cliente.email || '', ...(par ? { parceiroId: par.id, veioPor: par.tipo === 'agencia' ? 'agencia' : 'influencer' } : {}) }); }
+  if (!c) return null;
+  const muda = {};
+  if (o.cliente.whats && !c.whats) muda.whats = o.cliente.whats;
+  if (o.cliente.email && !c.email) muda.email = o.cliente.email;
+  /* nome corrigido no orçamento, cadastro ainda sem reserva: acompanha */
+  if (c.nome !== nome && !Cadastro.reservas(c).length && (Orc.all().filter(x => x.clienteId === c.id).length <= 1)) muda.nome = nome;
+  if (Object.keys(muda).length) Cadastro.salva(c.id, muda);
+  if (o.clienteId !== c.id) { o.clienteId = c.id; const x = Orc.get(o.id); if (x) x.clienteId = c.id; _opSave(); }
+  return c;
+}
+/* os orçamentos de um cliente (pela ficha, pelo WhatsApp ou pelo nome) */
+function oyOrcsDoCliente(c) {
+  const w = String(c.whats || '').replace(/\D/g, '').slice(-8), n = _nomeN(c.nome || '');
+  return Orc.all().filter(o => o.clienteId === c.id || (w.length >= 8 && String(o.cliente.whats || '').replace(/\D/g, '').slice(-8) === w) || (!o.clienteId && n && _nomeN(o.cliente.nome || '') === n));
+}
+const oyDM = (iso) => iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) : '';
+function oyFichaHtml(c) {
+  const l = oyOrcsDoCliente(c); if (!l.length) return '';
+  /* a viagem: a do orçamento fechado; senão, a do mais recente que tem dados de viagem */
+  const temViagem = (x) => (x.chegada && x.chegada.data) || (x.partida && x.partida.data) || oyHoteis(x).length || x.itens.length;
+  const o = l.find(x => x.status === 'fechado') || l.find(temViagem) || l[0];
+  const ch = o.chegada || {}, pa = o.partida || {}, hs = oyHoteis(o);
+  const st = (x) => (ORC_STATUS.find(s2 => s2[0] === x.status) || ['', x.status])[1];
+  return `<section class="card fc-viagem" id="fcViagem">
+    <h3>Viagem e orçamentos</h3>
+    <div class="fc-vg">
+      ${ch.data ? `<div><small>Chegada</small><b>${esc(oyDM(ch.data))}${ch.hora ? ' · ' + esc(ch.hora) : ''}</b>${ch.voo ? `<span>voo ${esc(ch.voo)}</span>` : ''}</div>` : ''}
+      ${pa.data ? `<div><small>Partida</small><b>${esc(oyDM(pa.data))}${pa.hora ? ' · ' + esc(pa.hora) : ''}</b>${pa.voo ? `<span>voo ${esc(pa.voo)}</span>` : ''}</div>` : ''}
+      ${oyPax(o) ? `<div><small>Pessoas</small><b>${esc(oyPaxTexto(o))}</b></div>` : ''}
+    </div>
+    ${hs.length ? `<div class="fc-hots">${hs.map(h => `<p><b>${esc(h.nome)}</b>${h.de || h.ate ? ` <span>${esc([oyDM(h.de), oyDM(h.ate)].filter(Boolean).join(' a '))}</span>` : ''}${h.situacao ? ` <em>${h.situacao === 'incluso' ? 'incluso' : 'à parte'}</em>` : ''}</p>`).join('')}</div>` : ''}
+    <div class="fc-orcs">${l.map(x => { const ds = oyOrdena(x.itens).filter(i => i.data);
+      return `<div class="fc-orc"><div><b>${esc(x.num)}</b> <span class="pill">${esc(st(x))}</span><small>${ds.length ? esc(oyDM(ds[0].data) + (ds.length > 1 ? ' a ' + oyDM(ds[ds.length - 1].data) : '')) + ' · ' : ''}${x.itens.length} ${x.itens.length === 1 ? 'serviço' : 'serviços'} · ${esc(oyM(Orc.total(x), OY_MOEDA))}</small></div>
+        <div class="fc-orc-acs"><a class="mini" href="#/adm/consulta/${esc(x.id)}">abrir</a><a class="mini" href="#/adm/proposta/${esc(x.id)}">proposta</a>${x.status === 'fechado' && (x.bookingIds || []).length && typeof Kit !== 'undefined' ? `<button type="button" class="mini strong" data-fckit="${esc(x.id)}">roteiro</button>` : ''}</div></div>`; }).join('')}</div>
+  </section>`;
+}
+if (typeof admFicha === 'function') {
+  const _oyFicha = admFicha;
+  admFicha = function (arg) {
+    const r = _oyFicha.apply(this, arguments);
+    try {
+      const c = cadastroDaRota(arg); if (!c || document.getElementById('fcViagem')) return r;
+      const html = oyFichaHtml(c); if (!html) return r;
+      const top = document.querySelector('#stage .fc-top'); if (!top) return r;
+      top.insertAdjacentHTML('afterend', html);
+      document.querySelectorAll('[data-fckit]').forEach(b => b.onclick = () => { const x = Orc.get(b.dataset.fckit), bk = x && Bookings.get(x.bookingIds[0]); if (bk) Kit.abrir(Kit.daReserva(bk)); });
+      if (!document.getElementById('fcViagemCss')) { const st = document.createElement('style'); st.id = 'fcViagemCss';
+        st.textContent = `.fc-vg{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:6px 0 10px}
+          .fc-vg>div{background:var(--surface-2);border-radius:12px;padding:10px 12px}.fc-vg small{display:block;color:var(--ink-3);font-size:12px}.fc-vg b{display:block}.fc-vg span{font-size:12.5px;color:var(--ink-2)}
+          .fc-hots p{margin:4px 0}.fc-hots span{color:var(--ink-2);font-size:13px}.fc-hots em{font-style:normal;font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--accent)}
+          .fc-orcs{display:grid;gap:6px;margin-top:10px}.fc-orc{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;align-items:center;border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+          .fc-orc small{display:block;color:var(--ink-3);margin-top:2px}.fc-orc-acs{display:flex;gap:6px;flex-wrap:wrap}`;
+        document.head.appendChild(st); }
+    } catch (e) {}
+    return r;
   };
 }
 
@@ -287,15 +379,17 @@ function ppDados(o) {
     tipo: 'proposta', v: 1, num: o.num, negocio: guiaNegocio(),
     contato: { whats: DB.settings.whats || '', email: g.email || DB.settings.email || '', insta: DB.settings.insta || '' },
     nome: o.cliente.nome || '', pessoas: oyPaxTexto(o), pax: oyPax(o), hotel: o.hotel || '',
+    hoteis: oyHoteis(o).map(h => ({ nome: String(h.nome || '').trim(), de: h.de || '', ate: h.ate || '', situacao: h.situacao || '' })),
     chegada: o.chegada || null, partida: o.partida || null, moeda: m,
     itens: oyOrdena(o.itens).filter(i => !i.sugestao).map(i => {
       const x = i.tourId && Tours.get(i.tourId);
       return { data: i.data || '', hora: i.hora || '', horaFim: i.horaFim || '', rotulo: i.rotulo || '', titulo: i.desc || '',
-        texto: i.texto || '', incluso: i.incluso || '', foto: i.foto || '', tipo: i.tipo, voo: i.voo || '',
+        texto: i.texto || '', incluso: i.incluso || '', naoIncluso: i.naoIncluso || '', aParte: !!i.aParte,
+        obs: i.sugestao || /^Sem preço na tabela/.test(i.obs || '') ? '' : (i.obs || ''), foto: i.foto || '', tipo: i.tipo, voo: i.voo || '',
         cidade: x && regs[x.region] && !['deserto', 'oriente'].includes(x.region) ? regs[x.region] : '' };
     }),
     subtotal: Orc.subtotal(o), vatPct: oyVatPct(o), vat: Orc.vat(o),
-    total: Orc.total(o), porPessoa: oyPorPessoa(o), pago: +o.pago || 0, pendente: oyPendente(o),
+    total: Orc.total(o), porPessoa: oyPorPessoa(o), porCasal: oyPorCasal(o), pago: +o.pago || 0, pendente: oyPendente(o),
     validade: o.validade || '', obs: o.obs || '',
     pagar: /^https:\/\//i.test(String(o.linkPagamento || '').trim()) ? String(o.linkPagamento).trim() : '',
     politica: o.politica != null ? o.politica : ppTextoPadrao('politica'),
@@ -328,10 +422,12 @@ function ppHtml(d) {
   const tag = (i) => [i.data ? ppSemana(i.data) : '', i.data ? i.data.slice(8, 10) + '/' + i.data.slice(5, 7) : '', ppHoras(i), i.rotulo, i.voo && i.tipo === 'traslado' ? 'voo ' + i.voo : ''].filter(Boolean).join(' | ');
   const cartao = (i) => `<section class="pp-card">
       ${tag(i) ? `<div class="pp-tag">${esc(tag(i))}</div>` : ''}
-      <h3 class="pp-tit">${esc(i.titulo)}</h3>
+      <h3 class="pp-tit">${esc(i.titulo)}${i.aParte ? ' <span class="pp-aparte">(à parte)</span>' : ''}</h3>
       ${i.foto ? `<div class="pp-foto" role="img" aria-label="${esc(i.titulo)}" style="background-image:url('${esc(ppFotoUrl(i.foto))}')"></div>` : ''}
       ${i.texto ? `<p>${ppEsc(i.texto)}</p>` : ''}
       ${i.incluso ? `<p class="pp-inc"><b>INCLUSO:</b> ${ppEsc(i.incluso)}</p>` : ''}
+      ${i.naoIncluso ? `<p class="pp-inc"><b>NÃO INCLUSO:</b> ${ppEsc(i.naoIncluso)}</p>` : ''}
+      ${i.obs ? `<div class="pp-obs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8.5 8.5 0 0 1-12.6 7.4L3 21l1.6-5.2A8.5 8.5 0 1 1 21 12Z"/></svg><p>${ppEsc(i.obs)}</p></div>` : ''}
     </section>`;
   const cabDia = (g) => {
     const cid = [...new Set(g.l.map(i => i.cidade).filter(Boolean))].join(' & ');
@@ -351,7 +447,7 @@ function ppHtml(d) {
       <h1>Proposta de<br>experiências</h1>
       ${linha ? `<p>${esc(linha)}</p>` : ''}
       ${ppPeriodo(d) ? `<p>${esc(ppPeriodo(d))}</p>` : ''}
-      ${d.hotel ? `<p>${esc(d.hotel)}</p>` : ''}
+      ${(d.hoteis || []).length > 1 ? `<p>${esc(d.hoteis.map(h => h.nome).join(' · '))}</p>` : d.hotel ? `<p>${esc(d.hotel)}</p>` : ''}
     </div>
   </section>
   ${dias.map(g => `<div class="pp-dia">
@@ -359,10 +455,11 @@ function ppHtml(d) {
     ${g.l.slice(1).map(cartao).join('')}
   </div>`).join('')}
   ${d.obs ? `<section class="pp-box"><h3>Observações</h3><p>${ppEsc(d.obs)}</p></section>` : ''}
+  ${(d.hoteis || []).length ? `<section class="pp-box"><h3>Hospedagem</h3>${d.hoteis.map(h => `<p class="pp-hot"><b>${esc(h.nome)}</b>${h.de || h.ate ? `<span>${esc([h.de, h.ate].filter(Boolean).map(x => x.slice(8, 10) + '/' + x.slice(5, 7)).join(' a '))}</span>` : ''}${h.situacao ? `<em>${h.situacao === 'incluso' ? 'incluso' : 'à parte'}</em>` : ''}</p>`).join('')}</section>` : ''}
   <section class="pp-inv">
     <div class="pp-invg">
       <div><small>Investimento total</small><b>${esc(oyM(d.total, d.moeda))}</b></div>
-      ${d.pax > 1 ? `<div><small>Por pessoa</small><b>${esc(oyM(d.porPessoa, d.moeda))}</b></div>` : ''}
+      ${d.pax > 1 ? `<div><small>Por pessoa</small><b>${esc(oyM(d.porPessoa, d.moeda))}</b>${d.porCasal ? `<small class="pp-casal">por casal ${esc(oyM(d.porCasal, d.moeda))}</small>` : ''}</div>` : ''}
     </div>
     ${d.vatPct > 0 ? `<p class="pp-vat">Subtotal ${esc(oyM(d.subtotal, d.moeda))} + VAT ${esc(String(d.vatPct).replace('.', ','))}% ${esc(oyM(d.vat, d.moeda))}. O total já inclui o VAT.</p>` : ''}
     ${d.pago > 0 ? `<div class="pp-pago"><span>Pago <b>${esc(oyM(d.pago, d.moeda))}</b></span><span>Pendente <b>${esc(oyM(d.pendente, d.moeda))}</b></span></div>` : ''}
@@ -425,6 +522,16 @@ function ppCss() {
   .pp-invg small{display:block;color:var(--pp-ouro);font-weight:800;letter-spacing:.05em;text-transform:uppercase;font-size:12px}
   .pp-invg b{display:block;font-size:clamp(24px,6vw,34px);font-weight:800;margin-top:6px;color:#fff;letter-spacing:-.01em}
   .pp-vat{color:#E9DFC6!important;font-size:13px!important;margin:-6px 0 14px!important}
+  .pp-obs{display:flex;gap:10px;align-items:flex-start;margin:6px 0 10px;padding:11px 14px;border-radius:14px 14px 14px 4px;background:#FBF3DC;border:1px solid #EAD9A6}
+  .pp-obs svg{flex:none;width:18px;height:18px;margin-top:2px;color:var(--pp-ouro-t)}
+  .pp-obs p{margin:0!important;color:var(--pp-n)!important;font-size:14px!important}
+  .pp-casal{color:#E9DFC6!important;letter-spacing:0!important;text-transform:none!important;font-weight:600!important;margin-top:6px}
+  .pp-aparte{font-weight:500;color:var(--pp-t);font-size:14px}
+  .pp-hot{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;padding:6px 0;border-top:1px solid #EFE6CF}
+  .pp-hot:first-of-type{border-top:0}
+  .pp-hot b{color:var(--pp-n)}
+  .pp-hot span{color:var(--pp-t);font-size:13.5px}
+  .pp-hot em{font-style:normal;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--pp-ouro-t)}
   .pp-pago{display:flex;flex-wrap:wrap;gap:8px 18px;margin:0 0 14px;color:#E9DFC6;font-size:14px}
   .pp-pago b{color:#fff}
   .pp-ind{background:var(--pp-ouro);color:#1a1405;border-radius:10px;padding:14px;text-align:center;font-weight:800;letter-spacing:.02em}
@@ -512,6 +619,7 @@ ROTAS_EXTRA['pp'] = (partes) => abrePublico(partes, (d) => d && d.tipo === 'prop
 /* ---------- 4. a proposta dentro do painel: conferir, PDF, link, WhatsApp ---------- */
 async function ppAdm(id) {
   const o = Orc.get(id); if (!o) return go('/adm/consulta');
+  oyLigaCliente(o);
   ppCss();
   document.body.classList.add('em-adm');
   const temWa = !!opNum(o.cliente.whats);
@@ -587,6 +695,9 @@ function oyTela(id) {
         <label class="fld">Título<input data-k="desc" value="${esc(i.desc)}"></label>
         <label class="fld">O que o cliente vai ler<textarea data-k="texto" rows="4">${esc(i.texto)}</textarea></label>`}
         <label class="fld">Incluso<textarea data-k="incluso" rows="2">${esc(i.incluso)}</textarea></label>
+        <label class="fld">Não incluso<textarea data-k="naoIncluso" rows="2">${esc(i.naoIncluso || '')}</textarea></label>
+        <label class="fld">Observação <small class="why">(aparece num balão na proposta e no roteiro)</small><textarea data-k="obs" rows="2" placeholder="Ex.: volta para o hotel por conta do cliente · Sugestão: jantar em Dubai Marina">${esc(/^Sem preço na tabela/.test(i.obs || '') ? '' : (i.obs || ''))}</textarea></label>
+        <label class="optin oy-aparte"><input type="checkbox" data-k="aParte" ${i.aParte ? 'checked' : ''}><span><b>À parte</b><small>entra no roteiro, por conta do cliente, sem valor (ex.: Beach Club, brunch)</small></span></label>
         ${x ? (() => { const pc = oyPrecoCrianca(x, i.opcao), idade = +((oyOpcoes(x)[+i.opcao || 0] || {}).idadeCrianca || x.idadeCrianca || 0);
           return `<div class="oy-g3 oy-opc">
           ${oyTemOpcoes(x) ? `<label class="fld oy-opsel">Opção<select data-k="opcao">${oyOpcoes(x).map((op, k) => `<option value="${k}" ${+i.opcao === k ? 'selected' : ''}>${esc(oyOpNome(op) || 'Opção ' + (k + 1))} · ${esc(oyM(+op.preco || 0, m))}</option>`).join('')}</select></label>` : ''}
@@ -615,10 +726,10 @@ function oyTela(id) {
   const linhaItem = (i) => {
     const aberto = S.aberto === i.id;
     return `<article class="oy-it ${aberto ? 'aberto' : ''}" data-it="${esc(i.id)}">
-      <button type="button" class="oy-itcab" data-abre="${esc(i.id)}" aria-expanded="${aberto}">
+      <button type="button" class="oy-itcab" data-oyabre="${esc(i.id)}" aria-expanded="${aberto}">
         <span class="oy-ithr">${esc(ppHoras(i) || 'sem horário')}</span>
-        <span class="oy-itn"><b>${esc(i.desc || 'Sem título')}</b>${i.tipo === 'traslado' && i.voo ? `<small>voo ${esc(i.voo)}</small>` : ''}${!i.valor ? '<small class="oy-alerta">sem valor</small>' : ''}</span>
-        <span class="oy-itv">${i.valor ? esc(oyM(i.valor, m)) : '—'}</span>
+        <span class="oy-itn"><b>${esc(i.desc || 'Sem título')}</b>${i.tipo === 'traslado' && i.voo ? `<small>voo ${esc(i.voo)}</small>` : ''}${i.aParte ? '<small>à parte</small>' : !i.valor ? '<small class="oy-alerta">sem valor</small>' : ''}</span>
+        <span class="oy-itv">${i.aParte ? 'à parte' : i.valor ? esc(oyM(i.valor, m)) : '—'}</span>
         <span class="oy-chev">${oyIc('seta')}</span>
       </button>
       ${aberto ? `<div class="oy-ited">${campos(i, false)}</div>` : ''}
@@ -632,7 +743,7 @@ function oyTela(id) {
     return `<div class="oy-sheet" role="table" aria-label="Roteiro">
       <div class="oy-shh" role="row"><span role="columnheader">Dia</span><span role="columnheader">Horário</span><span role="columnheader">Serviço e detalhes</span><span role="columnheader" class="oy-r">Valor ${esc(m)}</span><span role="columnheader"><span class="sr">Mais</span></span></div>
       ${itens.map(i => {
-        const band = i.data !== ult ? `<div class="oy-band" role="row"><span role="cell">${esc(oyDiaLongo(i.data))}</span></div>` : '';
+        const band = i.data !== ult ? `<div class="oy-band" role="row"><span role="cell">${esc(oyDiaLongo(i.data))}</span>${i.data ? `<button type="button" class="oy-band-add" data-adddia="${esc(i.data)}" aria-label="Acrescentar passeio em ${esc(oyDiaLongo(i.data))}">+ neste dia</button>` : ''}</div>` : '';
         ult = i.data;
         const aberto = S.aberto === i.id;
         const nl = (i.texto || '').split('\n').length;
@@ -643,9 +754,10 @@ function oyTela(id) {
             <input class="oy-ct" data-k="desc" value="${esc(i.desc)}" placeholder="Serviço (ex.: Tour de até 8 horas em Dubai)" aria-label="Serviço">
             <textarea class="oy-cx" data-k="texto" rows="${Math.min(10, Math.max(2, nl + 1))}" placeholder="Detalhes, um por linha (* Visita ao Miracle Garden…)" aria-label="Detalhes">${esc(i.texto)}</textarea>
             ${i.tipo === 'traslado' && i.voo ? `<small class="oy-cvoo">voo ${esc(i.voo)}</small>` : ''}
+            ${i.obs && !/^Sem preço na tabela/.test(i.obs) ? `<small class="oy-cobs" title="${esc(i.obs)}">obs: ${esc(i.obs.length > 60 ? i.obs.slice(0, 60) + '…' : i.obs)}</small>` : ''}
           </div>
-          <label class="oy-c oy-cv" role="cell"><span class="sr">Valor ${esc(m)}</span><input type="number" min="0" inputmode="decimal" data-k="valor" value="${i.valor || ''}" placeholder="0"></label>
-          <span class="oy-c" role="cell"><button type="button" class="oy-cm" data-abre="${esc(i.id)}" aria-expanded="${aberto}" aria-label="Mais deste serviço: incluso, foto, pessoas, custo">⋯</button></span>
+          <label class="oy-c oy-cv" role="cell"><span class="sr">Valor ${esc(m)}</span>${i.aParte ? '<span class="oy-aparte-v">à parte</span>' : `<input type="number" min="0" inputmode="decimal" data-k="valor" value="${i.valor || ''}" placeholder="0">`}</label>
+          <span class="oy-c oy-cacs" role="cell"><button type="button" class="oy-cm" data-oyabre="${esc(i.id)}" aria-expanded="${aberto}" aria-label="Mais deste serviço: incluso, foto, pessoas, custo, observação">⋯</button><button type="button" class="oy-cm oy-crm" data-rmi="${esc(i.id)}" aria-label="Tirar este serviço" title="tirar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:17px;height:17px"><path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13M10 11v6M14 11v6"/></svg></button></span>
         </div>${aberto ? `<div class="oy-rowmais" data-it="${esc(i.id)}">${campos(i, true)}</div>` : ''}`;
       }).join('')}
     </div>`;
@@ -657,7 +769,7 @@ function oyTela(id) {
   <div class="oy">
     <div class="oy-top">
       <a class="linkbtn" href="#/adm/consulta">← Orçamentos</a>
-      <div class="oy-tit"><h1 class="pageh">${esc(o.num)}</h1><span class="pill">${esc(st)}</span><small class="oy-salvo" id="oySalvo" aria-live="polite"></small></div>
+      <div class="oy-tit"><h1 class="pageh">${esc(o.num)}</h1><span class="pill">${esc(st)}</span><small class="oy-salvo" id="oySalvo" aria-live="polite">${o.salvoEm ? 'salvo às ' + esc(o.salvoEm) : 'salva sozinho'}</small></div>
     </div>
 
     <section class="card oy-card">
@@ -673,7 +785,14 @@ function oyTela(id) {
             <output id="oy-${k}">${+o[k] || 0}</output>
             <button type="button" data-step="${k}" data-d="1" aria-label="mais">+</button></div></div>`).join('')}
       </div>
-      <label class="fld">Hotel<input id="oyHotel" value="${esc(o.hotel || '')}" autocomplete="off" placeholder="Ex.: W Dubai The Palm"></label>
+      <div class="oy-hots"><span class="op-lbl">Hotéis</span>
+        ${(oyHoteis(o, true).length ? oyHoteis(o, true) : [{ de: '', ate: '', nome: '', situacao: '' }]).map((h, k) => `<div class="oy-hot" data-h="${k}">
+          <label class="fld"><span class="sr">Hotel</span><input data-hk="nome" value="${esc(h.nome || '')}" placeholder="Ex.: Sofitel Downtown" aria-label="Hotel" autocomplete="off"></label>
+          <label class="fld"><span class="sr">De</span><input type="date" data-hk="de" value="${esc(h.de || '')}" aria-label="Entrada"></label>
+          <label class="fld"><span class="sr">Até</span><input type="date" data-hk="ate" value="${esc(h.ate || '')}" aria-label="Saída"></label>
+          <label class="fld"><span class="sr">Situação</span><select data-hk="situacao" aria-label="Situação"><option value="">—</option><option value="incluso" ${h.situacao === 'incluso' ? 'selected' : ''}>incluso</option><option value="a parte" ${h.situacao === 'a parte' ? 'selected' : ''}>à parte</option></select></label>
+          <button type="button" class="mini ghost" data-hrm="${k}" aria-label="Tirar este hotel">✕</button></div>`).join('')}
+        <button type="button" class="mini" id="oyHotAdd">+ hotel</button></div>
       ${typeof Parceiros !== 'undefined' && Parceiros.all().length ? (() => { const par = oyParceiroDe(o); return `<label class="fld">Indicado por (parceiro)<select id="oyPar"><option value="">ninguém</option>${Parceiros.all().map(p => `<option value="${esc(p.id)}" ${par && par.id === p.id ? 'selected' : ''}>${esc(p.nome)}${p.cupom ? ' · ' + esc(p.cupom) : ''}${p.comissao ? ' · ' + p.comissao + '%' : ''}</option>`).join('')}</select></label>`; })() : ''}
       <div class="oy-g2">
         ${[['chegada', 'Chegada'], ['partida', 'Partida']].map(([k, n]) => `<fieldset class="oy-voo"><legend>${n}</legend>
@@ -688,7 +807,7 @@ function oyTela(id) {
     <section class="card oy-card">
       <div class="oy-hrow"><h2 class="oy-h">Roteiro</h2><span class="oy-sub">${o.itens.length ? `${o.itens.length} ${o.itens.length === 1 ? 'serviço' : 'serviços'}${nDias ? ' · ' + nDias + (nDias === 1 ? ' dia' : ' dias') : ''}` : ''}</span></div>
       ${!o.itens.length ? '<p class="why">Nenhum serviço ainda. Comece pelo passeio, pelo traslado de chegada ou por uma linha em branco.</p>'
-        : largo ? planilha() : grupos.map(g => `<div class="oy-dia"><h3 class="oy-diah">${esc(oyDiaCurto(g.d))}</h3>${g.l.map(linhaItem).join('')}</div>`).join('')}
+        : largo ? planilha() : grupos.map(g => `<div class="oy-dia"><h3 class="oy-diah"><span>${esc(oyDiaCurto(g.d))}</span>${g.d ? `<button type="button" class="oy-band-add" data-adddia="${esc(g.d)}" aria-label="Acrescentar passeio em ${esc(oyDiaCurto(g.d))}">+ neste dia</button>` : ''}</h3>${g.l.map(linhaItem).join('')}</div>`).join('')}
       <div class="oy-add" role="group" aria-label="Acrescentar ao roteiro">
         <button type="button" class="oy-addb oy-addf" id="oyAddP">${oyIc('mais')}<span>Passeio</span></button>
         <button type="button" class="oy-addb" data-tr="chegada">${oyIc('aviao')}<span>Traslado chegada</span></button>
@@ -732,7 +851,7 @@ function oyTela(id) {
 
     <div class="savebar oy-barra">
       <span class="sbwhat">${esc(oyM(Orc.total(o), m))}${oyPax(o) > 1 ? ' · ' + esc(oyM(oyPorPessoa(o), m)) + '/pessoa' : ''}</span>
-      <a class="cta sm" href="#/adm/proposta/${esc(o.id)}">Ver e enviar a proposta</a>
+      <div class="oy-barra-acs"><button type="button" class="mini strong oy-salvar" id="oySalvar">Salvar</button><a class="cta sm" href="#/adm/proposta/${esc(o.id)}">Ver e enviar a proposta</a></div>
     </div>
   </div>`);
   oyLiga(o);
@@ -742,13 +861,14 @@ function oyValoresHtml(o) {
   const m = oyMoeda(o), soma = o.itens.reduce((s, i) => s + (+i.valor || 0), 0);
   return `<div class="oy-hrow"><h2 class="oy-h">Valores</h2></div>
     <div class="oy-tot">
-      <div><small>Total com VAT</small><b>${esc(oyM(Orc.total(o), m))}</b><small>${esc(oyM(Orc.subtotal(o), m))}${+o.desconto ? ' (com desconto)' : ''} + VAT ${esc(String(oyVatPct(o)).replace('.', ','))}% ${esc(oyM(Orc.vat(o), m))}</small></div>
-      <div><small>Por pessoa</small><b>${oyPax(o) ? esc(oyM(oyPorPessoa(o), m)) : '—'}</b><small>${esc(oyPaxTexto(o) || 'informe as pessoas')}</small></div>
+      <div><small>${oyTotInf(o) ? 'Total que você fechou' : 'Total com VAT'}</small><b>${esc(oyM(Orc.total(o), m))}</b><small>${oyTotInf(o) ? 'já com VAT ' + esc(String(oyVatPct(o)).replace('.', ',')) + '% (' + esc(oyM(Orc.vat(o), m)) + ') dentro · serviços somam ' + esc(oyM(soma, m)) : esc(oyM(Orc.subtotal(o), m)) + (+o.desconto ? ' (com desconto)' : '') + ' + VAT ' + esc(String(oyVatPct(o)).replace('.', ',')) + '% ' + esc(oyM(Orc.vat(o), m))}</small></div>
+      <div><small>Por pessoa</small><b>${oyPax(o) ? esc(oyM(oyPorPessoa(o), m)) : '—'}</b><small>${esc(oyPaxTexto(o) || 'informe as pessoas')}${oyPorCasal(o) ? ' · por casal ' + esc(oyM(oyPorCasal(o), m)) : ''}</small></div>
       <div><small>Pendente</small><b>${esc(oyM(oyPendente(o), m))}</b></div>
     </div>
     <div class="oy-g3v">
       <label class="fld">Já pago (USD)<input type="number" min="0" inputmode="decimal" id="oyPago" value="${+o.pago || ''}" placeholder="0"></label>
       <label class="fld">Desconto (USD)<input type="number" min="0" inputmode="decimal" id="oyDesc" value="${+o.desconto || ''}" placeholder="0"></label>
+      <label class="fld" title="o total que você fecha com o cliente; em branco, o app soma os serviços e põe o VAT">Total que você fecha (USD)<input type="number" min="0" step="0.01" inputmode="decimal" id="oyTotInf" value="${oyTotInf(o) || ''}" placeholder="soma dos serviços"></label>
       <label class="fld">Válida até<input type="date" id="oyVal2" value="${esc(o.validade)}"></label>
     </div>
     <label class="fld">Link de pagamento (Pix e cartão — da sua plataforma)<input type="url" inputmode="url" id="oyLinkPag" value="${esc(o.linkPagamento || '')}" placeholder="https://…" autocomplete="off"></label>
@@ -760,7 +880,8 @@ function oyLe(o) {
   const v = (s) => { const e = document.querySelector(s); return e ? e.value : null; };
   const nome = v('#oyNome'); if (nome == null) return;
   o.cliente = { nome: nome.trim(), whats: (v('#oyWhats') || '').trim(), email: (v('#oyEmail') ?? o.cliente.email ?? '').trim() };
-  o.hotel = (v('#oyHotel') || '').trim();
+  const hs = [...document.querySelectorAll('.oy-hot')].map(r => { const g = (k) => (r.querySelector(`[data-hk="${k}"]`) || {}).value || ''; return { nome: g('nome').trim(), de: g('de'), ate: g('ate'), situacao: g('situacao') }; });
+  if (hs.length) { o.hoteis = hs; o.hotel = (hs.find(h => h.nome) || {}).nome || ''; }
   if (v('#oyPar') != null) { o.parceiroId = v('#oyPar'); if (!o.parceiroId) o.parceiroCodigo = ''; }
   $$('[data-v]').forEach(e => { const [k, c] = e.dataset.v.split('.'); o[k] = o[k] || {}; o[k][c] = c === 'hora' ? (oyHm(e.value) || e.value.trim()) : e.value.trim(); });
   document.querySelectorAll('.oy [data-it]').forEach(box => {
@@ -779,6 +900,7 @@ function oyLe(o) {
       /* "09:00–17:00", "9h às 17h", "19:30" */
       else if (k === 'faixa') { const [a, b] = String(e.value).split(/\s*(?:–|—|-|às|as|até|ate|a)\s*/i); i.hora = oyHm(a) || ''; i.horaFim = oyHm(b) || ''; }
       else if (k === 'opcao') i.opcao = Math.max(0, +e.value || 0);
+      else if (k === 'aParte') { i.aParte = !!e.checked; if (i.aParte) { i.valor = 0; i.auto = false; } }
       else if (k === 'adultosIt' || k === 'criancas') { /* já lidos acima */ }
       else i[k] = e.value;
     });
@@ -790,7 +912,7 @@ function oyLe(o) {
     }
   });
   const n = (s, d) => { const x = v(s); return x == null ? d : (+x || 0); };
-  o.pago = n('#oyPago', o.pago); o.desconto = n('#oyDesc', o.desconto);
+  o.pago = n('#oyPago', o.pago); o.desconto = n('#oyDesc', o.desconto); o.totalInformado = n('#oyTotInf', o.totalInformado || 0);
   if (v('#oyLinkPag') != null) o.linkPagamento = String(v('#oyLinkPag')).trim();
   o.moeda = OY_MOEDA; o.validade = v('#oyVal2') || o.validade;
   if (v('#oySt')) o.status = v('#oySt');
@@ -811,8 +933,10 @@ function oyRedesenha(o) {
   }, 0);
 }
 function oySalva(o, redesenha) {
-  oyLe(o); Orc.salva(o); ppRepublica(o);
-  const s = $('#oySalvo'); if (s) { s.textContent = 'salvo'; clearTimeout(_oyT); _oyT = setTimeout(() => { const z = $('#oySalvo'); if (z) z.textContent = ''; }, 1600); }
+  oyLe(o);
+  const d = new Date(); o.salvoEm = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  Orc.salva(o); ppRepublica(o);
+  const s = $('#oySalvo'); if (s) s.textContent = 'salvo às ' + o.salvoEm;
   if (redesenha) { oyRedesenha(o); return; }
   const val = $('#oyVal'); if (val && !val.contains(document.activeElement)) { val.innerHTML = oyValoresHtml(o); oyLigaValores(o); }
   const bar = document.querySelector('.oy-barra .sbwhat'); if (bar) bar.textContent = oyM(Orc.total(o), oyMoeda(o)) + (oyPax(o) > 1 ? ' · ' + oyM(oyPorPessoa(o), oyMoeda(o)) + '/pessoa' : '');
@@ -826,10 +950,20 @@ function oyLiga(o) {
   $$('.oy input, .oy textarea, .oy select').forEach(e => {
     if (e.closest('#oyVal') || e.id === 'orLkNome' || e.id === 'orLkUrl') return;
     e.oninput = () => { clearTimeout(e._t); e._t = setTimeout(() => oySalva(o, false), 700); };
+    /* DATA (28/10/2026, "as datas selecionadas estão mudando/bugando"): no computador o campo de
+       data dispara "change" a cada dígito do ano (0002 → 0020 → 0202 → 2026); redesenhar ali
+       tirava o cursor no meio e a data ficava errada. Agora: enquanto mexe, só guarda; ao SAIR do
+       campo, reorganiza os dias uma vez. */
+    if (e.type === 'date') {
+      e.onchange = () => { e._mudou = true; oySalva(o, false); };
+      e.onblur = () => { if (!e._mudou) return; e._mudou = false; if (/^\d{4}-\d{2}-\d{2}$/.test(e.value) && +e.value.slice(0, 4) < 2000) return; oySalva(o, true); };
+      return;
+    }
     e.onchange = () => {
+      if (['oyNome', 'oyWhats', 'oyEmail'].includes(e.id)) { oyLe(o); Orc.salva(o); oyLigaCliente(o); }
       /* só o que muda a ordem ou o preço redesenha; o valor na planilha só refaz os totais */
       const naPlanilha = !!e.closest('.oy-row');
-      const muda = e.matches('[data-k="data"],[data-k="hora"],[data-k="faixa"],[data-k="pax"],[data-k="opcao"],[data-k="adultosIt"],[data-k="criancas"],[data-v$=".data"]') || (!naPlanilha && e.matches('[data-k="valor"]'));
+      const muda = e.matches('[data-k="aParte"],[data-k="data"],[data-k="hora"],[data-k="faixa"],[data-k="pax"],[data-k="opcao"],[data-k="adultosIt"],[data-k="criancas"],[data-v$=".data"]') || (!naPlanilha && e.matches('[data-k="valor"]'));
       oySalva(o, muda);
     };
   });
@@ -837,7 +971,7 @@ function oyLiga(o) {
   const cresce = (t) => { t.style.height = 'auto'; t.style.height = (t.scrollHeight + 2) + 'px'; };
   $$('.oy-cx').forEach(t => { cresce(t); t.addEventListener('input', () => cresce(t)); });
   oyLigaValores(o);
-  $$('[data-abre]').forEach(b => b.onclick = () => { oyLe(o); Orc.salva(o); S.aberto = S.aberto === b.dataset.abre ? '' : b.dataset.abre; re(); });
+  $$('[data-oyabre]').forEach(b => b.onclick = () => { oyLe(o); Orc.salva(o); S.aberto = S.aberto === b.dataset.oyabre ? '' : b.dataset.oyabre; re(); });
   $$('[data-step]').forEach(b => b.onclick = () => {
     oyLe(o); const antes = oyPax(o), k = b.dataset.step;
     o[k] = Math.max(0, (+o[k] || 0) + +b.dataset.d);
@@ -845,7 +979,11 @@ function oyLiga(o) {
     oyMudaPax(o, antes); Orc.salva(o); ppRepublica(o); re();
   });
   $$('[data-foto]').forEach(b => b.onclick = () => { oyLe(o); const i = o.itens.find(z => z.id === S.aberto); if (i) i.foto = b.dataset.foto; Orc.salva(o); re(); });
-  $$('[data-rmi]').forEach(b => b.onclick = () => { oyLe(o); o.itens = o.itens.filter(i => i.id !== b.dataset.rmi); S.aberto = ''; Orc.salva(o); re(); });
+  $$('[data-rmi]').forEach(b => b.onclick = () => {
+    oyLe(o); const k = o.itens.findIndex(i => i.id === b.dataset.rmi); if (k < 0) return;
+    const [tirado] = o.itens.splice(k, 1); S.aberto = ''; S.desfazer = { item: tirado, k }; Orc.salva(o); re();
+    setTimeout(() => oyDesfazBarra(o), 60);
+  });
   $$('[data-dup]').forEach(b => b.onclick = () => { oyLe(o); const i = o.itens.find(z => z.id === b.dataset.dup); if (!i) return; const n = Orc._item({ ...i, id: '' }); o.itens.push(n); S.aberto = n.id; Orc.salva(o); re(); });
   $$('[data-recalc]').forEach(b => b.onclick = () => {
     oyLe(o); const i = o.itens.find(z => z.id === b.dataset.recalc); if (!i) return;
@@ -858,8 +996,13 @@ function oyLiga(o) {
     if (!p.data) { toast(`Coloque o dia da ${qual === 'chegada' ? 'chegada' : 'partida'} primeiro`); const e = document.querySelector(`[data-v="${qual}.data"]`); if (e) e.focus(); return; }
     const n = oyTraslado(o, qual === 'chegada' ? 'chegada' : 'saida'); o.itens.push(n); S.aberto = n.id; Orc.salva(o); re();
   });
-  $('#oyAddL').onclick = () => { oyLe(o); const n = Orc._item({ tipo: 'livre', desc: '', pax: oyPax(o) || 2, data: oyProximoDia(o) }); o.itens.push(n); S.aberto = matchMedia('(min-width: 761px)').matches ? '' : n.id; Orc.salva(o); re(); setTimeout(() => { const e = document.querySelector(`[data-it="${n.id}"] [data-k="desc"]`); if (e) e.focus(); }, 60); };
+  $('#oyAddL').onclick = () => { oyLe(o); const ult = oyOrdena(o.itens.filter(i => i.data)).pop(); const n = Orc._item({ tipo: 'livre', desc: '', pax: oyPax(o) || 2, data: S.ultimoDia || (ult && ult.data) || oyProximoDia(o) }); o.itens.push(n); S.aberto = matchMedia('(min-width: 761px)').matches ? '' : n.id; Orc.salva(o); re(); setTimeout(() => { const e = document.querySelector(`[data-it="${n.id}"] [data-k="desc"]`); if (e) e.focus(); }, 60); };
   $('#oyAddP').onclick = () => { oyLe(o); Orc.salva(o); oyCatalogo(o); };
+  $$('[data-adddia]').forEach(b => b.onclick = () => { oyLe(o); Orc.salva(o); S.ultimoDia = b.dataset.adddia; oyCatalogo(o, b.dataset.adddia); });
+  /* SALVAR (28/10/2026, "onde está o botão de salvar?"): o app já salva sozinho; o botão confirma */
+  $('#oySalvar').onclick = () => { oySalva(o, false); oyLigaCliente(o); toast('Orçamento salvo ✓'); };
+  $('#oyHotAdd').onclick = () => { oyLe(o); o.hoteis = [...oyHoteis(o, true), { nome: '', de: '', ate: '', situacao: '' }]; Orc.salva(o); re(); };
+  $$('[data-hrm]').forEach(b => b.onclick = () => { oyLe(o); o.hoteis = oyHoteis(o, true).filter((_, k) => k !== +b.dataset.hrm); o.hotel = (o.hoteis.find(h => String(h.nome || '').trim()) || {}).nome || ''; Orc.salva(o); re(); });
   const det = document.querySelector('.oy-mais'); if (det) det.ontoggle = () => { S.mais = det.open; };
   $('#oyPadrao').onclick = () => { oyLe(o); DB.settings.propPolitica = o.politica; DB.settings.propCondicoes = o.condicoes; DB.settings.propDiferencial = o.diferencial; save(); Orc.salva(o); toast('Textos guardados para as próximas propostas'); };
   $('#orLkAdd').onclick = () => { oyLe(o); const r = Orc.linkAdd(o.id, $('#orLkNome').value, $('#orLkUrl').value); if (r && r.erro) return toast(r.erro); re(); };
@@ -869,11 +1012,29 @@ function oyLiga(o) {
   opLigaCards && opLigaCards(re);
 }
 
+/* "Serviço tirado · desfazer" por 8 segundos */
+function oyDesfazBarra(o) {
+  const S = oyTela._s; if (!S || !S.desfazer) return;
+  document.querySelectorAll('.oy-desfaz').forEach(e => e.remove());
+  const el = document.createElement('div'); el.className = 'oy-desfaz'; el.setAttribute('role', 'status');
+  el.innerHTML = `<span>Tirado: ${esc(S.desfazer.item.desc || 'serviço')}</span><button type="button">desfazer</button>`;
+  document.body.appendChild(el);
+  const some = setTimeout(() => { el.remove(); if (S.desfazer) S.desfazer = null; }, 8000);
+  el.querySelector('button').onclick = () => {
+    clearTimeout(some); el.remove(); const x = Orc.get(o.id), d = S.desfazer; if (!x || !d) return;
+    x.itens.splice(Math.min(d.k, x.itens.length), 0, d.item); S.desfazer = null; Orc.salva(x); toast('Voltou'); const y = scrollY; oyTela(o.id); scrollTo(0, y);
+  };
+}
+
 /* a janela do catálogo: busca, filtro por região, um toque acrescenta */
-function oyCatalogo(o) {
+/* 28/10/2026, ele: "quando ela clica em + está indo pra outra data" — antes, depois de cada
+   passeio acrescentado, o dia pulava sozinho para o próximo dia livre. Agora o dia escolhido
+   fica até ela trocar; o "+ neste dia" de cada faixa abre já naquele dia. */
+function oyCatalogo(o, diaFixo) {
   const m = oyMoeda(o);
-  const dias = oyDiasDaViagem(o);
-  const C = oyCatalogo._s = { q: '', r: '', dia: oyProximoDia(o), n: 0 };
+  const dias = oyDiasDaViagem(o); if (diaFixo && !dias.includes(diaFixo)) { dias.push(diaFixo); dias.sort(); }
+  const S0 = oyTela._s || {};
+  const C = oyCatalogo._s = { q: '', r: '', dia: diaFixo || S0.ultimoDia || oyProximoDia(o), n: 0 };
   const d = opJanela('Acrescentar passeio', `
     <div class="oy-cdias">${dias.length ? `<span class="op-lbl">Para o dia</span><div class="chips" id="oyCDias">${dias.map(x => `<button type="button" class="chip ${x === C.dia ? 'on' : ''}" data-cdia="${x}">${esc(oyDiaCurto(x))}</button>`).join('')}</div>`
       : `<label class="fld">Para o dia<input type="date" id="oyCDia" value="${esc(C.dia)}"></label>`}</div>
@@ -910,7 +1071,7 @@ function oyCatalogo(o) {
       if (!n) return;
       o.itens.push(n); Orc.salva(o); ppRepublica(o); C.n++;
       d.querySelector('#oyCN').textContent = `${C.n} acrescentado${C.n > 1 ? 's' : ''} · ${n.desc}${dia ? ' em ' + opCurta(dia) : ''}`;
-      if (dias.length) { const prox = oyProximoDia(o); if (prox && prox !== C.dia && dias.includes(prox)) { C.dia = prox; d.querySelectorAll('[data-cdia]').forEach(c => c.classList.toggle('on', c.dataset.cdia === prox)); } }
+      S0.ultimoDia = C.dia;   /* o próximo passeio vai para o MESMO dia, até ela escolher outro */
       pinta();
     });
   };
@@ -918,8 +1079,8 @@ function oyCatalogo(o) {
   d.querySelector('#oyCQ').oninput = (e) => { C.q = e.target.value; pinta(); };
   if (typeof matchMedia === 'function' && matchMedia('(pointer: fine)').matches) setTimeout(() => d.querySelector('#oyCQ').focus(), 30);
   d.querySelectorAll('[data-creg]').forEach(b => b.onclick = () => { C.r = b.dataset.creg; d.querySelectorAll('[data-creg]').forEach(c => c.classList.toggle('on', c === b)); pinta(); });
-  d.querySelectorAll('[data-cdia]').forEach(b => b.onclick = () => { C.dia = b.dataset.cdia; d.querySelectorAll('[data-cdia]').forEach(c => c.classList.toggle('on', c === b)); });
-  const di = d.querySelector('#oyCDia'); if (di) di.onchange = () => { C.dia = di.value; };
+  d.querySelectorAll('[data-cdia]').forEach(b => b.onclick = () => { C.dia = b.dataset.cdia; S0.ultimoDia = C.dia; d.querySelectorAll('[data-cdia]').forEach(c => c.classList.toggle('on', c === b)); });
+  const di = d.querySelector('#oyCDia'); if (di) di.onchange = () => { C.dia = di.value; S0.ultimoDia = C.dia; };
   d.querySelector('#oyCOk').onclick = () => d.close();
   d.addEventListener('close', () => { if (location.hash.includes(o.id)) { const y = scrollY; oyTela(o.id); scrollTo(0, y); } });
 }
@@ -1017,11 +1178,21 @@ function oyCss() {
   .oy-barra .cta{flex:none;text-decoration:none}
   /* a PLANILHA (computador): as cores da planilha dela — cabeçalho preto e ouro, faixa por dia */
   .oy-sheet{border:1px solid var(--line);border-radius:var(--r-md,12px);overflow:hidden;background:var(--surface);margin-top:4px}
-  .oy-shh,.oy-row{display:grid;grid-template-columns:150px 118px minmax(0,1fr) 112px 44px;align-items:start}
+  .oy-shh,.oy-row{display:grid;grid-template-columns:150px 118px minmax(0,1fr) 112px 84px;align-items:start}
+  .oy-cacs{display:flex;gap:2px}
+  .oy-crm:hover{color:var(--danger);background:var(--danger-wash)}
+  .oy-barra-acs{display:flex;gap:8px;align-items:center}
+  .oy-desfaz{position:fixed;left:50%;bottom:calc(150px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:300;display:flex;align-items:center;gap:14px;padding:10px 10px 10px 16px;border-radius:999px;background:var(--ink);color:var(--paper);box-shadow:var(--sh-2);max-width:92vw}
+  .oy-desfaz span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px}
+  .oy-desfaz button{border:0;border-radius:999px;padding:8px 14px;background:var(--accent);color:var(--accent-ink);font:inherit;font-weight:700;cursor:pointer}
   .oy-shh{background:#141414;color:#D4AF37;font-size:11.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase}
   .oy-shh > span{padding:9px 12px}
   .oy-r{text-align:right}
-  .oy-band{background:#F7E9BE;color:#1a1405;font-weight:700;font-size:13.5px;padding:7px 12px;border-top:1px solid rgba(138,109,30,.25)}
+  .oy-band{display:flex;align-items:center;justify-content:space-between;gap:10px;background:#F7E9BE;color:#1a1405;font-weight:700;font-size:13.5px;padding:5px 8px 5px 12px;border-top:1px solid rgba(138,109,30,.25)}
+  .oy-band-add{border:1px solid rgba(138,109,30,.35);background:rgba(255,255,255,.6);color:#5C4812;border-radius:999px;min-height:30px;padding:0 12px;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
+  .oy-band-add:hover{background:#fff}
+  .oy-band-add:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .oy-diah{display:flex;align-items:center;justify-content:space-between;gap:8px}
   .oy-row{border-top:1px solid var(--line)}
   .oy-row.aberto{background:var(--accent-wash)}
   .oy-c{padding:5px 4px;min-width:0}
@@ -1034,6 +1205,7 @@ function oyCss() {
   .oy-cx{color:var(--ink-2);line-height:1.45;margin-top:2px;overflow:hidden;min-height:58px}
   .oy-cd input{color:var(--ink-3)}
   .oy-cd input:focus{color:var(--ink)}
+  .oy-cobs{display:inline-block;margin:2px 8px 4px;padding:3px 9px;border-radius:10px 10px 10px 3px;background:var(--accent-wash);color:var(--ink-2);font-size:12px}
   .oy-cvoo{display:block;padding:0 8px 4px;color:var(--ink-3);font-size:12px}
   .oy-cv input{text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
   .oy-cm{display:grid;place-items:center;width:38px;height:38px;border:0;border-radius:50%;background:none;color:var(--ink-2);font-size:20px;line-height:1;cursor:pointer}
@@ -1042,6 +1214,11 @@ function oyCss() {
   .oy-rowmais{padding:10px 14px 14px;background:var(--accent-wash);border-top:1px dashed var(--accent-line)}
   .oy-custo2{min-width:0}
   .oy-opc{align-items:end}
+  .oy-hots{margin:4px 0 10px}
+  .oy-hot{display:grid;grid-template-columns:minmax(0,1.6fr) 1fr 1fr .9fr 40px;gap:0 8px;align-items:end}
+  .oy-hot .fld{margin-bottom:6px}
+  .oy-aparte{margin:2px 0 10px}
+  .oy-aparte-v{display:block;padding:9px 8px;text-align:right;color:var(--ink-3);font-style:italic}
   .oy-opsel select{min-width:0}
   .oy-pcri{margin:-4px 0 10px;font-size:12.5px}
   /* a janela do catálogo */
@@ -1083,6 +1260,8 @@ function oyCss() {
     .oy-g3v .fld:last-child{grid-column:1/-1}
     .oy-g3{grid-template-columns:1.4fr 1fr 1fr}
     .oy-vg{grid-template-columns:1fr 1fr}
+    .oy-hot{grid-template-columns:1fr 1fr 40px}
+    .oy-hot .fld:first-child{grid-column:1/-1}
     .oy-vg .fld:first-child{grid-column:1/-1}
     .oy-tot{grid-template-columns:1fr 1fr}
     .oy-tot > div:first-child{grid-column:1/-1}
@@ -1092,7 +1271,7 @@ function oyCss() {
     .oy-itn b{white-space:normal;overflow:visible}
   }
   /* o botão do Assistente sobe acima da barra de baixo (senão um tapa o outro) */
-  @media(max-width:760px){.oy-barra .cta{flex:1;text-align:center;justify-content:center}body:has(.oy-barra) #iaFab{bottom:calc(150px + env(safe-area-inset-bottom))!important}}
+  @media(max-width:760px){.oy-barra-acs{flex:1}.oy-barra-acs .cta{flex:1}.oy-barra .cta{flex:1;text-align:center;justify-content:center}body:has(.oy-barra) #iaFab{bottom:calc(150px + env(safe-area-inset-bottom))!important}}
   @media(min-width:761px){body:has(.oy-barra) #iaFab{bottom:96px!important}}
   @media(prefers-reduced-motion:reduce){.oy-chev svg{transition:none}}`;
   document.head.appendChild(s);
@@ -1114,9 +1293,14 @@ opDocOrc = (id) => go('/adm/proposta/' + id);
     pago: { type: 'number', description: 'quanto o cliente já pagou, em USD' },
     desconto: { type: 'number' }, validade: { type: 'string', description: 'AAAA-MM-DD' },
     link_pagamento: { type: 'string', description: 'link de pagamento da plataforma dela (https://…): vira o botão Pagar agora na proposta' },
+    total_informado: { type: 'number', description: 'o TOTAL que ela fechou (USD, com centavos). Vale exatamente esse número; o VAT fica dentro.' },
+    hoteis: { type: 'array', description: 'hotéis por período, como ela escreve ("07-11/11 Sofitel Downtown *a parte")', items: { type: 'object', properties: { nome: { type: 'string' }, de: { type: 'string', description: 'AAAA-MM-DD' }, ate: { type: 'string', description: 'AAAA-MM-DD' }, situacao: { type: 'string', enum: ['incluso', 'a parte'] } } } },
   };
   const ITEM_EXTRA = { hora_fim: { type: 'string' }, texto: { type: 'string', description: 'o que o cliente lê sobre o serviço (passeio do catálogo já vem preenchido)' },
     incluso: { type: 'string' }, destaque: { type: 'string', description: 'ex.: manhã livre, à noite' }, voo: { type: 'string' },
+    nao_incluso: { type: 'string', description: 'o NÃO INCLUSO do serviço, como ela escreveu' },
+    obs: { type: 'string', description: 'observação do serviço (vira um balão na proposta), ex.: "Não incluso volta para o hotel (por conta da cliente)", "Sugestão: jantar em Dubai Marina"' },
+    a_parte: { type: 'boolean', description: 'serviço "(a parte)": entra no roteiro, por conta do cliente, sem valor' },
     opcao: { type: 'string', description: 'a opção do passeio, pelo nome (ex.: "prime", "17 minutos", "com serviço de mesa") — ver_passeios mostra as opções' },
     criancas: { type: 'integer', description: 'quantas das pessoas são crianças (o preço de criança entra sozinho)' },
     tipo: { type: 'string', enum: ['passeio', 'traslado', 'livre'] }, traslado: { type: 'string', enum: ['chegada', 'saida'], description: 'traslado de aeroporto pronto, com o texto e o voo da chegada/partida' } };
@@ -1125,7 +1309,7 @@ opDocOrc = (id) => go('/adm/proposta/' + id);
     Object.assign(t.input_schema.properties, EXTRA);
     const it = t.input_schema.properties.itens && t.input_schema.properties.itens.items;
     if (it && it.properties) Object.assign(it.properties, ITEM_EXTRA);
-    t.description += ' Junto: hotel, adultos, criancas, chegada e partida (dia, hora, voo), pago. TUDO EM DÓLAR (USD). Cada serviço com data e hora; passeio_id traz foto, texto e incluso do catálogo; traslado:"chegada"/"saida" monta o traslado de aeroporto.';
+    t.description += ' Junto: hotel ou hoteis por período, adultos, criancas, chegada e partida (dia, hora, voo), pago, total_informado. TUDO EM DÓLAR (USD). Use EXATAMENTE o que ela mandou. Cada serviço com data e hora; passeio_id traz foto, texto e incluso do catálogo; traslado:"chegada"/"saida" monta o traslado de aeroporto.';
   }
   IA_FERRAMENTAS.push({ name: 'proposta_orcamento', description: 'Abre a PROPOSTA do orçamento (o que o cliente recebe: capa com fotos, roteiro dia a dia, investimento, condições) para ela gerar o PDF ou mandar o link no WhatsApp. Você não manda nada: só abre a tela.',
     input_schema: { type: 'object', properties: { numero: { type: 'string', description: 'número ou cliente do orçamento' } }, required: ['numero'] } });
@@ -1139,6 +1323,8 @@ opDocOrc = (id) => go('/adm/proposta/' + id);
     o.moeda = OY_MOEDA; if (i.pago != null) o.pago = +i.pago || 0; if (i.desconto != null) o.desconto = +i.desconto || 0;
     if (isoOk(i.validade)) o.validade = i.validade;
     if (/^https:\/\//i.test(String(i.link_pagamento || ''))) o.linkPagamento = String(i.link_pagamento).trim();
+    if (i.total_informado != null) o.totalInformado = Math.max(0, +i.total_informado || 0);
+    if (Array.isArray(i.hoteis)) { o.hoteis = i.hoteis.map(h => ({ nome: String(h.nome || '').trim(), de: isoOk(h.de) ? h.de : '', ate: isoOk(h.ate) ? h.ate : '', situacao: /incl/i.test(h.situacao || '') ? 'incluso' : /parte/i.test(h.situacao || '') ? 'a parte' : '' })).filter(h => h.nome); o.hotel = (o.hoteis[0] || {}).nome || o.hotel || ''; }
     if (i.adultos != null || i.criancas != null) { o.pax = oyPax(o); o.paxNota = oyPaxTexto(o); }
     return antes;
   };
@@ -1147,12 +1333,13 @@ opDocOrc = (id) => go('/adm/proposta/' + id);
     if (it.traslado) return oyTraslado(o, it.traslado === 'chegada' ? 'chegada' : 'saida');
     const x = it.passeio_id && Tours.get(it.passeio_id);
     if (x) {
-      const q = ingN(it.opcao || ''), k = q ? oyOpcoes(x).findIndex(op => ingN(oyOpNome(op)).includes(q)) : 0;
+      const k = oyAchaOpcao(x, it.opcao);
       return oyDoCatalogo(o, it.passeio_id, { data: isoOk(it.data) ? it.data : '', hora: oyHm(it.hora), horaFim: oyHm(it.hora_fim), pax: it.pessoas, criancas: it.criancas, opcao: Math.max(0, k), valor: it.valor, texto: it.texto, incluso: it.incluso });
     }
     return null;
   };
   const enriquece = (n, it) => Object.assign(n, {
+    ...(it.nao_incluso ? { naoIncluso: it.nao_incluso } : {}), ...(it.obs ? { obs: it.obs } : {}), ...(it.a_parte ? { aParte: true, valor: 0, auto: false } : {}),
     ...(it.hora_fim ? { horaFim: oyHm(it.hora_fim) } : {}), ...(it.texto ? { texto: it.texto } : {}), ...(it.incluso ? { incluso: it.incluso } : {}),
     ...(it.destaque ? { rotulo: it.destaque } : {}), ...(it.voo ? { voo: it.voo } : {}), ...(it.tipo ? { tipo: it.tipo } : {}) });
 
@@ -1165,12 +1352,25 @@ opDocOrc = (id) => go('/adm/proposta/' + id);
         fazer: () => { go('/adm/proposta/' + r.o.id); return { ok: true, lembrete: 'a proposta está aberta na tela: ela toca em Gerar PDF ou Mandar no WhatsApp' }; } };
     }
     if (nome === 'criar_orcamento') {
+      /* serviço sem "pessoas" é do grupo todo (antes saía 2 por padrão, mesmo com 4 adultos) */
+      const grupo = (+i.adultos || 0) + (+i.criancas || 0);
+      if (grupo > 0) i = { ...i, itens: (i.itens || []).map(it => it.pessoas ? it : { ...it, pessoas: grupo }) };
       const p = _plano(nome, i); if (!p || !p.fazer) return p;
+      /* as linhas dos serviços no cartão, do jeito dela ("à parte", USD) */
+      const ehServ = (l) => l[0] === '—' || /^\d{2}\/\d{2}/.test(String(l[0]));
+      const k0 = p.linhas.findIndex(ehServ);
+      if (k0 >= 0) {
+        const serv = (i.itens || []).slice(0, 12).map(it => [it.data ? ingData(it.data) : '—', `${it.traslado ? (it.traslado === 'chegada' ? 'Traslado de chegada' : 'Traslado de saída') : (it.descricao || (Tours.get(it.passeio_id) ? oyPt(Tours.get(it.passeio_id).name) + (it.opcao ? ' · ' + it.opcao : '') : '?'))} · ${it.pessoas || grupo || 2}p · ${it.a_parte ? 'à parte' : +it.valor > 0 ? oyM(+it.valor, OY_MOEDA) : 'preço da tabela'}`]);
+        p.linhas = [...p.linhas.slice(0, k0), ...serv, ...p.linhas.filter((l, k) => k > k0 && !ehServ(l))];
+      }
       const fazer0 = p.fazer;
       const tmp = { itens: [], adultos: i.adultos, criancas: i.criancas, pax: (+i.adultos || 0) + (+i.criancas || 0), hotel: i.hotel, chegada: i.chegada, partida: i.partida };
       if (i.hotel) p.linhas.splice(1, 0, ['Hotel', i.hotel]);
       if (i.adultos || i.criancas) p.linhas.splice(1, 0, ['Pessoas', oyPaxTexto(tmp)]);
       if (i.chegada && i.chegada.data) p.linhas.splice(1, 0, ['Viagem', `${ingData(i.chegada.data)}${i.partida && i.partida.data ? ' a ' + ingData(i.partida.data) : ''}`]);
+      if (Array.isArray(i.hoteis) && i.hoteis.length) p.linhas.splice(1, 0, ['Hotéis', i.hoteis.map(h => h.nome + (h.situacao ? ' (' + h.situacao + ')' : '')).join(' · ')]);
+      /* o total que ela fechou é o que aparece (nada de soma recalculada) */
+      if (+i.total_informado > 0) p.linhas = p.linhas.filter(l => l[0] !== 'Sinal').map(l => l[0] === 'Total' ? ['Total', oyM(+i.total_informado, OY_MOEDA) + ' (o que você fechou, VAT dentro)'] : l);
       p.fazer = () => {
         const res = fazer0(); const o = Orc.all().find(x => x.num === res.numero); if (!o) return res;
         campos(o, i);
@@ -1183,7 +1383,7 @@ opDocOrc = (id) => go('/adm/proposta/' + id);
         });
         if (novos.length) o.itens = novos;
         o.moeda = OY_MOEDA;
-        Orc.salva(o);
+        Orc.salva(o); oyLigaCliente(o);
         return { ...res, lembrete: res.lembrete + '. Para o cliente: proposta_orcamento abre a proposta (PDF e link).' };
       };
       return p;
@@ -1234,13 +1434,21 @@ opDocOrc = (id) => go('/adm/proposta/' + id);
     };
   }
 
-  /* as regras do orçamento no que o assistente lê antes de tudo */
+  /* as regras do orçamento no que o assistente lê antes de tudo — e o CATÁLOGO inteiro
+     (ele, 28/10: "o assistente precisa ser inteligente e ler todo o app"): acha o passeio
+     certo de primeira, com as opções e os preços, sem precisar consultar */
+  const catalogo = () => Tours.all().filter(x => x.status !== 'draft').map(x => {
+    const ops = oyOpcoes(x);
+    return `${x.id}: ${oyPt(x.name)} — ${ops.length > 1 ? ops.map(op => `${oyOpNome(op)} USD ${+op.preco || 0}${+op.precoCrianca ? ' (criança ' + op.precoCrianca + ')' : ''}`).join(' | ') : (+x.price ? 'USD ' + x.price : 'sob consulta')}${x.priceMode === 'session' ? ' por grupo' : x.priceMode === 'pp' ? ' por pessoa' : ''}${+x.precoCrianca ? ' · criança ' + x.precoCrianca : ''}`;
+  }).join('\n');
   const _sis = iaSistema;
   iaSistema = function () {
     const b = _sis();
+    b.push({ type: 'text', text: `## O CATÁLOGO DELA (id: nome — preço). Use o id em passeio_id.\n${catalogo()}` });
     b.push({ type: 'text', text: `## ORÇAMENTO E PROPOSTA (o jeito dela, desde 28/10/2026)
 - Antes de criar, tenha o BÁSICO: nome do cliente, WhatsApp, quantas pessoas (adultos e crianças), hotel e os dias de chegada e partida (com hora e voo, se ela souber). Falta algum? Pergunte UMA coisa por vez — mas não trave: com nome e pessoas já dá para criar e completar depois com editar_orcamento.
 - Monte o roteiro DIA A DIA: cada serviço com data e hora. Passeio do catálogo SEMPRE com passeio_id (de ver_passeios): traz preço, foto, texto e incluso. Passeio com opções (prime/non-prime, minutos de voo, com/sem serviço de mesa): passe opcao com o nome; tem criança no grupo? passe criancas — o preço de criança entra sozinho. Traslado de aeroporto: item com traslado:"chegada" ou "saida" (pega o voo e o hotel). O resto: descricao + texto.
+- RESPEITE O QUE ELA MANDOU, SEM RECRIAR NADA: se ela passou os serviços, os dias, os horários, os textos (descrição, INCLUSO, NÃO INCLUSO), os valores ou o TOTAL, use EXATAMENTE isso. Valor de cada serviço que ela disse → valor; o total dela → total_informado (o app usa esse número e põe o VAT dentro). NUNCA recalcule pela tabela o que ela deu, nunca acrescente nem tire serviço, nunca troque data, hora ou texto, nunca resuma o texto dela. Do catálogo, só complete o que ela NÃO disse (foto; texto/incluso se ela não escreveu). Serviço "(a parte)" → a_parte:true, sem valor. Hotéis por período ("07-11/11 Sofitel *a parte") → hoteis. Cola uma planilha/texto inteiro? Monte tudo de uma vez num criar_orcamento só.
 - Moeda: SOMENTE DÓLAR (USD), sempre. Nunca escreva valor em dirham, real ou euro. Os valores dos serviços são SEM imposto: o app soma 5% de VAT no fim sozinho (nunca some de novo). Total e por pessoa saem sozinhos.
 - "(Indicação: CÓDIGO)" na conversa = veio pelo link de um parceiro: o app liga o orçamento a ele sozinho e a comissão entra em Indicações e cupons.
 - Depois de criar ou mudar, ofereça em uma linha: "Quer que eu abra a proposta para gerar o PDF ou mandar o link?" → proposta_orcamento. Quem manda é ela.` });

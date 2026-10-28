@@ -1071,7 +1071,7 @@ iaDesenha = function () {
       for (const file of files) {
         try {
           if (/pdf/.test(file.type)) { if (file.size > 5e6) throw new Error('PDF grande demais (máx. 5 MB).'); iaFoto.push(await new Promise((ok, falha) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = () => falha(new Error('não li o PDF')); r.readAsDataURL(file); })); }
-          else iaFoto.push(await iaReduzFoto(file));
+          else iaFoto.push(...(await iaFotosLer(file)));
         } catch (e) { iaBolha('erro', e.message); }
       }
       iaMostraAnexo();

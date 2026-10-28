@@ -111,6 +111,7 @@ function rtDocHtml(d) {
       ${bloco(t ? 'Seu encontro com a equipe' : 'Incluso e encontro', `${rtJunta(inclui)}<p>${encontro}</p>${mapa ? `<a class="rt-lk kt-tela" href="${esc(mapa)}" target="_blank" rel="noopener">Abrir o ponto de encontro no mapa</a>` : ''}`)}
       ${rtLista(s.naoInclui).length ? bloco('Não incluso', rtJunta(s.naoInclui)) : ''}
       ${levar.length ? bloco('Para o dia', rtJunta(levar)) : ''}
+      ${s.obs ? `<div class="rt-obs kt-bl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8.5 8.5 0 0 1-12.6 7.4L3 21l1.6-5.2A8.5 8.5 0 1 1 21 12Z"/></svg><p>${rtP(s.obs)}</p></div>` : ''}
       ${pagamento(s)}
       <p class="rt-ag kt-tela"><a class="rt-lk" href="${esc(typeof kitGoogle === 'function' ? kitGoogle(s, d) : '#')}" target="_blank" rel="noopener">Pôr no Google Agenda</a></p>`;
   };
@@ -170,6 +171,9 @@ function rtCss() {
   .rt-lista a span{font-size:12.5px;color:var(--rt-o);font-weight:600;white-space:nowrap}
   .rt-lista a b{font-weight:600;font-size:14.5px}
   .rt-lista a:focus-visible{outline:2px solid var(--rt-o);outline-offset:2px}
+  .rt-obs{display:flex;gap:10px;align-items:flex-start;margin:4px 0 14px;padding:11px 14px;border-radius:14px 14px 14px 4px;background:#FBF3DC;border:1px solid #EAD9A6}
+  .rt-obs svg{flex:none;width:18px;height:18px;margin-top:3px;color:var(--rt-o)}
+  .rt-obs p{margin:0;font-size:15px;line-height:1.5;color:var(--rt-n)}
   .rt-ancora{display:block;position:relative;top:-70px}
   .rt-lk{color:var(--rt-o);font-weight:600;font-size:13px;letter-spacing:.03em;text-transform:uppercase;text-decoration:none}
   .rt-lk:hover{text-decoration:underline}
