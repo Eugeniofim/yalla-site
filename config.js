@@ -74,6 +74,11 @@ var APP_CONFIG = {
       ['dubai',     'Dubai',         'Dubai'],
       ['abudhabi',  'Abu Dhabi',     'Abu Dhabi'],
       ['sharjah',   'Sharjah',       'Sharjah'],
+      /* 28/10/2026, a Milla: "adicionar todos os Emirados" */
+      ['ajman',     'Ajman',         'Ajman'],
+      ['uaq',       'Umm Al Quwain', 'Umm Al Quwain'],
+      ['rak',       'Ras Al Khaimah', 'Ras Al Khaimah'],
+      ['fujairah',  'Fujairah',      'Fujairah'],
       ['deserto',   'Deserto',       'Desert'],
       ['oriente',   'Oriente Médio', 'Middle East'],
     ],

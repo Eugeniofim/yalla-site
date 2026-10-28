@@ -1083,9 +1083,59 @@ const TYPE_LABEL = { day: 'fDay', walk: 'fWalk', photo: 'fPhoto', session: 'tSes
    por numero de pessoas — nesta ultima o cartao mostra o MENOR valor da
    tabela com "a partir de", porque um valor de grupo sem o "a partir de"
    parece caro para quem viaja em dois. */
+/* OS TIPOS DE PASSEIO (28/10/2026, a Milla: "preciso poder editar as opções do dropdown").
+   A lista mora nos Ajustes (DB.settings.tiposTour, [id, nome]): ela renomeia, acrescenta e
+   tira. "Transfer" fica sempre (é ele que liga o traslado); tipo em uso não sai. Sem lista
+   salva, a base de Dubai — sem os tipos de Roma (audiência papal, trem, cruzeiro, bike). */
+const TIPOS_PADRAO = [['walk', 'Experiência / city tour'], ['day', 'Dia inteiro, com motorista'], ['transfer', 'Transfer'], ['barco', 'Barco e iate'], ['photo', 'Sessão de fotos']];
+function tiposTour(soDela) {
+  try { const d = DB.settings.tiposTour; if (Array.isArray(d) && d.length) return d; } catch (e) {}
+  return soDela ? [] : TIPOS_PADRAO;
+}
+/* as opções do select: a lista dela + o tipo que o passeio já tem (nunca some o que está gravado) */
+function tipoOpts(cur) {
+  const l = tiposTour().slice();
+  if (cur && !l.some(([id]) => id === cur)) l.push([cur, tipoLabel(cur)]);
+  return l.map(([id, nome]) => `<option value="${esc(id)}" ${cur === id ? 'selected' : ''}>${esc(nome)}</option>`).join('');
+}
+/* editar a lista (tipos ou regiões) numa janelinha, sem perder o que já está preenchido no passeio */
+function editaLista(qual) {
+  const ehTipo = qual === 'tipos';
+  let l = (ehTipo ? tiposTour() : regioes()).map(r => [r[0], r[1], r[2] || r[1]]);
+  const usados = (id) => Tours.all().filter(x => (ehTipo ? x.type : x.region) === id).length;
+  const slug = (n) => { const b = String(n).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || 'item'; let id = b, k = 2; while (l.some(r => r[0] === id)) id = b + '-' + k++; return id; };
+  const d = opJanela(ehTipo ? 'Tipos de passeio' : 'Onde acontece', `<p class="why">${ehTipo ? 'Renomeie, acrescente ou tire. "Transfer" fica sempre: é ele que faz o traslado funcionar.' : 'As regiões que aparecem no passeio e no site. Renomeie, acrescente ou tire.'} O que algum passeio usa não pode sair (só renomear).</p>
+    <div class="edl"></div>
+    <div class="frow"><label class="fld grow"><span class="sr">Novo</span><input class="edl-novo" placeholder="${ehTipo ? 'Ex.: Ingressos e atrações' : 'Ex.: Al Ain'}" aria-label="Nome novo"></label><button type="button" class="mini strong edl-add">+ acrescentar</button></div>
+    <div class="btnrow"><button type="button" class="cta sm edl-ok">Salvar a lista</button></div>`);
+  const pinta = () => {
+    d.querySelector('.edl').innerHTML = l.map((r, k) => { const n = usados(r[0]), fixo = ehTipo && r[0] === 'transfer';
+      return `<div class="edl-l"><input value="${esc(r[1])}" data-k="${k}" aria-label="Nome"><small>${n ? n + (n > 1 ? ' passeios' : ' passeio') : 'nenhum passeio'}</small>
+        <button type="button" class="mini ghost danger" data-tira="${k}" ${n || fixo ? 'disabled' : ''} title="${fixo ? 'o transfer fica sempre' : n ? 'em uso: troque nos passeios antes' : 'tirar'}">tirar</button></div>`; }).join('');
+    d.querySelectorAll('.edl-l input').forEach(i => i.oninput = () => { const r = l[+i.dataset.k]; r[1] = i.value; r[2] = i.value; });
+    d.querySelectorAll('[data-tira]').forEach(b => b.onclick = () => { l.splice(+b.dataset.tira, 1); pinta(); });
+  };
+  pinta();
+  const add = () => { const i = d.querySelector('.edl-novo'), n = i.value.trim(); if (!n) return i.focus(); l.push([slug(n), n, n]); i.value = ''; pinta(); i.focus(); };
+  d.querySelector('.edl-add').onclick = add;
+  d.querySelector('.edl-novo').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } };
+  d.querySelector('.edl-ok').onclick = () => {
+    l = l.filter(r => String(r[1]).trim()).map(r => [r[0], String(r[1]).trim(), String(r[2] || r[1]).trim()]);
+    if (ehTipo && !l.some(r => r[0] === 'transfer')) l.push(['transfer', 'Transfer', 'Transfer']);
+    if (ehTipo) DB.settings.tiposTour = l.map(r => [r[0], r[1]]); else DB.settings.regioes = l;
+    save();
+    /* o passeio aberto não perde nada: só a lista do select muda */
+    const sel = document.getElementById(ehTipo ? 'fType' : 'fRegion');
+    if (sel) { const cur = sel.value; sel.innerHTML = ehTipo ? tipoOpts(cur) : regiaoOpts(cur); }
+    d.close(); toast('Lista salva');
+  };
+}
+document.addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('[data-edlista]'); if (!b) return; e.preventDefault(); editaLista(b.dataset.edlista); });
+
 /* o rotulo do tipo: o cliente pode renomear no config (a Yalla chama de
    "Experiência" e "Corporativo" o que a base chama de "a pé" e "dia inteiro") */
 function tipoLabel(type) {
+  const meu = tiposTour(true).find(([id]) => id === type); if (meu) return meu[1];
   const c = (typeof GUIA_CFG !== 'undefined' && GUIA_CFG.tipos) || {};
   return c[type] ? tl(c[type]) : t(TYPE_LABEL[type] || 'fWalk');
 }
@@ -2369,8 +2419,10 @@ function admTourEdit(id) {
     <h1 class="pageh">${isNew ? t('newTour').replace('+ ', '') : esc(x.name.pt)}</h1>
     <div class="formgrid">
       <section class="card">
-        <label class="fld">${t('tType')}<select id="fType">${selOpts([['walk','tWalk'],['day','tDay'],['transfer','tTransfer'],['papal','tPapal'],['trem','tTrem'],['conexao','tConexao'],['barco','tBarco'],['photo','tPhotoT'],['session','tSession'],['bike','tBike']], x.type)}</select></label>
+        <label class="fld">${t('tType')}<select id="fType">${tipoOpts(x.type)}</select></label>
+        <button type="button" class="linkbtn edl-lk" data-edlista="tipos">editar a lista de tipos</button>
         <label class="fld">${t('tRegion')}<select id="fRegion">${regiaoOpts(x.region)}</select></label>
+        <button type="button" class="linkbtn edl-lk" data-edlista="regioes">editar a lista de lugares</button>
         ${typeof CONTEUDO !== 'undefined' && (CONTEUDO.categorias || []).length ? (() => {
           /* a ficha do documento dela (20/10/2026): categoria, modalidade, idioma, transfer e como reserva */
           const op = (lista, cur) => (CONTEUDO[lista] || []).map(o => `<option value="${o[0]}" ${cur === o[0] ? 'selected' : ''}>${esc(opcaoNome(o))}</option>`).join('');

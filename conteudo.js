@@ -55,6 +55,7 @@ const CONTEUDO = {
   conversa: {
     cidades: [
       ['Dubai', /\bdubai\b|\bdubái\b/], ['Abu Dhabi', /abu dh?abi|abu dabi/], ['Sharjah', /sharjah/],
+      ['Ajman', /\bajman\b/], ['Umm Al Quwain', /umm? al quwain|\buaq\b/],
       ['Ras Al Khaimah', /ras al khaimah/], ['Fujairah', /fujairah/], ['Al Ain', /al ain/],
       ['Omã', /\bom[aã]\b|oman|musandam/], ['Deserto', /deserto|desert|dunas/],
     ],
@@ -72,7 +73,9 @@ const CONTEUDO = {
     onde: [
       ['dubai', 'Dubai', 'Dubai', 'Dubái'], ['abudhabi', 'Abu Dhabi', 'Abu Dhabi', 'Abu Dabi'],
       ['sharjah', 'Sharjah', 'Sharjah', 'Sharjah'], ['deserto', 'Deserto', 'Desert', 'Desierto'],
-      ['rak', 'Ras Al Khaimah', 'Ras Al Khaimah', 'Ras Al Khaimah'], ['oma', 'Omã (Musandam)', 'Oman (Musandam)', 'Omán (Musandam)'],
+      ['ajman', 'Ajman', 'Ajman', 'Ajman'], ['uaq', 'Umm Al Quwain', 'Umm Al Quwain', 'Umm Al Quwain'],
+      ['rak', 'Ras Al Khaimah', 'Ras Al Khaimah', 'Ras Al Khaimah'], ['fujairah', 'Fujairah', 'Fujairah', 'Fujairah'],
+      ['oma', 'Omã (Musandam)', 'Oman (Musandam)', 'Omán (Musandam)'],
     ],
     /* interesses = as 7 categorias do documento dela (18/10/2026) + 3 do jeito de viajar */
     gosto: [
@@ -114,7 +117,7 @@ const CONTEUDO = {
                 iate: 'iate-marina' },
     /* lugar escolhido → passeio fixo; sem passeio → item livre para ela pôr o valor */
     ondeServico: { abudhabi: 'abu-dhabi-dia', deserto: 'safari-deserto' },
-    ondeSemTabela: { sharjah: 'Sharjah', rak: 'Ras Al Khaimah', oma: 'Omã (Musandam)' },
+    ondeSemTabela: { sharjah: 'Sharjah', ajman: 'Ajman', uaq: 'Umm Al Quwain', rak: 'Ras Al Khaimah', fujairah: 'Fujairah', oma: 'Omã (Musandam)' },
     padrao: 'city-tour-dubai',
     /* gostos que pedem item livre (ela monta) */
     gostoLivre: { negocios: 'Agenda de negócios / visitas técnicas', gastronomia: 'Gastronomia e vida noturna',
