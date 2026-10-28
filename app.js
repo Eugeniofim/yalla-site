@@ -2160,7 +2160,7 @@ function renderBook() {
    item responde UMA pergunta, e as partes de cada um ficam na barrinha do
    topo da tela (subNav). As rotas de sempre continuam valendo (links,
    assistente, tutorial): só o menu mudou.
-     Hoje      — o que acontece hoje?            (Meu dia, Calendário, Tarefas)
+     Agenda    — o que acontece hoje e quando?   (Hoje, Calendário, Tarefas)
      Vendas    — em que pé está cada cliente?    (Orçamentos, Pipeline, Planilha, Reservas, Transfers)
      Clientes  — quem é essa pessoa?
      Catálogo  — o que eu vendo e com quem?      (Passeios, Preços, Guias e motoristas, Fornecedores)
@@ -2176,7 +2176,8 @@ const ADM_IC = {
   ajustes: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/>',
 };
 const ADM_MENU = [
-  { id: 'hoje',     nome: 'Hoje',     subs: [['today', 'Meu dia'], ['agenda', 'Calendário'], ['tarefas', 'Tarefas']] },
+  /* 28/10/2026, ele: "cadê a AGENDA no menu" — o item se chama Agenda; dentro, Hoje · Calendário · Tarefas */
+  { id: 'hoje',     nome: 'Agenda',   subs: [['today', 'Hoje'], ['agenda', 'Calendário'], ['tarefas', 'Tarefas']] },
   { id: 'vendas',   nome: 'Vendas',   subs: [['consulta', 'Orçamentos'], ['pipeline', 'Pipeline'], ['planilha', 'Planilha'], ['bookings', 'Reservas'], ['transfer', 'Transfers']] },
   { id: 'clientes', nome: 'Clientes', subs: [['clients', 'Clientes']] },
   /* o atendimento automático (WhatsApp e Instagram): só no app de quem contratou */
