@@ -63,7 +63,8 @@ var APP_CONFIG = {
     logoHorizontal:       'arte/logo-horizontal.png',
     logoHorizontalEscuro: 'arte/logo-horizontal-escuro.png',
     /* as palavras dela, do material da marca */
-    badge: 'Guia brasileira licenciada nos Emirados · Travel. Connect. Ascend.',
+    /* 28/10/2026, a Milla: tirar "Guia brasileira licenciada nos Emirados" da abertura, deixar só o lema */
+    badge: 'Travel. Connect. Ascend.',
     prefixo: 'YE',                 /* codigo da reserva: YE-4821 */
     /* como ela chama cada tipo (a base diz "a pé" e "dia inteiro") */
     tipos: {
