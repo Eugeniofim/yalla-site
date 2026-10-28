@@ -3788,7 +3788,8 @@ function admAgenda() {
   for (let i = 0; i < startWd; i++) cells += '<span class="agc empty"></span>';
   for (let d = 1; d <= daysIn; d++) {
     const iso = `${cur}-${String(d).padStart(2, '0')}`;
-    const list = byDay[iso] || [];
+    /* 28/10/2026, igual à Mari: só a saída COM reserva marca o dia (o catálogo dela tem horário quase todo dia) */
+    const list = (byDay[iso] || []).filter(x => x.booked > 0);
     const isToday = iso === isoToday();
     const dots = list.slice(0, 4).map(x =>
       `<i class="${x.left === 0 ? 'full' : x.left <= 2 ? 'low' : ''}"></i>`).join('');
@@ -3797,7 +3798,20 @@ function admAgenda() {
       <b>${d}</b>${list.length ? `<span class="agdots">${dots}</span>` : ''}${nTf ? `<span class="ag-tf" title="${nTf} tarefa(s)">✓${nTf > 1 ? nTf : ''}</span>` : ''}</button>`;
   }
 
-  const selList = (byDay[sel] || []).sort((a, b) => a.time.localeCompare(b.time));
+  const selList = (byDay[sel] || []).filter(d => d.booked > 0).sort((a, b) => a.time.localeCompare(b.time));
+  /* O DIA, como na agenda da Mari: os passeios com gente e as tarefas numa lista só, pela hora */
+  const tfDia = Tarefas.doDia(sel).filter(tt => tt.tipo === 'tarefa');
+  const linhasDia = [
+    ...selList.map(d => {
+      const bs = DB.bookings.filter(b => b.tourId === d.tour.id && b.date === d.date && b.time === d.time && b.status !== 'cancelled');
+      const tr = d.tour.type === 'transfer';
+      return [d.time || '', `<div class="deprow ag-sv"><div class="tinfo"><span class="ag-k ${tr ? 'trf' : ''}">${tr ? 'Transfer' : 'Passeio'}</span><b>${esc(d.time)} · ${esc(d.tour.name[LANG] || d.tour.name.pt)}</b>
+          <small>${t('agBooked', { n: d.booked })}${d.capacity ? ' · ' + t('agFree', { n: d.left }) : ''}</small></div>
+        ${bs.length ? `<div class="paxlist">${bs.map(b => `<span class="pill ${Bookings.due(b) > 0 ? 'warn' : 'ok'}">${esc(String(b.name || '').split(' ')[0])} ×${b.pax}${Bookings.due(b) > 0 ? ' · deve ' + valorReserva(b, Bookings.due(b)) : ''}</span>`).join('')}</div>` : ''}</div>`];
+    }),
+    ...tfDia.map(tt => [tt.hora || '', tfLinha(tt, isoToday())]),
+  ].sort((a, b) => (a[0] || '99:99').localeCompare(b[0] || '99:99'));
+  const nTfAbertas = tfDia.filter(tt => !tt.feita).length;
 
   admShell('agenda', `
     <div class="pagehead agHead"><h1 class="pageh">${t('agTitle')}</h1>${agSeg('cal')}</div>
@@ -3811,33 +3825,23 @@ function admAgenda() {
       <section class="card">
         <div class="agrid head">${WD.map(w => `<span class="agwd">${w}</span>`).join('')}</div>
         <div class="agrid" id="agGrid">${cells}</div>
-        <p class="why">${t('agLegend')}</p>
+        <p class="why ag-leg"><span><i class="ag-ponto"></i>passeio com reserva</span><span><b class="ag-tfm">✓</b>tarefa</span></p>
       </section>
-      <section class="card">
-        <h3>${t('agDayOf', { d: fmtDate(sel) })}</h3>
-        ${selList.length ? selList.map(d => {
-          const bs = DB.bookings.filter(b => b.tourId === d.tour.id && b.date === d.date
-                                        && b.time === d.time && b.status !== 'cancelled');
-          return `<div class="deprow">
-            <div class="tinfo"><b>${d.time} · ${esc(d.tour.name[LANG] || d.tour.name.pt)}</b>
-              <small>${t('agBooked', { n: d.booked })} · ${t('agFree', { n: d.left })}</small></div>
-            ${bs.length ? `<div class="paxlist">${bs.map(b =>
-              `<span class="pill ${Bookings.due(b) > 0 ? 'warn' : 'ok'}">${esc(b.name.split(' ')[0])} ×${b.pax}</span>`).join('')}</div>` : ''}
-          </div>`;
-        }).join('') : `<p class="empty">${t('agNoDep')}</p>`}
-        <div class="ag-tarefas"><span class="op-lbl">Tarefas do dia</span>
-          ${tfMiniHtml(Tarefas.doDia(sel).filter(tt => tt.tipo === 'tarefa'), isoToday(), 'Nenhuma tarefa neste dia.')}
-          <div class="frow"><label class="fld grow"><input id="agTf" placeholder="Nova tarefa para ${fmtDate(sel)}"></label><button class="mini strong" id="agTfAdd">+ tarefa</button></div>
-          <a class="mini" href="#/adm/today/${sel}">ver o dia completo (clientes, guias, pagamentos)</a>
-        </div>
+      <section class="card ag-diacard" aria-live="polite">
+        <div class="ag-diacab"><h3>${sel === isoToday() ? 'Hoje' : 'O dia'} · ${esc(fmtDate(sel))}</h3><small>${[selList.length ? selList.length + (selList.length > 1 ? ' passeios' : ' passeio') : '', nTfAbertas ? nTfAbertas + (nTfAbertas > 1 ? ' tarefas' : ' tarefa') : ''].filter(Boolean).join(' · ')}</small></div>
+        <form class="ag-anota" id="agTfForm"><label class="fld grow"><span class="sr">Anotar para ${esc(fmtDate(sel))}</span><input id="agTf" autocomplete="off" placeholder="Anotar para ${esc(fmtDate(sel))}: ex. ligar para o hotel 10h"></label><button class="mini strong" id="agTfAdd" type="submit">+ anotar</button></form>
+        <div class="ag-lista">${linhasDia.length ? linhasDia.map(l => l[1]).join('') : '<p class="empty">Nada neste dia. Anote uma tarefa no campo acima.</p>'}</div>
+        <a class="mini" href="#/adm/today/${sel}">ver o dia completo (clientes, guias, pagamentos)</a>
       </section>
     </div>`);
   tfLigaMini(() => admAgenda());
-  $('#agTfAdd').onclick = () => {
+  $('#agTfForm').onsubmit = (e) => {
+    e.preventDefault();
     const v = $('#agTf').value.trim(); if (!v) return $('#agTf').focus();
     const p = lerPrazo(v, sel);
     Tarefas.cria({ texto: v, prazo: sel, hora: p.hora });
-    admAgenda._d = sel; admAgenda();
+    toast('Anotado para ' + fmtDate(sel)); admAgenda._d = sel; admAgenda();
+    setTimeout(() => { const i = $('#agTf'); if (i) i.focus(); }, 30);
   };
 
   const shift = (n) => {

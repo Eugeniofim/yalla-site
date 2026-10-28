@@ -803,3 +803,19 @@ a.orc-row:hover .tinfo b{text-decoration:underline}
 .edl-l small{color:var(--ink-3);font-size:12px;white-space:nowrap}
 .edl-l button[disabled]{opacity:.4;cursor:not-allowed}
 .op-dlg .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* ---- a agenda como a da Mari (28/10/2026): passeios com gente e tarefas numa lista só ---- */
+p.ag-leg{display:flex;flex-wrap:wrap;gap:6px 18px}
+.ag-leg span{display:inline-flex;align-items:center;gap:6px}
+.ag-ponto{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.ag-tfm{color:var(--accent);font-size:13px}
+.ag-diacab{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.ag-diacab small{color:var(--ink-3)}
+.ag-anota{display:flex;gap:8px;align-items:center;margin:8px 0 12px}
+.ag-anota .fld{margin:0}
+.ag-anota input{min-height:44px}
+.ag-lista{display:grid;gap:6px;margin-bottom:10px}
+.ag-sv{border:1px solid var(--line);border-radius:var(--r-md,12px);padding:10px 12px}
+.ag-k{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);margin-bottom:2px}
+.ag-k.trf{color:var(--ink-2)}
+.card .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
