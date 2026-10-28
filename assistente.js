@@ -941,6 +941,7 @@ async function iaRodaFerramenta(nome, input) {
 function iaRedesenhaTela() {
   if (typeof route !== 'function') return;
   if (typeof isBusyEditing === 'function' && isBusyEditing()) return;
+  if (typeof redesenhaSuave === 'function') { redesenhaSuave(true); return; }
   const y = window.scrollY || 0; route(); scrollTo(0, y);
 }
 

@@ -98,10 +98,11 @@ const CONTEUDO = {
     /* faixa de investimento do pedido de proposta (opcional para o cliente).
        Sugestão de 20/10/2026 — a Yalla confirma as faixas e a moeda. */
     faixas: [
-      ['ate2',   'Até 2 mil AED',        'Up to AED 2,000',       'Hasta 2.000 AED'],
-      ['2a5',    'De 2 a 5 mil AED',     'AED 2,000 to 5,000',    'De 2.000 a 5.000 AED'],
-      ['5a10',   'De 5 a 10 mil AED',    'AED 5,000 to 10,000',   'De 5.000 a 10.000 AED'],
-      ['mais10', 'Acima de 10 mil AED',  'Over AED 10,000',       'Más de 10.000 AED'],
+      /* 28/10/2026: tudo em dólar (as chaves ficam, para os pedidos antigos) */
+      ['ate2',   'Até US$ 500',              'Up to US$ 500',            'Hasta US$ 500'],
+      ['2a5',    'De US$ 500 a 1.500',       'US$ 500 to 1,500',         'De US$ 500 a 1.500'],
+      ['5a10',   'De US$ 1.500 a 3.000',     'US$ 1,500 to 3,000',       'De US$ 1.500 a 3.000'],
+      ['mais10', 'Acima de US$ 3.000',       'Over US$ 3,000',           'Más de US$ 3.000'],
     ],
     modo: [
       ['guia',        'Com guia particular',                                 'With a private guide',                              'Con guía privado'],

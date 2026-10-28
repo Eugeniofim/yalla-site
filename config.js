@@ -19,8 +19,10 @@ var APP_CONFIG = {
      o app começa limpo e só os passeios dela continuam. */
   semExemplos: false,
 
-  /* a moeda do negócio: tudo que é valor aparece nela */
-  moeda: 'AED',
+  /* a moeda do negócio: tudo que é valor aparece nela.
+     28/10/2026, pedido dele: "deixar tudo em dólares, somente dólares" (era
+     AED; os passeios no ar já estavam todos em USD e ainda não há reserva). */
+  moeda: 'USD',
 
   /* os dois lados do caixa dela: a plataforma no Brasil (Pix e cartão em
      12x) e a conta em Dubai. As chaves internas ficam as mesmas do app-base. */

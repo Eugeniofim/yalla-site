@@ -513,6 +513,8 @@ html.vt-trava{overflow:hidden}
 .vt-zap{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:40;width:58px;height:58px;border-radius:50%;background:#25D366;color:#fff;
   display:grid;place-items:center;box-shadow:0 14px 30px -12px rgba(0,0,0,.5)}
 .vt-zap svg{width:30px;height:30px}
+.com-cesta .vt-zap{bottom:calc(112px + env(safe-area-inset-bottom))}
+.vt-zap:focus-visible{outline:3px solid #1a1405;outline-offset:3px}
 @media (prefers-reduced-motion:reduce){.vt *{transition:none !important}.vt-cat:hover img,.vt-prod:hover,.vt-ap:hover{transform:none}}
 .vt-btn{white-space:normal;max-width:100%}
 .vt-idiomas button{min-width:44px;min-height:44px;padding:0 6px}

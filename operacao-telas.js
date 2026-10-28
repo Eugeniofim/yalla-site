@@ -718,9 +718,9 @@ function admGuias(arg) {
 /* O topo da aba Clientes: as duas partes dela */
 function cliTopo(qual) {
   return `<div class="cli-seg" role="tablist">
-    <a class="cli-seg-b ${qual === 'planilha' ? 'on' : ''}" href="#/adm/planilha" role="tab">📋 Planilha</a>
-    <a class="cli-seg-b ${qual === 'crm' ? 'on' : ''}" href="#/adm/consulta" role="tab">📨 Orçamentos</a>
-    <a class="cli-seg-b ${qual === 'clientes' ? 'on' : ''}" href="#/adm/clients" role="tab">👤 Clientes</a></div>`;
+    <a class="cli-seg-b ${qual === 'planilha' ? 'on' : ''}" href="#/adm/planilha" role="tab">Planilha</a>
+    <a class="cli-seg-b ${qual === 'crm' ? 'on' : ''}" href="#/adm/consulta" role="tab">Orçamentos</a>
+    <a class="cli-seg-b ${qual === 'clientes' ? 'on' : ''}" href="#/adm/clients" role="tab">Clientes</a></div>`;
 }
 /* acha o cadastro pela rota: "c:<id>", a chave antiga (e-mail/WhatsApp/nome) ou "g:<nome>" */
 function cadastroDaRota(arg) {
@@ -2541,6 +2541,19 @@ function tfLembretesHtml(hoje) {
       </div>`).join('')}` : ''}
   </section>`;
 }
+/* Agenda e Tarefas são um item só no menu (28/10/2026, igual à Mari): esta
+   chave fica no topo das duas telas. O número é o que vence hoje ou atrasou. */
+const IC_CAL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>';
+const IC_LISTA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M3.5 6l1.2 1.2L7 5M3.5 12l1.2 1.2L7 11M3.5 18l1.2 1.2L7 17"/></svg>';
+function agSeg(qual) {
+  const G = Tarefas.grupos(isoToday());
+  const pend = G.atrasadas.length + G.hoje.length;
+  const aba = (k, href, ic, nome, extra) => `<a href="${href}" class="${qual === k ? 'on' : ''}" ${qual === k ? 'aria-current="page"' : ''}>${ic}<span>${nome}</span>${extra || ''}</a>`;
+  return `<nav class="agSeg" aria-label="Ver a agenda como">
+    ${aba('cal', '#/adm/agenda', IC_CAL, 'Calendário')}
+    ${aba('tf', '#/adm/tarefas', IC_LISTA, 'Tarefas', pend ? `<span class="agBadge ${G.atrasadas.length ? 'bad' : ''}" aria-label="${pend} para fazer">${pend}</span>` : '')}
+  </nav>`;
+}
 function admTarefas(arg) {
   const S = admTarefas._s = admTarefas._s || { v: 'tarefas', busca: '' };
   S.f = S.f || 'todas'; S.cat = S.cat || 'tudo';
@@ -2562,13 +2575,12 @@ function admTarefas(arg) {
   const grupo = (tit, lista, cls) => lista.length ? `<section class="card tf-grupo ${cls || ''}"><h3>${tit} <span class="tf-n">${lista.length}</span></h3>${lista.map(t => tfLinha(t, hoje)).join('')}</section>` : '';
   const recentes = Tarefas.all().filter(t => t.feita && /sozinha/.test(t.obsFim || '') && t.feitaEm && t.feitaEm.slice(0, 10) >= addDays(hoje, -1));
 
-  admShell('tarefas', `
-    <div class="pagehead"><h1 class="pageh">Tarefas e anotações</h1>
-      <div class="chips">
+  admShell('agenda', `
+    <div class="pagehead agHead"><h1 class="pageh">${t('agTitle')}</h1>${agSeg('tf')}</div>
+    <div class="chips">
         <button class="chip ${S.v === 'tarefas' ? 'on' : ''}" data-tv="tarefas">Tarefas · ${abertas}</button>
         <button class="chip ${S.v === 'notas' ? 'on' : ''}" data-tv="notas">Anotações · ${Tarefas.notas('').length}</button>
-        <a class="mini" href="#/adm/agenda">ver na agenda</a>
-      </div></div>
+      </div>
     <datalist id="tfClis">${clientes.map(c => `<option value="${esc(c.name)}">`).join('')}</datalist>
 
     ${S.v === 'tarefas' ? `
@@ -3070,13 +3082,23 @@ function admParcerias() {
    (pedido de 29/09: "ela precisa ter facil orcamento pra enviar, voucher e
    cadastro cliente"). Cada um abre uma janelinha; nada de procurar a aba.
 ===================================================== */
+/* 28/10/2026 ("tá muito confuso, deixa tudo minimalista"): ícones de traço no
+   lugar dos emojis; no celular os cinco viram uma fileira de ícone + nome. */
+const AT_IC = {
+  orc: '<path d="M12 5v14M5 12h14"/>',
+  voucher: '<path d="M4 7.5A1.5 1.5 0 0 1 5.5 6h13A1.5 1.5 0 0 1 20 7.5V10a2 2 0 0 0 0 4v2.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 16.5V14a2 2 0 0 0 0-4Z"/><path d="M14 6v12" stroke-dasharray="2 2.2"/>',
+  cliente: '<circle cx="10" cy="8" r="3.5"/><path d="M3.5 19.5c.8-3.4 3.4-5.2 6.5-5.2s5.7 1.8 6.5 5.2M18.5 8v6M15.5 11h6"/>',
+  pagto: '<rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.6"/><path d="M6.5 9.5v.01M17.5 14.5v.01"/>',
+  drive: '<path d="M3.5 7.5A1.5 1.5 0 0 1 5 6h4.2l2 2.2H19a1.5 1.5 0 0 1 1.5 1.5v7.8A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5Z"/>',
+};
+const atIc = (k) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${AT_IC[k]}</svg>`;
 function atalhosHtml() {
   return `<nav class="atalhos" aria-label="Atalhos">
-    <button class="at-b at-forte" data-at="orc">＋ Orçamento</button>
-    <button class="at-b" data-at="voucher">🎫 Voucher</button>
-    <button class="at-b" data-at="cliente">👤 Novo cliente</button>
-    <button class="at-b" data-at="pagto">💵 Pagamento</button>
-    <button class="at-b drv-bt ${drvEstado.liberada ? 'ok' : drvEstado.pasta ? 'warn' : ''}" data-at="drive"><i class="drv-dot" aria-hidden="true"></i>📁 Google Drive</button>
+    <button class="at-b at-forte" data-at="orc">${atIc('orc')}<span>Orçamento</span></button>
+    <button class="at-b" data-at="voucher">${atIc('voucher')}<span>Voucher</span></button>
+    <button class="at-b" data-at="cliente">${atIc('cliente')}<span>Cliente</span></button>
+    <button class="at-b" data-at="pagto">${atIc('pagto')}<span>Pagamento</span></button>
+    <button class="at-b drv-bt ${drvEstado.liberada ? 'ok' : drvEstado.pasta ? 'warn' : ''}" data-at="drive">${atIc('drive')}<span>Drive</span><i class="drv-dot" aria-hidden="true"></i></button>
   </nav>`;
 }
 /* a janelinha (dialog nativo: Esc fecha, o foco fica dentro) */

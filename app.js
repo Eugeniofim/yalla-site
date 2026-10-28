@@ -312,8 +312,76 @@ function route() {
   else                       viewHub();
   document.body.classList.toggle('em-adm', p[0] === 'adm');
   cestaBarra(p[0]);
+  zapFlutuante(p);
   faixaAcimaDaBarra();
   scrollTo(0, 0);
+  _assinaturaTela = assinaturaTela();
+}
+
+/* A TELA NÃO SOBE MAIS SOZINHA (28/10/2026, "o app tá subindo, fica subindo e
+   perdendo infos" — o mesmo conserto da Mari de 22/10). Com ela logada, de 25
+   em 25 s a nuvem chamava route() MESMO SEM NADA NOVO: a tela voltava ao topo
+   e o que ela tinha digitado (e ainda não salvo) sumia. Agora: (1) só
+   redesenha se o que aparece na tela mudou de verdade; (2) redesenha na mesma
+   altura e sem a animação de entrada; (3) nunca por cima de quem está
+   digitando; (4) o que ela digitou e não salvou volta para o campo, se a
+   nuvem não mudou aquele campo. */
+let _assinaturaTela = '';
+function assinaturaTela() {
+  try {
+    const priv = typeof ITENS_COLS !== 'undefined' ? ITENS_COLS.map(k => DB[k]) : [];
+    return JSON.stringify([DB.tours, DB.rules, DB.departures, DB.blocks, DB.coupons, DB.settings, DB.bookings, DB.seatCounts, DB.pedidos, DB.orcamentos, priv]);
+  } catch (e) { return String(Math.random()); }
+}
+function _camposSujos() {
+  const l = [];
+  document.querySelectorAll('#app input[id], #app textarea[id], #app select[id]').forEach(e => {
+    if (e.type === 'checkbox' || e.type === 'radio') { if (e.checked !== e.defaultChecked) l.push({ id: e.id, chk: e.checked, ori: e.defaultChecked }); }
+    else if (e.tagName === 'SELECT') { const d = [...e.options].find(o => o.defaultSelected); const ori = d ? d.value : ''; if (e.value !== ori) l.push({ id: e.id, v: e.value, ori, sel: true }); }
+    else if (e.value !== e.defaultValue) l.push({ id: e.id, v: e.value, ori: e.defaultValue });
+  });
+  return l;
+}
+function _devolveCampos(l) {
+  for (const c of l) {
+    const e = document.getElementById(c.id); if (!e) continue;
+    if ('chk' in c) { if (e.defaultChecked === c.ori) e.checked = c.chk; continue; }
+    const ori = c.sel ? ((([...e.options].find(o => o.defaultSelected)) || {}).value || '') : e.defaultValue;
+    if (ori === c.ori) e.value = c.v;   /* a nuvem não mexeu neste campo: o que ela digitou fica */
+  }
+}
+function redesenhaSuave(forcar) {
+  if (!forcar && assinaturaTela() === _assinaturaTela) return false;          /* nada mudou: a tela fica quieta */
+  if (isBusyEditing()) { pendingSync = true; return false; }
+  const y = scrollY, sujos = _camposSujos();
+  document.body.classList.add('sem-anima');
+  route();
+  _devolveCampos(sujos);
+  scrollTo(0, y);
+  requestAnimationFrame(() => { scrollTo(0, y); setTimeout(() => document.body.classList.remove('sem-anima'), 450); });
+  return true;
+}
+
+/* O botão verde do WhatsApp em TODA página do cliente (28/10/2026, pedido
+   dele: "precisa sempre aparecer, mesmo que o cliente clique nos passeios").
+   Antes ele vinha dentro da capa e sumia ao abrir um passeio. Mora fora do
+   #app (o route() redesenha o #app) e sai do painel e do login. Na página de
+   um passeio a mensagem já leva o nome dele. Com a barra "Meu pedido" na
+   tela, o botão sobe para não ficar por cima dela. */
+function zapFlutuante(p) {
+  let el = document.getElementById('vtZap');
+  const g = (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.guia) || {};
+  if (['adm', 'login', 'novasenha'].includes(p[0]) || !(waNum() || g.whatsLink)) { if (el) el.remove(); return; }
+  const x = p[0] === 'tour' && Tours.get(p[1]);
+  const marca = guiaNegocio().split(' ')[0];
+  if (!el) {
+    el = document.createElement('a');
+    el.id = 'vtZap'; el.className = 'vt-zap'; el.target = '_blank'; el.rel = 'noopener'; el.innerHTML = ICONE_WA;
+    document.body.appendChild(el);
+  }
+  el.href = waLink(x ? t('waAskDates', { tour: x.name[LANG] || x.name.pt }) : t('waHello'));
+  el.setAttribute('aria-label', L3('Falar com a ' + marca + ' no WhatsApp', 'Chat with ' + marca + ' on WhatsApp', 'Hablar con ' + marca + ' por WhatsApp'));
+  document.body.classList.toggle('com-cesta', !!document.getElementById('cestaBar'));
 }
 
 /* A faixa do rodape (proposta / demonstracao) e a barra de abas do painel
@@ -479,9 +547,9 @@ function viewHub() {
     <div class="vt-wrap">
       <span class="vt-olho">${L3('Dubai · Abu Dhabi · Emirados', 'Dubai · Abu Dhabi · Emirates', 'Dubái · Abu Dabi · Emiratos')}</span>
       <h1 id="vtTit">${L3('Dubai e Emirados Árabes Unidos, do seu jeito.', 'Dubai and the United Arab Emirates, your way.', 'Dubái y los Emiratos Árabes Unidos, a tu manera.')}</h1>
-      <p class="vt-sub">${L3('Passeios privativos, atrações e experiências selecionadas, com atendimento em português e cuidado em cada detalhe da sua viagem.',
-        'Private tours, attractions and hand-picked experiences, with Portuguese-speaking service and care in every detail of your trip.',
-        'Paseos privados, atracciones y experiencias seleccionadas, con atención en portugués y cuidado en cada detalle de tu viaje.')}</p>
+      <p class="vt-sub">${L3('Passeios privativos, atrações e experiências selecionadas, com atendimento em seu idioma preferido e cuidado em cada detalhe da sua viagem.',
+        'Private tours, attractions and hand-picked experiences, with service in your preferred language and care in every detail of your trip.',
+        'Paseos privados, atracciones y experiencias seleccionadas, con atención en tu idioma preferido y cuidado en cada detalle de tu viaje.')}</p>
       <div class="vt-acoes">
         <button type="button" class="vt-btn vt-btn-ouro" data-vai="experiencias">${L3('Explorar experiências', 'Explore experiences', 'Explorar experiencias')}</button>
         <a class="vt-btn vt-btn-claro" href="#/roteiro">${planejar}</a>
@@ -646,7 +714,6 @@ function viewHub() {
         <a class="vt-painel" href="#/adm">${YL.cadeado}${L3('Painel da equipe', 'Team panel', 'Panel del equipo')}</a></span></div>
     </div>
   </footer>
-  <a class="vt-zap" href="${esc(waLink(t('waHello')))}" target="_blank" rel="noopener" aria-label="${L3('Falar com a ' + marca + ' no WhatsApp', 'Chat with ' + marca + ' on WhatsApp', 'Hablar con ' + marca + ' por WhatsApp')}">${ICONE_WA}</a>
   </div>`;
 
   bindLang(app);
@@ -1024,7 +1091,7 @@ function tipoLabel(type) {
 }
 /* "sob consulta": sem preço na tabela, o app não inventa um "a partir de 0" */
 /* o preço na moeda do passeio (21/10/2026): os tours da planilha dela são em
-   dólar, o mesmo valor do link de pagamento. Sem x.moeda, a do negócio (AED). */
+   dólar, o mesmo valor do link de pagamento. Sem x.moeda, a do negócio (USD desde 28/10/2026; era AED). */
 function valorTour(x, v) {
   const m = x && x.moeda;
   if (!m || m === moedaCodigo()) return eur(v);
@@ -2042,7 +2109,9 @@ function renderBook() {
 /* O menu em grupos (como o TI ARTES): cada grupo tem um título e as abas.
    A Planilha (o CRM dela, a planilha mais importante) fica SEMPRE no menu. */
 const ADM_GROUPS = [
-  { h: 'O dia a dia',           tabs: [['today', 'admToday'], ['agenda', 'admAgenda'], ['tarefas', 'admTarefas']] },
+  /* Agenda e Tarefas num item só (28/10/2026, "faz igual à Mari"): a chave
+     Calendário | Tarefas fica no topo das duas telas (agSeg) */
+  { h: 'O dia a dia',           tabs: [['today', 'admToday'], ['agenda', 'admAgenda']] },
   { h: 'Orçamentos e clientes', tabs: [['planilha', 'admPlanilha'], ['pipeline', 'admPipeline'], ['consulta', 'admConsulta'], ['clients', 'admClients'], ['bookings', 'admBookings']] },
   /* o atendimento automático (WhatsApp e Instagram) e a tela de ensinar o agente:
      só no app de quem contratou (APP_CONFIG.atendimento) */
@@ -2089,7 +2158,7 @@ function admShell(tab, inner) {
   /* reserva que chegou do site ganha o cadastro; e a sincronia por linha
      (nuvem-itens.js) liga na primeira tela do painel com ela logada */
   if (typeof cadastroEmDia === 'function') cadastroEmDia();
-  if (typeof itLigar === 'function') itLigar(() => { if (isBusyEditing()) pendingSync = true; else route(); });
+  if (typeof itLigar === 'function') itLigar(() => redesenhaSuave());
   if (typeof visualAplica === 'function') visualAplica(true);
   app.innerHTML = `
   <div class="adm">
@@ -3653,13 +3722,13 @@ function admAgenda() {
   const selList = (byDay[sel] || []).sort((a, b) => a.time.localeCompare(b.time));
 
   admShell('agenda', `
-    <div class="pagehead"><h1 class="pageh">${t('agTitle')}</h1>
-      <div class="chips">
+    <div class="pagehead agHead"><h1 class="pageh">${t('agTitle')}</h1>${agSeg('cal')}</div>
+    <div class="chips agMesNav">
         <button class="mini" id="agPrev" aria-label="${t('agPrev')}">←</button>
         <button class="chip on">${MN[M - 1]} ${Y}</button>
         <button class="mini" id="agNext" aria-label="${t('agNext')}">→</button>
         <button class="mini" id="agNow">${t('agToday')}</button>
-      </div></div>
+      </div>
     <div class="two-col">
       <section class="card">
         <div class="agrid head">${WD.map(w => `<span class="agwd">${w}</span>`).join('')}</div>
@@ -3892,7 +3961,7 @@ addEventListener('hashchange', () => {
    Nao bloqueia o arranque: o app abre com o preco em euro e o valor em real
    entra quando a cotacao chegar. Se nunca chegar, simplesmente nao aparece. */
 if (typeof fxAtualiza === 'function') {
-  fxAtualiza().then((c) => { if (c && LANG === 'pt' && !isBusyEditing()) route(); });
+  fxAtualiza().then((c) => { if (c && LANG === 'pt' && !isBusyEditing()) redesenhaSuave(true); });
 }
 
 /* ---------- nuvem ---------- */
@@ -3902,9 +3971,8 @@ cloudStart((r) => {
     const b = r.fresh[r.fresh.length - 1];
     toast((LANG === 'pt' ? '🎉 Nova reserva: ' : '🎉 New booking: ') + b.name + ' · ' + valorReserva(b, b.total));
   }
-  /* re-render seguro: nunca por cima de trabalho em andamento */
-  if (isBusyEditing()) { pendingSync = true; return; }
-route();
+  /* re-render seguro: só se mudou algo, na mesma altura, nunca por cima de trabalho em andamento */
+  redesenhaSuave();
 });
 
 
