@@ -51,6 +51,7 @@ Orc._item = function (i) {
     tipo: ['passeio', 'traslado', 'livre'].includes(i.tipo) ? i.tipo
       : (i.tourId ? 'passeio' : RE_TRANSFER.test(String(i.desc || '')) || /traslado/i.test(String(i.desc || '')) ? 'traslado' : 'livre'),
     auto: !!i.auto,                                /* o valor veio da tabela: muda junto com o nº de pessoas */
+    criancas: Math.max(0, Math.min(+i.criancas || 0, Math.max(1, +i.pax || 1))),   /* das pessoas, quantas são crianças */
   });
 };
 /* O TOTAL (o que o resto do app já usa: CRM, painel, assistente):
@@ -137,17 +138,34 @@ function oyProximoDia(o) {
   return ult ? addDays(ult.data, 1) : '';
 }
 
-/* um passeio do catálogo, já com o preço da tabela dela, o texto, o incluso e a foto */
+/* AS OPÇÕES DE CADA PASSEIO E O PREÇO DE CRIANÇA (28/10/2026, pedido da Milla: "aqui precisa
+   ter as opções dentro de cada: adulto/criança OU non-prime/prime"). A opção escolhida traz o
+   preço; a criança paga o preço de criança da opção (ou do passeio), como no site. */
+const oyOpcoes = (x) => Array.isArray(x && x.opcoes) ? x.opcoes : [];
+const oyOpNome = (op) => oyPt(op && op.nome).trim();
+const oyTemOpcoes = (x) => oyOpcoes(x).length > 1;
+const oyPrecoCrianca = (x, k) => +((oyOpcoes(x)[+k || 0] || {}).precoCrianca || (x && x.precoCrianca) || 0);
+function oyPrecoItem(x, i) {
+  const pax = Math.max(1, +i.pax || 1), cri = Math.min(pax, Math.max(0, +i.criancas || 0));
+  const pr = Bookings.precoDe(x, x.id, i.data || isoToday(), i.hora || '09:00', pax, { opcao: +i.opcao || 0, idades: Array(cri).fill(0) });
+  return pr || { total: 0 };
+}
+/* o nome do serviço com a opção ("Burj Khalifa – At The Top · Após 16:00 (prime)") */
+const oyTituloDe = (x, k) => oyPt(x.name) + (oyTemOpcoes(x) && oyOpNome(oyOpcoes(x)[+k || 0]) ? ' · ' + oyOpNome(oyOpcoes(x)[+k || 0]) : '');
+/* um passeio do catálogo, já com o preço da tabela dela, a opção, o texto, o incluso e a foto */
 function oyDoCatalogo(o, tourId, extra) {
   extra = extra || {};
   const x = Tours.get(tourId); if (!x) return null;
   const pax = +extra.pax || oyPax(o) || 2;
-  const base = Orc.itemDoCatalogo(tourId, { pax, data: extra.data || '', hora: extra.hora || '' });
+  const opcao = Math.max(0, Math.min(+extra.opcao || 0, Math.max(0, oyOpcoes(x).length - 1)));
+  const criancas = Math.min(pax, extra.criancas != null ? +extra.criancas || 0 : (+o.criancas || 0));
+  const base = Orc.itemDoCatalogo(tourId, { pax, data: extra.data || '', hora: extra.hora || '', opcao });
+  base.valor = oyPrecoItem(x, { pax, criancas, opcao, data: extra.data, hora: extra.hora }).total || base.valor;
   /* hora só se for certa: a que ela disse, a do horário fixo do passeio ou a faixa da duração
      ("09h00 – 18h00"). Sem nada disso fica em branco — o 09:00 de reserva seria chute. */
   const regra = (DB.rules || []).find(r => r.tourId === tourId);
   const [h1, h2] = oyHorasDe(x, extra.hora || (regra && regra.time) || '');
-  return Orc._item({ ...base, pax, tipo: x.type === 'transfer' ? 'traslado' : 'passeio', auto: !(+extra.valor > 0),
+  return Orc._item({ ...base, pax, criancas, opcao, desc: oyTituloDe(x, opcao), tipo: x.type === 'transfer' ? 'traslado' : 'passeio', auto: !(+extra.valor > 0),
     valor: +extra.valor > 0 ? +extra.valor : base.valor, hora: h1 || '', horaFim: extra.horaFim || h2,
     texto: extra.texto || oyParagrafo(oyPt(x.desc)), incluso: extra.incluso || oyLista(x.includes).join(', '),
     foto: oyFotosDe(x)[0] || '' });
@@ -170,8 +188,9 @@ function oyTraslado(o, qual) {
 function oyMudaPax(o, antes) {
   const agora = oyPax(o);
   for (const i of o.itens) {
-    if (i.pax === antes || !i.pax) i.pax = agora || 1;
-    if (i.auto && i.tourId && Tours.get(i.tourId)) { const n = Orc.itemDoCatalogo(i.tourId, { pax: i.pax, data: i.data, hora: i.hora, opcao: i.opcao }); if (n) i.valor = n.valor; }
+    if (i.pax === antes || !i.pax) { i.pax = agora || 1; i.criancas = Math.min(i.pax, +o.criancas || 0); }
+    const x = i.tourId && Tours.get(i.tourId);
+    if (i.auto && x) i.valor = oyPrecoItem(x, i).total || i.valor;
   }
   o.pax = agora; o.paxNota = oyPaxTexto(o);
 }
@@ -568,9 +587,16 @@ function oyTela(id) {
         <label class="fld">Título<input data-k="desc" value="${esc(i.desc)}"></label>
         <label class="fld">O que o cliente vai ler<textarea data-k="texto" rows="4">${esc(i.texto)}</textarea></label>`}
         <label class="fld">Incluso<textarea data-k="incluso" rows="2">${esc(i.incluso)}</textarea></label>
+        ${x ? (() => { const pc = oyPrecoCrianca(x, i.opcao), idade = +((oyOpcoes(x)[+i.opcao || 0] || {}).idadeCrianca || x.idadeCrianca || 0);
+          return `<div class="oy-g3 oy-opc">
+          ${oyTemOpcoes(x) ? `<label class="fld oy-opsel">Opção<select data-k="opcao">${oyOpcoes(x).map((op, k) => `<option value="${k}" ${+i.opcao === k ? 'selected' : ''}>${esc(oyOpNome(op) || 'Opção ' + (k + 1))} · ${esc(oyM(+op.preco || 0, m))}</option>`).join('')}</select></label>` : ''}
+          <label class="fld">Adultos<input type="number" min="0" inputmode="numeric" data-k="adultosIt" value="${Math.max(0, (+i.pax || 1) - (+i.criancas || 0))}"></label>
+          <label class="fld">Crianças<input type="number" min="0" inputmode="numeric" data-k="criancas" value="${+i.criancas || 0}"></label>
+        </div>
+        <p class="why oy-pcri">${pc > 0 ? `Criança${idade ? ' até ' + idade + ' anos' : ''} paga ${esc(oyM(pc, m))}.` : 'Este passeio não tem preço de criança: criança paga como adulto.'} O valor refaz sozinho ao mudar a opção ou as pessoas.</p>`; })() : ''}
         <div class="oy-g3">
           ${i.tipo === 'traslado' ? `<label class="fld">Voo<input data-k="voo" value="${esc(i.voo)}" placeholder="EK323"></label>` : `<label class="fld">Destaque<input data-k="rotulo" value="${esc(i.rotulo)}" placeholder="manhã livre"></label>`}
-          <label class="fld">Pessoas<input type="number" min="1" inputmode="numeric" data-k="pax" value="${i.pax}"></label>
+          ${x ? '' : `<label class="fld">Pessoas<input type="number" min="1" inputmode="numeric" data-k="pax" value="${i.pax}"></label>`}
           ${so ? `<label class="fld oy-custo2" title="o que você paga a quem faz o serviço — nunca vai para o cliente">Custo (só você vê)<input type="number" min="0" inputmode="decimal" data-k="custo" value="${i.custo || ''}" placeholder="0"></label>`
             : `<label class="fld">Valor ${esc(m)}<input type="number" min="0" inputmode="decimal" data-k="valor" value="${i.valor || ''}" placeholder="0"></label>`}
         </div>
@@ -739,6 +765,10 @@ function oyLe(o) {
   $$('[data-v]').forEach(e => { const [k, c] = e.dataset.v.split('.'); o[k] = o[k] || {}; o[k][c] = c === 'hora' ? (oyHm(e.value) || e.value.trim()) : e.value.trim(); });
   document.querySelectorAll('.oy [data-it]').forEach(box => {
     const i = o.itens.find(z => z.id === box.dataset.it); if (!i) return;
+    const antes = { opcao: +i.opcao || 0, pax: +i.pax || 1, cri: +i.criancas || 0 }, x = i.tourId && Tours.get(i.tourId);
+    const tituloAuto = x && i.desc === oyTituloDe(x, antes.opcao);
+    const ad = box.querySelector('[data-k="adultosIt"]'), cr = box.querySelector('[data-k="criancas"]');
+    if (ad && cr && ad.closest('[data-it]') === box) { const a = Math.max(0, +ad.value || 0), c = Math.max(0, +cr.value || 0); i.pax = Math.max(1, a + c); i.criancas = Math.min(c, i.pax); }
     box.querySelectorAll('[data-k]').forEach(e => {
       if (e.closest('[data-it]') !== box) return;
       const k = e.dataset.k;
@@ -748,8 +778,16 @@ function oyLe(o) {
       else if (k === 'hora' || k === 'horaFim') i[k] = oyHm(e.value) || e.value.trim();
       /* "09:00–17:00", "9h às 17h", "19:30" */
       else if (k === 'faixa') { const [a, b] = String(e.value).split(/\s*(?:–|—|-|às|as|até|ate|a)\s*/i); i.hora = oyHm(a) || ''; i.horaFim = oyHm(b) || ''; }
+      else if (k === 'opcao') i.opcao = Math.max(0, +e.value || 0);
+      else if (k === 'adultosIt' || k === 'criancas') { /* já lidos acima */ }
       else i[k] = e.value;
     });
+    /* mudou a opção ou as pessoas: o preço da tabela refaz (e o título leva a opção nova) */
+    if (x && (i.opcao !== antes.opcao || i.pax !== antes.pax || (+i.criancas || 0) !== antes.cri)) {
+      if (i.opcao !== antes.opcao) i.auto = true;
+      if (i.auto) i.valor = oyPrecoItem(x, i).total || i.valor;
+      if (tituloAuto && i.opcao !== antes.opcao) i.desc = oyTituloDe(x, i.opcao);
+    }
   });
   const n = (s, d) => { const x = v(s); return x == null ? d : (+x || 0); };
   o.pago = n('#oyPago', o.pago); o.desconto = n('#oyDesc', o.desconto);
@@ -791,7 +829,7 @@ function oyLiga(o) {
     e.onchange = () => {
       /* só o que muda a ordem ou o preço redesenha; o valor na planilha só refaz os totais */
       const naPlanilha = !!e.closest('.oy-row');
-      const muda = e.matches('[data-k="data"],[data-k="hora"],[data-k="faixa"],[data-k="pax"],[data-v$=".data"]') || (!naPlanilha && e.matches('[data-k="valor"]'));
+      const muda = e.matches('[data-k="data"],[data-k="hora"],[data-k="faixa"],[data-k="pax"],[data-k="opcao"],[data-k="adultosIt"],[data-k="criancas"],[data-v$=".data"]') || (!naPlanilha && e.matches('[data-k="valor"]'));
       oySalva(o, muda);
     };
   });
@@ -811,8 +849,8 @@ function oyLiga(o) {
   $$('[data-dup]').forEach(b => b.onclick = () => { oyLe(o); const i = o.itens.find(z => z.id === b.dataset.dup); if (!i) return; const n = Orc._item({ ...i, id: '' }); o.itens.push(n); S.aberto = n.id; Orc.salva(o); re(); });
   $$('[data-recalc]').forEach(b => b.onclick = () => {
     oyLe(o); const i = o.itens.find(z => z.id === b.dataset.recalc); if (!i) return;
-    const n = Orc.itemDoCatalogo(i.tourId, { pax: i.pax, data: i.data, hora: i.hora, opcao: i.opcao });
-    if (n) { i.valor = n.valor; i.sinal = n.sinal; i.auto = true; }
+    const x = Tours.get(i.tourId), n = Orc.itemDoCatalogo(i.tourId, { pax: i.pax, data: i.data, hora: i.hora, opcao: i.opcao });
+    if (x) { i.valor = oyPrecoItem(x, i).total || (n && n.valor) || 0; if (n) i.sinal = n.sinal; i.auto = true; }
     Orc.salva(o); re();
   });
   $$('[data-tr]').forEach(b => b.onclick = () => {
@@ -850,17 +888,25 @@ function oyCatalogo(o) {
     const l = Tours.all().filter(x => x.status !== 'draft' || ja.has(x.id))
       .filter(x => !C.r || x.region === C.r)
       .filter(x => !q || _nomeN(x.name.pt + ' ' + oyPt(x.tagline) + ' ' + (x.region || '')).includes(q));
+    const pax = oyPax(o) || 2, cri = Math.min(pax, +o.criancas || 0);
+    const grupo = `${pax - cri} ${pax - cri === 1 ? 'adulto' : 'adultos'}${cri ? ' + ' + cri + (cri === 1 ? ' criança' : ' crianças') : ''}`;
+    const preco = (x, k) => oyPrecoItem(x, { pax, criancas: cri, opcao: k }).total || 0;
     d.querySelector('#oyCL').innerHTML = l.length ? l.map(x => {
-      const f = oyFotosDe(x)[0], p = Orc.itemDoCatalogo(x.id, { pax: oyPax(o) || 2 });
-      const mx = x.moeda || moedaCodigo();
-      return `<button type="button" class="oy-cit ${ja.has(x.id) ? 'ja' : ''}" data-cadd="${esc(x.id)}">
-        <span class="oy-cft" ${f ? `style="background-image:url('${esc(f)}')"` : ''} aria-hidden="true"></span>
-        <span class="oy-cnm"><b>${esc(x.name.pt)}</b><small>${p && p.valor ? esc(oyM(p.valor, mx)) + ' · ' + (oyPax(o) || 2) + 'p' : 'sob consulta'}${ja.has(x.id) ? ' · já no roteiro' : ''}</small></span>
+      const f = oyFotosDe(x)[0], ops = oyOpcoes(x);
+      const foto = `<span class="oy-cft" ${f ? `style="background-image:url('${esc(f)}')"` : ''} aria-hidden="true"></span>`;
+      /* com opções: uma linha por opção (preço do adulto e da criança, e o total do grupo) */
+      if (oyTemOpcoes(x)) return `<div class="oy-cit oy-citop ${ja.has(x.id) ? 'ja' : ''}">${foto}
+        <div class="oy-cnm"><b>${esc(x.name.pt)}</b><small>${esc(grupo)}${ja.has(x.id) ? ' · já no roteiro' : ''}</small>
+          <div class="oy-cops" role="group" aria-label="Opções de ${esc(x.name.pt)}">${ops.map((op, k) => { const v = preco(x, k), pc = +op.precoCrianca || 0;
+            return `<button type="button" class="oy-cop" data-cadd="${esc(x.id)}" data-cop="${k}"><span><b>${esc(oyOpNome(op) || 'Opção ' + (k + 1))}</b><small>${esc(oyM(+op.preco || 0, OY_MOEDA))}${pc ? ' · criança ' + esc(oyM(pc, OY_MOEDA)) : ''}</small></span><em>${v ? esc(oyM(v, OY_MOEDA)) : 'consultar'}</em>${oyIc('mais')}</button>`; }).join('')}</div></div></div>`;
+      const v = preco(x, 0), pc = oyPrecoCrianca(x, 0);
+      return `<button type="button" class="oy-cit ${ja.has(x.id) ? 'ja' : ''}" data-cadd="${esc(x.id)}">${foto}
+        <span class="oy-cnm"><b>${esc(x.name.pt)}</b><small>${v ? esc(oyM(v, OY_MOEDA)) + ' · ' + esc(grupo) : 'sob consulta'}${pc ? ' · criança ' + esc(oyM(pc, OY_MOEDA)) : ''}${ja.has(x.id) ? ' · já no roteiro' : ''}</small></span>
         <span class="oy-cmais">${oyIc('mais')}</span></button>`;
     }).join('') : '<p class="why">Nada com esse nome. Use "Item livre" para escrever à mão.</p>';
     d.querySelectorAll('[data-cadd]').forEach(b => b.onclick = () => {
       const dia = C.dia || '';
-      const n = oyDoCatalogo(o, b.dataset.cadd, { data: dia });
+      const n = oyDoCatalogo(o, b.dataset.cadd, { data: dia, opcao: +b.dataset.cop || 0 });
       if (!n) return;
       o.itens.push(n); Orc.salva(o); ppRepublica(o); C.n++;
       d.querySelector('#oyCN').textContent = `${C.n} acrescentado${C.n > 1 ? 's' : ''} · ${n.desc}${dia ? ' em ' + opCurta(dia) : ''}`;
@@ -870,6 +916,7 @@ function oyCatalogo(o) {
   };
   pinta();
   d.querySelector('#oyCQ').oninput = (e) => { C.q = e.target.value; pinta(); };
+  if (typeof matchMedia === 'function' && matchMedia('(pointer: fine)').matches) setTimeout(() => d.querySelector('#oyCQ').focus(), 30);
   d.querySelectorAll('[data-creg]').forEach(b => b.onclick = () => { C.r = b.dataset.creg; d.querySelectorAll('[data-creg]').forEach(c => c.classList.toggle('on', c === b)); pinta(); });
   d.querySelectorAll('[data-cdia]').forEach(b => b.onclick = () => { C.dia = b.dataset.cdia; d.querySelectorAll('[data-cdia]').forEach(c => c.classList.toggle('on', c === b)); });
   const di = d.querySelector('#oyCDia'); if (di) di.onchange = () => { C.dia = di.value; };
@@ -994,6 +1041,9 @@ function oyCss() {
   .oy-cm:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   .oy-rowmais{padding:10px 14px 14px;background:var(--accent-wash);border-top:1px dashed var(--accent-line)}
   .oy-custo2{min-width:0}
+  .oy-opc{align-items:end}
+  .oy-opsel select{min-width:0}
+  .oy-pcri{margin:-4px 0 10px;font-size:12.5px}
   /* a janela do catálogo */
   .oy-cdlg{width:min(640px,96vw)}
   .oy-cdias .chips,.oy-creg{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;scrollbar-width:thin}
@@ -1010,6 +1060,16 @@ function oyCss() {
   .oy-cft{width:56px;height:44px;border-radius:8px;background:var(--surface-2) center/cover}
   .oy-cnm b{display:block;font-weight:600;font-size:var(--fs-3);line-height:1.25}
   .oy-cnm small{color:var(--ink-3);font-size:12px}
+  .oy-citop{grid-template-columns:56px 1fr;cursor:default;align-items:start}
+  .oy-citop:hover{background:var(--surface);border-color:var(--line)}
+  .oy-cops{display:grid;gap:4px;margin-top:8px}
+  .oy-cop{display:grid;grid-template-columns:1fr auto 32px;align-items:center;gap:8px;min-height:44px;padding:6px 6px 6px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);text-align:left;font:inherit;color:var(--ink);cursor:pointer}
+  .oy-cop:hover{border-color:var(--accent-line);background:var(--accent-wash)}
+  .oy-cop:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .oy-cop b{display:block;font-size:13.5px;font-weight:600}
+  .oy-cop small{display:block;color:var(--ink-3);font-size:12px}
+  .oy-cop em{font-style:normal;font-weight:700;font-variant-numeric:tabular-nums;font-size:13.5px}
+  .oy-cop svg{width:30px;height:30px;padding:6px;border-radius:50%;background:var(--accent);color:var(--accent-ink)}
   .oy-cmais{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:var(--accent);color:var(--accent-ink)}
   .oy-cmais svg{width:18px;height:18px}
   .oy-cpe{justify-content:space-between;align-items:center}
@@ -1057,6 +1117,8 @@ opDocOrc = (id) => go('/adm/proposta/' + id);
   };
   const ITEM_EXTRA = { hora_fim: { type: 'string' }, texto: { type: 'string', description: 'o que o cliente lê sobre o serviço (passeio do catálogo já vem preenchido)' },
     incluso: { type: 'string' }, destaque: { type: 'string', description: 'ex.: manhã livre, à noite' }, voo: { type: 'string' },
+    opcao: { type: 'string', description: 'a opção do passeio, pelo nome (ex.: "prime", "17 minutos", "com serviço de mesa") — ver_passeios mostra as opções' },
+    criancas: { type: 'integer', description: 'quantas das pessoas são crianças (o preço de criança entra sozinho)' },
     tipo: { type: 'string', enum: ['passeio', 'traslado', 'livre'] }, traslado: { type: 'string', enum: ['chegada', 'saida'], description: 'traslado de aeroporto pronto, com o texto e o voo da chegada/partida' } };
   for (const n of ['criar_orcamento', 'editar_orcamento']) {
     const t = acha(n); if (!t) continue;
@@ -1083,7 +1145,11 @@ opDocOrc = (id) => go('/adm/proposta/' + id);
   /* o serviço do jeito novo (foto, texto, incluso; traslado pronto) */
   const servico = (o, it) => {
     if (it.traslado) return oyTraslado(o, it.traslado === 'chegada' ? 'chegada' : 'saida');
-    if (it.passeio_id && Tours.get(it.passeio_id)) return oyDoCatalogo(o, it.passeio_id, { data: isoOk(it.data) ? it.data : '', hora: oyHm(it.hora), horaFim: oyHm(it.hora_fim), pax: it.pessoas, valor: it.valor, texto: it.texto, incluso: it.incluso });
+    const x = it.passeio_id && Tours.get(it.passeio_id);
+    if (x) {
+      const q = ingN(it.opcao || ''), k = q ? oyOpcoes(x).findIndex(op => ingN(oyOpNome(op)).includes(q)) : 0;
+      return oyDoCatalogo(o, it.passeio_id, { data: isoOk(it.data) ? it.data : '', hora: oyHm(it.hora), horaFim: oyHm(it.hora_fim), pax: it.pessoas, criancas: it.criancas, opcao: Math.max(0, k), valor: it.valor, texto: it.texto, incluso: it.incluso });
+    }
     return null;
   };
   const enriquece = (n, it) => Object.assign(n, {
@@ -1156,13 +1222,25 @@ opDocOrc = (id) => go('/adm/proposta/' + id);
     return _plano(nome, i);
   };
 
+  /* ver_passeios mostra as opções de cada passeio (nome, preço, preço de criança) */
+  if (typeof iaLeitura === 'function') {
+    const _ler = iaLeitura;
+    iaLeitura = function (nome, i) {
+      const r = _ler(nome, i);
+      if (nome !== 'ver_passeios' || !Array.isArray(r)) return r;
+      return r.map(p => { const x = Tours.get(p.id); if (!x) return p;
+        const ops = oyOpcoes(x).map(op => ({ nome: oyOpNome(op), preco: +op.preco || 0, ...(+op.precoCrianca ? { preco_crianca: +op.precoCrianca, crianca_ate_anos: +op.idadeCrianca || +x.idadeCrianca || null } : {}) }));
+        return { ...p, moeda: OY_MOEDA, ...(+x.precoCrianca ? { preco_crianca: +x.precoCrianca } : {}), ...(ops.length > 1 ? { opcoes: ops } : {}) }; });
+    };
+  }
+
   /* as regras do orçamento no que o assistente lê antes de tudo */
   const _sis = iaSistema;
   iaSistema = function () {
     const b = _sis();
     b.push({ type: 'text', text: `## ORÇAMENTO E PROPOSTA (o jeito dela, desde 28/10/2026)
 - Antes de criar, tenha o BÁSICO: nome do cliente, WhatsApp, quantas pessoas (adultos e crianças), hotel e os dias de chegada e partida (com hora e voo, se ela souber). Falta algum? Pergunte UMA coisa por vez — mas não trave: com nome e pessoas já dá para criar e completar depois com editar_orcamento.
-- Monte o roteiro DIA A DIA: cada serviço com data e hora. Passeio do catálogo SEMPRE com passeio_id (de ver_passeios): traz preço, foto, texto e incluso. Traslado de aeroporto: item com traslado:"chegada" ou "saida" (pega o voo e o hotel). O resto: descricao + texto.
+- Monte o roteiro DIA A DIA: cada serviço com data e hora. Passeio do catálogo SEMPRE com passeio_id (de ver_passeios): traz preço, foto, texto e incluso. Passeio com opções (prime/non-prime, minutos de voo, com/sem serviço de mesa): passe opcao com o nome; tem criança no grupo? passe criancas — o preço de criança entra sozinho. Traslado de aeroporto: item com traslado:"chegada" ou "saida" (pega o voo e o hotel). O resto: descricao + texto.
 - Moeda: SOMENTE DÓLAR (USD), sempre. Nunca escreva valor em dirham, real ou euro. Os valores dos serviços são SEM imposto: o app soma 5% de VAT no fim sozinho (nunca some de novo). Total e por pessoa saem sozinhos.
 - "(Indicação: CÓDIGO)" na conversa = veio pelo link de um parceiro: o app liga o orçamento a ele sozinho e a comissão entra em Indicações e cupons.
 - Depois de criar ou mudar, ofereça em uma linha: "Quer que eu abra a proposta para gerar o PDF ou mandar o link?" → proposta_orcamento. Quem manda é ela.` });
