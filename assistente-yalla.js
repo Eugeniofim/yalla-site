@@ -188,3 +188,47 @@ if (typeof guardaFoto === 'function' && typeof Mkt !== 'undefined') {
     return p;
   };
 })();
+
+/* INCLUSO, NÃO INCLUSO E ORIENTAÇÕES NO LUGAR CERTO (28/10/2026, vídeo da Milla do Majesty 56: tudo
+   tinha ido para a descrição e a página mostrava "Está incluído" vazio). criar_passeio e
+   alterar_passeio ganham inclui / nao_inclui / orientacoes; e o que for gravado passa pela mesma
+   separação do editor (tourSeparaTextos) — o texto dela só muda de lugar, nada é reescrito. */
+(function () {
+  if (typeof IA_FERRAMENTAS === 'undefined' || typeof iaPlano !== 'function') return;
+  const L = { type: 'array', items: { type: 'string' } };
+  const CAMPOS = { inclui: { ...L, description: 'o que ESTÁ incluso, um item por linha, como ela escreveu' }, nao_inclui: { ...L, description: 'o que NÃO está incluso, como ela escreveu' },
+    orientacoes: { type: 'string', description: 'avisos para o cliente (capacidade, "percurso sujeito a…", o que levar), como ela escreveu' } };
+  for (const n of ['criar_passeio', 'alterar_passeio']) {
+    const t = IA_FERRAMENTAS.find(f => f.name === n); if (!t) continue;
+    Object.assign(t.input_schema.properties, CAMPOS);
+    t.description += ' descricao = SÓ o programa (o texto corrido); o incluso, o não incluso e os avisos vão em inclui / nao_inclui / orientacoes — nunca dentro da descrição.';
+  }
+  const _plano = iaPlano;
+  iaPlano = function (nome, i) {
+    i = i || {};
+    if (nome !== 'criar_passeio' && nome !== 'alterar_passeio') return _plano(nome, i);
+    const inc = (i.inclui || []).map(String).filter(s => s.trim()), ninc = (i.nao_inclui || []).map(String).filter(s => s.trim()), ori = String(i.orientacoes || '').trim();
+    const resto = { ...i }; delete resto.inclui; delete resto.nao_inclui; delete resto.orientacoes;
+    const so = nome === 'alterar_passeio' && (inc.length || ninc.length || ori) && !Object.keys(resto).some(k => k !== 'passeio_id' && resto[k] != null && resto[k] !== '' && !(Array.isArray(resto[k]) && !resto[k].length));
+    let p;
+    if (so) { const x = Tours.get(i.passeio_id); if (!x) return E_('passeio não encontrado'); p = { titulo: 'Textos do passeio', assumiu: [], linhas: [['Passeio', nomeTour(x)]], fazer: () => ({ ok: true }) }; }
+    else p = _plano(nome, resto);
+    if (!p || !p.fazer) return p;
+    if (inc.length) p.linhas.push(['Incluso', inc.join(' · ')]);
+    if (ninc.length) p.linhas.push(['Não incluso', ninc.join(' · ')]);
+    if (ori) p.linhas.push(['Orientações', ori]);
+    const f0 = p.fazer;
+    p.fazer = async () => {
+      const r = await f0(); const id = nome === 'criar_passeio' ? r && r.passeio_id : i.passeio_id; const x = id && Tours.get(id); if (!x) return r;
+      const muda = {};
+      if (inc.length) muda.includes = { ...(Array.isArray(x.includes) ? { pt: x.includes } : (x.includes || {})), pt: inc };
+      if (ninc.length) muda.notIncludes = { ...(Array.isArray(x.notIncludes) ? { pt: x.notIncludes } : (x.notIncludes || {})), pt: ninc };
+      if (ori) muda.dicas = { ...(x.dicas || {}), pt: ori };
+      if (Object.keys(muda).length) Tours.update(id, muda);
+      const y = Tours.get(id), z = typeof tourSeparaTextos === 'function' ? tourSeparaTextos(y) : y;
+      if (z !== y) Tours.update(id, { desc: z.desc, includes: z.includes, notIncludes: z.notIncludes, dicas: z.dicas, ...(z.minHoras !== y.minHoras ? { minHoras: z.minHoras } : {}) });
+      return r;
+    };
+    return p;
+  };
+})();

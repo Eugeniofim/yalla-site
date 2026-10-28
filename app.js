@@ -1504,7 +1504,7 @@ function cancelaTxt(x) {
 }
 
 function viewTour(id) {
-  const x = Tours.get(id);
+  const x = typeof tourSeparaTextos === 'function' ? tourSeparaTextos(Tours.get(id)) : Tours.get(id);
   if (!x) {
     /* Link direto de um passeio na PRIMEIRA visita: o catalogo ainda vem
        a caminho da nuvem. Mandar para a lista perdia justamente o link que o
@@ -1609,20 +1609,20 @@ function viewTour(id) {
         </div>
       </div>
 
-      <!-- O QUE INCLUI -->
-      <div class="sec">
+      <!-- O QUE INCLUI (sem item nenhum, a seção não aparece: antes ficava "Está incluído" e nada embaixo) -->
+      ${lista(x.includes).length || lista(x.notIncludes).length ? `<div class="sec">
         <span class="seclabel">${t('secIncludes')}</span>
         <div class="incbox">
-          <div>
+          ${lista(x.includes).length ? `<div>
             <h4>${t('included')}</h4>
             <ul class="inc yes">${lista(x.includes).map(i => `<li>${esc(i)}</li>`).join('')}</ul>
-          </div>
+          </div>` : ''}
           ${lista(x.notIncludes).length ? `<div>
             <h4>${t('notIncluded')}</h4>
             <ul class="inc no">${lista(x.notIncludes).map(i => `<li>${esc(i)}</li>`).join('')}</ul>
           </div>` : ''}
         </div>
-      </div>
+      </div>` : ''}
 
       <!-- VALOR E RESERVA -->
       <div class="sec">
@@ -2234,7 +2234,21 @@ function onCloudRejected() {
   toast(t('nlNotSaved'));
 }
 
+/* passeios com INCLUSO/NÃO INCLUSO colados na descrição: arruma o DADO uma vez, no aparelho da dona
+   (vai para a nuvem pelo caminho normal). Depois disso a descrição não tem mais os cabeçalhos e nada
+   acontece de novo. */
+function arrumaTextosPasseios() {
+  if (typeof tourSeparaTextos !== 'function') return 0;
+  let n = 0;
+  for (const x of Tours.all()) {
+    const y = tourSeparaTextos(x); if (y === x) continue;
+    Tours.update(x.id, { desc: y.desc, includes: y.includes, notIncludes: y.notIncludes, dicas: y.dicas, ...(y.minHoras !== x.minHoras ? { minHoras: y.minHoras } : {}) }); n++;
+  }
+  if (n && typeof toast === 'function') toast(n === 1 ? 'Arrumei 1 passeio: incluso e não incluso nos lugares certos' : `Arrumei ${n} passeios: incluso e não incluso nos lugares certos`);
+  return n;
+}
 function admShell(tab, inner) {
+  if (!admShell._textos && typeof isLoggedIn === 'function' && isLoggedIn()) { admShell._textos = true; setTimeout(arrumaTextosPasseios, 1200); }
   /* reserva que chegou do site ganha o cadastro; e a sincronia por linha
      (nuvem-itens.js) liga na primeira tela do painel com ela logada */
   if (typeof cadastroEmDia === 'function') cadastroEmDia();
@@ -2503,7 +2517,7 @@ function admTourEdit(id) {
         <label class="fld campo-en">${t('tNameEn')}<input id="fNameEn" value="${esc(x.name.en)}"></label>
         <label class="fld">${t('edTagline')}<input id="fTagPt" value="${esc((x.tagline && x.tagline.pt) || '')}" placeholder="Entre vinhedos, castelos e vilarejos iluminados"><small class="why">${t('edTaglineWhy')}</small></label>
         <label class="fld campo-en">${t('edTagline')} (EN)<input id="fTagEn" value="${esc((x.tagline && x.tagline.en) || '')}"></label>
-        <label class="fld">${t('tDesc')}<textarea id="fDescPt">${esc(x.desc.pt)}</textarea><small class="why">${t('tDescHelp')}</small></label>
+        <label class="fld">${t('tDesc')}<textarea id="fDescPt">${esc(x.desc.pt)}</textarea><small class="why">${t('tDescHelp')} ${L3('Só o programa — o incluso, o não incluso e os avisos têm campos próprios mais abaixo. Colou tudo junto? O app separa sozinho.', 'Just the programme — included, not included and notes have their own fields below. Pasted it all together? The app splits it for you.', 'Solo el programa — lo incluido, lo no incluido y los avisos tienen campos propios más abajo. ¿Pegaste todo junto? La app lo separa sola.')}</small><small class="why tsep-ok" id="fDescSep" aria-live="polite" hidden></small></label>
         <label class="fld campo-en">${t('tDescEn')}<textarea id="fDescEn">${esc(x.desc.en)}</textarea></label>
         <label class="fld">${t('tMeeting')}<input id="fMeetPt" value="${esc(noIdioma(x.meeting))}"></label>
         <label class="fld campo-en">${t('tMeeting')} (EN)<input id="fMeetEn" value="${esc((x.meeting && x.meeting.en) || '')}"></label>
@@ -2782,6 +2796,29 @@ function admTourEdit(id) {
   $('#verEn')?.addEventListener('change', aplicaEn);
   aplicaEn();
 
+  /* SEPARA NA HORA (28/10/2026, o Majesty 56 da Milla: ela colou o material inteiro na descrição e a
+     página mostrou tudo misturado, com "Está incluído" vazio). Ao sair da descrição, os blocos
+     INCLUSO / NÃO INCLUSO vão para os campos de baixo e os avisos para Orientações — na frente dela.
+     Só move o texto dela; o que ela já tinha posto nos campos de baixo não é trocado. */
+  const separaNaHora = (lang) => {
+    const d = $(lang === 'en' ? '#fDescEn' : '#fDescPt'); if (!d || typeof separaDescricao !== 'function') return;
+    const s = separaDescricao(d.value); if (!s.inclui.length && !s.naoInclui.length) return;
+    const suf = lang === 'en' ? 'En' : 'Pt', inc = $('#fInc' + suf), ninc = $('#fNinc' + suf), dic = $('#fDicas' + suf);
+    d.value = s.desc;
+    if (inc && !inc.value.trim()) inc.value = s.inclui.join('\n');
+    if (ninc && !ninc.value.trim()) ninc.value = s.naoInclui.join('\n');
+    const max = +($('#fMax') || {}).value || 0;
+    const notas = s.notas.filter(n => !(/^\s*(capacidade|capacity|capacidad)\s*:/i.test(n) && max > 0 && new RegExp('\\b' + max + '\\b').test(n)));
+    if (dic && notas.length) dic.value = [dic.value.trim(), ...notas.filter(n => !dic.value.includes(n))].filter(Boolean).join('\n');
+    const st = $('#fDescSep'); if (st) { st.hidden = false; st.textContent = L3(`✓ Separei: ${s.inclui.length} no "Está incluído", ${s.naoInclui.length} no "Não está incluído"${notas.length ? ', ' + notas.length + ' em Orientações' : ''}. Confira lá embaixo.`, `✓ Split: ${s.inclui.length} included, ${s.naoInclui.length} not included${notas.length ? ', ' + notas.length + ' in Good to know' : ''}. Check below.`, `✓ Separé: ${s.inclui.length} incluidos, ${s.naoInclui.length} no incluidos. Revisa abajo.`); }
+  };
+  if ($('#fDescPt')) $('#fDescPt').addEventListener('blur', () => separaNaHora('pt'));
+  if ($('#fDescEn')) $('#fDescEn').addEventListener('blur', () => separaNaHora('en'));
+  /* por hora: "Mínimo 2 horas" escrito na duração acerta o mínimo de horas (estava ficando 1) */
+  const minDaDuracao = () => { const m = String(($('#fDur') || {}).value || '').match(/m[ií]n(?:imo|\.)?\s*(?:de\s*)?(\d+)\s*h/i), f = $('#fMinHoras'); if (m && f && $('#fMode').value === 'hora' && (+f.value || 1) < +m[1]) f.value = m[1]; };
+  if ($('#fDur')) $('#fDur').addEventListener('change', minDaDuracao);
+  $('#fMode').addEventListener('change', minDaDuracao);
+  minDaDuracao();
   /* "+ FOTOS" NA GALERIA (28/10/2026, a Milla: as fotos do iate "não baixaram" — o editor só tinha a capa) */
   if ($('#fGal')) $('#fGal').onchange = async (e) => {
     const fs = [...e.target.files]; e.target.value = ''; if (!fs.length) return;
@@ -2824,7 +2861,7 @@ function admTourEdit(id) {
   $('#saveDraft2').onclick = () => $('#saveDraft').click();
 
   function collect(status) {
-    return {
+    return tourSeparaTextos({
       type: $('#fType').value, region: $('#fRegion').value,
       ...($('#fCat') ? { categoria: $('#fCat').value, modalidade: $('#fModal').value, transferInc: $('#fTrfInc').value,
         reserva: $('#fReserva').value, idioma: par('#fIdiomaPt', '#fIdiomaEn'),
@@ -2865,7 +2902,7 @@ function admTourEdit(id) {
       notIncludes: { pt: itens('#fNincPt'), en: itens('#fNincEn') },
       /* joga fora parada sem nome — linha em branco na página do cliente é pior que nada */
       stops: stops.filter(p => (p.n && p.n.pt || '').trim()),
-    };
+    });
   }
   function itens(sel) {
     return $(sel).value.split('\n').map(l => l.trim()).filter(Boolean);

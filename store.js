@@ -1086,3 +1086,62 @@ const Reports = {
              ticket: bs.length ? Math.round(revenue / pax || 0) : 0 };
   },
 };
+
+
+/* DESCRIÇÃO COM "INCLUSO:" / "NÃO INCLUSO:" DENTRO (28/10/2026, a Milla, vídeo do Majesty 56: "tá tudo
+   misturado, o incluso não é o incluso, tá aqui; ali 'o que inclui: está incluído', nada a ver").
+   Ela cola o texto inteiro do material dela na descrição. Aqui ele é separado como nos passeios do
+   catálogo: o programa fica na descrição, as listas vão para Incluso / Não incluso e o que vem depois
+   ("CAPACIDADE: …", "Percurso sujeito a…") vai para Orientações. Só mexe quando acha o cabeçalho e
+   pelo menos um item; o texto dela não é reescrito, só muda de lugar. */
+const SEP_NINC = /^\s*(?:n[ãa]o\s+inclu(?:so|i|[ií]do)s?|not\s+included|excluded|does\s+not\s+include|no\s+incluye|no\s+incluido)\s*:\s*(.*)$/i;
+const SEP_INC = /^\s*(?:o\s+que\s+(?:est[áa]\s+)?inclu(?:[ií]do|i)|inclu[ií]dos?|inclui|inclusos?|included|includes|what'?s\s+included|incluye|incluidos?)\s*:\s*(.*)$/i;
+const SEP_NOTA = /^\s*(?:capacidade|capacity|capacidad)\s*:/i;
+const SEP_ITEM = /^\s*[•·\-–*✓✔▪◦]\s*(.+)$/;
+const sepLimpa = (t) => String(t || '').trim().replace(/\s*[.;]$/, '');
+function separaDescricao(texto) {
+  const r = { desc: '', inclui: [], naoInclui: [], notas: [] }, d = [];
+  let modo = 'desc', branco = false, m;
+  for (const linha of String(texto || '').split('\n')) {
+    const l = linha.trim();
+    if ((m = l.match(SEP_NINC))) { modo = 'ninc'; branco = false; if (m[1].trim()) r.naoInclui.push(...m[1].split(';').map(sepLimpa).filter(Boolean)); continue; }
+    if ((m = l.match(SEP_INC))) { modo = 'inc'; branco = false; if (m[1].trim()) r.inclui.push(...m[1].split(';').map(sepLimpa).filter(Boolean)); continue; }
+    if (SEP_NOTA.test(l)) { r.notas.push(l); modo = 'notas'; continue; }
+    if (!l) { if (modo === 'desc') d.push(''); else branco = true; continue; }
+    if (modo === 'inc' || modo === 'ninc') {
+      const it = l.match(SEP_ITEM);
+      if (it || !branco) { (modo === 'inc' ? r.inclui : r.naoInclui).push(sepLimpa(it ? it[1] : l)); continue; }
+      r.notas.push(l); modo = 'notas'; continue;
+    }
+    if (modo === 'desc') d.push(linha.replace(/\s+$/, '')); else r.notas.push(l);
+  }
+  r.desc = d.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  return r;
+}
+/* o passeio com os textos no lugar certo (cópia; o mesmo objeto se não há o que separar) */
+function tourSeparaTextos(x) {
+  if (!x || !x.desc || typeof x.desc !== 'object') return x;
+  const obj = (v) => Array.isArray(v) ? { pt: v } : { ...(v || {}) };
+  const out = { ...x, desc: { ...x.desc }, includes: obj(x.includes), notIncludes: obj(x.notIncludes), dicas: { ...(x.dicas || {}) } };
+  let mudou = false;
+  for (const k of Object.keys(x.desc)) {
+    const s = separaDescricao(x.desc[k]);
+    if (!s.inclui.length && !s.naoInclui.length) continue;
+    /* lista já preenchida por ela e DIFERENTE do que está no texto: não mexe nesta língua (nada some) */
+    const igual = (a, b) => JSON.stringify((a || []).map(v => sepLimpa(v).toLowerCase())) === JSON.stringify((b || []).map(v => sepLimpa(v).toLowerCase()));
+    if ((out.includes[k] || []).length && s.inclui.length && !igual(out.includes[k], s.inclui)) continue;
+    if ((out.notIncludes[k] || []).length && s.naoInclui.length && !igual(out.notIncludes[k], s.naoInclui)) continue;
+    out.desc[k] = s.desc;
+    if (!(out.includes[k] || []).length) out.includes[k] = s.inclui;
+    if (!(out.notIncludes[k] || []).length) out.notIncludes[k] = s.naoInclui;
+    /* "CAPACIDADE: até 15 pessoas" some quando o máximo do passeio já diz isso (aparece em Detalhes) */
+    const notas = s.notas.filter(n => !(SEP_NOTA.test(n) && +x.max > 0 && new RegExp('\\b' + (+x.max) + '\\b').test(n)));
+    const ja = String(out.dicas[k] || '').trim();
+    if (notas.length) out.dicas[k] = [ja, ...notas.filter(n => !ja.includes(n))].filter(Boolean).join('\n');
+    mudou = true;
+  }
+  /* por hora: o mínimo que ela escreveu na duração ("Mínimo 2 horas") vale, se o campo ficou no 1 */
+  const mh = String(x.duration || '').match(/m[ií]n(?:imo|\.)?\s*(?:de\s*)?(\d+)\s*h/i);
+  if (x.priceMode === 'hora' && mh && (+x.minHoras || 1) < +mh[1]) { out.minHoras = +mh[1]; mudou = true; }
+  return mudou ? out : x;
+}
