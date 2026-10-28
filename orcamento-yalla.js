@@ -817,10 +817,10 @@ function oyTela(id) {
           ${so ? `<label class="fld oy-custo2" title="o que você paga a quem faz o serviço — nunca vai para o cliente">Custo (só você vê)<input type="number" min="0" inputmode="decimal" data-k="custo" value="${i.custo || ''}" placeholder="0"></label>`
             : `<label class="fld">Valor ${esc(m)}<input type="number" min="0" inputmode="decimal" data-k="valor" value="${i.valor || ''}" placeholder="0"></label>`}
         </div>
-        ${fotos.length || i.foto ? `<span class="op-lbl">Foto na proposta</span><div class="oy-fotos" role="group" aria-label="Foto na proposta">
+        ${`<span class="op-lbl">Foto na proposta</span><div class="oy-fotos" role="group" aria-label="Foto na proposta">
           <button type="button" class="oy-ft oy-ftno ${!i.foto ? 'on' : ''}" data-foto="" aria-pressed="${!i.foto}">sem foto</button>
           ${(i.foto && !fotos.includes(i.foto) ? [i.foto, ...fotos] : fotos).slice(0, 12).map(f => `<button type="button" class="oy-ft ${i.foto === f ? 'on' : ''}" data-foto="${esc(f)}" aria-pressed="${i.foto === f}" aria-label="usar esta foto" style="background-image:url('${esc(f)}')"></button>`).join('')}
-        </div>` : ''}
+        <label class="oy-ft oy-ftup" title="enviar uma foto (hotel, restaurante, o que não está no catálogo)">+ foto<input type="file" accept="image/*" data-fotoup hidden></label></div>`}
         <div class="oy-itacs">
           ${so ? '' : `<label class="fld oy-custo" title="o que você paga a quem faz o serviço — nunca vai para o cliente">Custo (só você vê)<input type="number" min="0" inputmode="decimal" data-k="custo" value="${i.custo || ''}" placeholder="0"></label>`}
           ${x ? `<button type="button" class="mini" data-recalc="${esc(i.id)}">preço da tabela</button>` : ''}
@@ -855,10 +855,10 @@ function oyTela(id) {
         const nl = (i.texto || '').split('\n').length;
         return band + `<div class="oy-row ${aberto ? 'aberto' : ''}" data-it="${esc(i.id)}" role="row">
           <label class="oy-c oy-cd" role="cell"><span class="sr">Dia</span><input type="date" data-k="data" value="${esc(i.data)}"></label>
-          <label class="oy-c oy-ch" role="cell"><span class="sr">Horário</span><input data-k="faixa" value="${esc(ppHoras(i))}" placeholder="09:00–17:00"></label>
+          <label class="oy-c oy-ch" role="cell"><span class="sr">Horário</span><input data-k="faixa" value="${esc(ppHoras(i))}" placeholder="horário" aria-label="Horário (ex.: 09:00–17:00)"></label>
           <div class="oy-c oy-cs" role="cell">
             <input class="oy-ct" data-k="desc" value="${esc(i.desc)}" placeholder="Serviço (ex.: Tour de até 8 horas em Dubai)" aria-label="Serviço">
-            <textarea class="oy-cx" data-k="texto" rows="${Math.min(10, Math.max(2, nl + 1))}" placeholder="Detalhes, um por linha (* Visita ao Miracle Garden…)" aria-label="Detalhes">${esc(i.texto)}</textarea>
+            <textarea class="oy-cx" data-k="texto" rows="${Math.min(10, Math.max(2, nl + 1))}" placeholder="detalhes (opcional)" aria-label="Detalhes, um por linha">${esc(i.texto)}</textarea>
             ${i.foto ? `<button type="button" class="oy-cfoto" data-oyabre="${esc(i.id)}" style="background-image:url('${esc(i.foto)}')" aria-label="Foto deste serviço na proposta (toque para trocar)" title="foto na proposta"></button>` : ''}
             ${i.tipo === 'traslado' && i.voo ? `<small class="oy-cvoo">voo ${esc(i.voo)}</small>` : ''}
             ${i.obs && !/^Sem preço na tabela/.test(i.obs) ? `<small class="oy-cobs" title="${esc(i.obs)}">obs: ${esc(i.obs.length > 60 ? i.obs.slice(0, 60) + '…' : i.obs)}</small>` : ''}
@@ -1151,6 +1151,18 @@ function oyLiga(o) {
     ta.value = (tem ? l.filter(x => x.toLowerCase() !== f.toLowerCase()) : [...l, f]).join(', ');
     b.classList.toggle('on', !tem); b.setAttribute('aria-pressed', String(!tem)); oySalva(o, false);
   });
+  /* FOTO PARA O QUE NÃO ESTÁ NO CATÁLOGO (28/10/2026, a Milla: "incluir foto quando for algo que não está
+     no catálogo, tipo hotel"): sobe para a pasta de fotos e vale para a proposta e o roteiro */
+  $$('[data-fotoup]').forEach(inp => inp.onchange = async () => {
+    const f = inp.files && inp.files[0]; inp.value = ''; if (!f) return;
+    const box = inp.closest('[data-it]'); oyLe(o); const i = box && o.itens.find(z => z.id === box.dataset.it); if (!i) return;
+    toast('Subindo a foto…');
+    try {
+      let src = await readImageResized(f, 1400, 0.82);
+      if (typeof fotoNaNuvem === 'function') src = await fotoNaNuvem(src, 'orc-' + o.id);
+      i.foto = src; re(); toast('Foto na proposta ✓');
+    } catch (e) { toast('Não consegui ler essa foto'); }
+  });
   $$('[data-foto]').forEach(b => b.onclick = () => { oyLe(o); const i = o.itens.find(z => z.id === S.aberto); if (i) i.foto = b.dataset.foto; Orc.salva(o); re(); });
   $$('[data-rmi]').forEach(b => b.onclick = () => {
     oyLe(o); const k = o.itens.findIndex(i => i.id === b.dataset.rmi); if (k < 0) return;
@@ -1350,6 +1362,7 @@ function oyCss() {
   .oy-vatck{margin:0 0 12px}
   .oy-pag{display:grid;gap:8px;margin:4px 0 8px}
   .oy-rap{display:flex;flex-wrap:wrap;gap:6px;margin:-4px 0 12px}
+  .oy-ftup{display:flex;align-items:center;justify-content:center;cursor:pointer;font-weight:600;font-size:13px;border:1px dashed var(--line-2);background:var(--surface)}
   .oy-cfoto{display:block;width:96px;height:64px;margin:6px 0 2px;border:0;border-radius:8px;background-size:cover;background-position:center;background-color:var(--surface-2);cursor:pointer}
   .oy-itf{float:left;width:40px;height:40px;margin-right:10px;border-radius:8px;background-size:cover;background-position:center}
   .oy-rap .chip{min-height:36px}
