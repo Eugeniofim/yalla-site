@@ -2104,23 +2104,49 @@ function renderBook() {
 /* =====================================================
    ADM
 ===================================================== */
-/* A ordem do dia dela (reuniao de 28/09/2026): o que acontece hoje, o que
-   chegou pedindo orcamento, quem faz, e so depois o resto. */
-/* O menu em grupos (como o TI ARTES): cada grupo tem um título e as abas.
-   A Planilha (o CRM dela, a planilha mais importante) fica SEMPRE no menu. */
-const ADM_GROUPS = [
-  /* Agenda e Tarefas num item só (28/10/2026, "faz igual à Mari"): a chave
-     Calendário | Tarefas fica no topo das duas telas (agSeg) */
-  { h: 'O dia a dia',           tabs: [['today', 'admToday'], ['agenda', 'admAgenda']] },
-  { h: 'Orçamentos e clientes', tabs: [['planilha', 'admPlanilha'], ['pipeline', 'admPipeline'], ['consulta', 'admConsulta'], ['clients', 'admClients'], ['bookings', 'admBookings']] },
-  /* o atendimento automático (WhatsApp e Instagram) e a tela de ensinar o agente:
-     só no app de quem contratou (APP_CONFIG.atendimento) */
-  ...((typeof APP_CONFIG !== 'undefined' && APP_CONFIG.atendimento) ? [{ h: 'Atendimento', tabs: [['inbox', 'admInbox']] }] : []),
-  { h: 'Operação',              tabs: [['guias', 'admGuias'], ['parceiros', 'admParceiros'], ['transfer', 'admTransfer'], ['tours', 'admTours'], ['precos', 'admPrecos'], ['voucher', 'admVoucher']] },
-  { h: 'Dinheiro',              tabs: [['money', 'admMoney'], ['reports', 'admReports'], ['coupons', 'admCoupons']] },
-  { h: 'O app',                 tabs: [['look', 'temaTit'], ['settings', 'admSettings']] },
+/* O MENU EM 5 (28/10/2026, pedido dele: "muito efetivo e minimalista… tem
+   muitas abas"). Eram 18 itens; o trabalho dela é uma linha só — monta o
+   roteiro, manda a proposta, o cliente paga, sai o roteiro da viagem. Cada
+   item responde UMA pergunta, e as partes de cada um ficam na barrinha do
+   topo da tela (subNav). As rotas de sempre continuam valendo (links,
+   assistente, tutorial): só o menu mudou.
+     Hoje      — o que acontece hoje?            (Meu dia, Calendário, Tarefas)
+     Vendas    — em que pé está cada cliente?    (Orçamentos, Pipeline, Planilha, Reservas, Transfers)
+     Clientes  — quem é essa pessoa?
+     Catálogo  — o que eu vendo e com quem?      (Passeios, Preços, Guias e motoristas, Fornecedores)
+     Dinheiro  — quanto entrou e quanto devo?    (Contabilidade, Dashboard, Indicações)
+     Ajustes   — (Ajustes, Aparência, Voucher) */
+const ADM_IC = {
+  hoje: '<path d="M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/><circle cx="12" cy="12" r="4"/>',
+  vendas: '<path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/>',
+  clientes: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 19.5c.8-3.4 3.4-5.2 6.5-5.2s5.7 1.8 6.5 5.2"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18.5 14.6c1.5.7 2.6 2.3 3 4.9"/>',
+  catalogo: '<rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/>',
+  dinheiro: '<rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.6"/>',
+  atend: '<path d="M21 12a8.5 8.5 0 0 1-12.6 7.4L3 21l1.6-5.2A8.5 8.5 0 1 1 21 12Z"/>',
+  ajustes: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/>',
+};
+const ADM_MENU = [
+  { id: 'hoje',     nome: 'Hoje',     subs: [['today', 'Meu dia'], ['agenda', 'Calendário'], ['tarefas', 'Tarefas']] },
+  { id: 'vendas',   nome: 'Vendas',   subs: [['consulta', 'Orçamentos'], ['pipeline', 'Pipeline'], ['planilha', 'Planilha'], ['bookings', 'Reservas'], ['transfer', 'Transfers']] },
+  { id: 'clientes', nome: 'Clientes', subs: [['clients', 'Clientes']] },
+  /* o atendimento automático (WhatsApp e Instagram): só no app de quem contratou */
+  ...((typeof APP_CONFIG !== 'undefined' && APP_CONFIG.atendimento) ? [{ id: 'atend', nome: 'Conversas', subs: [['inbox', 'Atendimento']] }] : []),
+  { id: 'catalogo', nome: 'Catálogo', subs: [['tours', 'Passeios'], ['precos', 'Preços'], ['guias', 'Guias e motoristas'], ['parceiros', 'Fornecedores']] },
+  { id: 'dinheiro', nome: 'Dinheiro', subs: [['money', 'Contabilidade'], ['reports', 'Dashboard'], ['coupons', 'Indicações']] },
+  { id: 'ajustes',  nome: 'Ajustes',  subs: [['settings', 'Ajustes'], ['look', 'Aparência'], ['voucher', 'Voucher']] },
 ];
-const ADM_TABS = ADM_GROUPS.flatMap(g => g.tabs);
+const admMenuDe = (tab) => ADM_MENU.find(g => g.subs.some(([id]) => id === tab)) || null;
+/* a lista de sempre (o assistente e as outras telas usam): [rota, chave do nome] */
+const ADM_NOMES = { today: 'admToday', agenda: 'admAgenda', tarefas: 'admTarefas', consulta: 'admConsulta', pipeline: 'admPipeline', planilha: 'admPlanilha', bookings: 'admBookings', transfer: 'admTransfer',
+  clients: 'admClients', inbox: 'admInbox', tours: 'admTours', precos: 'admPrecos', guias: 'admGuias', parceiros: 'admParceiros', money: 'admMoney', reports: 'admReports', coupons: 'admCoupons',
+  settings: 'admSettings', look: 'temaTit', voucher: 'admVoucher' };
+const ADM_TABS = ADM_MENU.flatMap(g => g.subs.map(([id]) => [id, ADM_NOMES[id] || id]));
+/* a barrinha das partes de cada item (no topo da tela) */
+function subNav(tab) {
+  const g = admMenuDe(tab); if (!g || g.subs.length < 2) return '';
+  const pend = g.id === 'hoje' && typeof Tarefas !== 'undefined' ? (() => { const G = Tarefas.grupos(isoToday()); return { n: G.atrasadas.length + G.hoje.length, atras: G.atrasadas.length }; })() : null;
+  return `<nav class="subnav" aria-label="${esc(g.nome)}">${g.subs.map(([id, nome]) => `<a href="#/adm/${id}" class="${id === tab ? 'on' : ''}" ${id === tab ? 'aria-current="page"' : ''}>${esc(nome)}${id === 'tarefas' && pend && pend.n ? ` <span class="agBadge ${pend.atras ? 'bad' : ''}" aria-label="${pend.n} para fazer">${pend.n}</span>` : ''}</a>`).join('')}</nav>`;
+}
 
 /* ---- aviso de painel destravado ----
    Desde que as reservas passaram a ser privadas, quem não está logada
@@ -2165,15 +2191,14 @@ function admShell(tab, inner) {
     <aside class="rail">
       <div class="brand">${logoFull({ mark: 26, sub: 'ADM' })}</div>
       <button class="nb nb-ia" id="nbAssist" type="button">⚡ Assistente</button>
-      <nav>${ADM_GROUPS.map(g =>
-        `<div class="nav-grp">${g.h ? `<div class="nav-h">${g.h}</div>` : ''}${g.tabs.map(([id, k]) =>
-          `<button class="nb ${tab === id ? 'on' : ''}" data-tab="${id}" id="nb-${id}">${t(k)}</button>`).join('')}</div>`).join('')}</nav>
+      <nav class="menu5">${ADM_MENU.map(g => { const on = g.subs.some(([id]) => id === tab);
+        return `<button class="nb nb5 ${on ? 'on' : ''}" data-tab="${g.subs[0][0]}" id="nb-${g.subs[0][0]}" ${on ? 'aria-current="page"' : ''}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ADM_IC[g.id] || ''}</svg><span>${esc(g.nome)}</span></button>`; }).join('')}</nav>
       <div class="railfoot">
         <button class="nb ghost" id="viewSite">👁 ${t('viewSite')}</button>
         <button class="nb ghost" id="exitAdm">← ${t('exit')}</button>
       </div>
     </aside>
-    <main class="stage" id="stage">${noAuthBanner()}${typeof atalhosHtml === 'function' ? atalhosHtml() : ''}${inner}</main>
+    <main class="stage" id="stage">${noAuthBanner()}${typeof atalhosHtml === 'function' ? atalhosHtml() : ''}${subNav(tab)}${inner}</main>
   </div>`;
   const nab = $('#goProtect');
   if (nab) nab.onclick = () => go('/login');

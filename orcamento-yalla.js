@@ -81,6 +81,7 @@ Orc.fecha = function (id, opts) {
     /* o roteiro depois da compra (kit) mostra o que ela escreveu no orçamento */
     const i = usados[n]; if (!i) return;
     Object.assign(b, { orcTitulo: i.desc || '', orcTexto: i.texto || '', orcIncluso: i.incluso || '', orcFoto: i.foto || '' });
+    const par = oyParceiroDe(o); if (par && !b.parceiroId) b.parceiroId = par.id;
     if (i.horaFim) b.horaFim = i.horaFim;
   });
   for (const b of bs) {
@@ -175,6 +176,74 @@ function oyMudaPax(o, antes) {
   o.pax = agora; o.paxNota = oyPaxTexto(o);
 }
 
+/* ---------- PARCEIROS: o link de cada um (?p=CUPOM) e a comissão sozinha ----------
+   O link marca o visitante (store.js, parceiroDaVisita); aqui: a marca vai na
+   mensagem do WhatsApp, entra no orçamento (do site, do pedido de roteiro ou
+   da conversa colada com "Indicação: CUPOM"), vira parceiroId nas reservas do
+   Fechou, e a reserva feita no site com a marca conta para o parceiro. */
+const oyParPorCodigo = (c) => { const k = String(c || '').toUpperCase(); return k && typeof Parceiros !== 'undefined' ? Parceiros.all().find(p => p.cupom && p.cupom === k) || null : null; };
+function oyParceiroDe(o) {
+  if (!o || typeof Parceiros === 'undefined') return null;
+  return (o.parceiroId && Parceiros.get(o.parceiroId)) || oyParPorCodigo(o.parceiroCodigo);
+}
+const OY_RE_INDIC = /indica[cç][aã]o:\s*([A-Za-z0-9_-]{2,24})/i;
+/* a mensagem que o cliente manda do site leva o código (ela vê no WhatsApp; o app lê ao colar a conversa) */
+if (typeof waLink === 'function') {
+  const _oyWa = waLink;
+  waLink = function (text, num) {
+    const c = !num && typeof parceiroDaVisita === 'function' && !/^#\/adm/.test(location.hash) && !(typeof isLoggedIn === 'function' && isLoggedIn()) ? parceiroDaVisita() : '';
+    return _oyWa(c && text && !OY_RE_INDIC.test(text) ? text + '\n\n(Indicação: ' + c + ')' : text, num);
+  };
+}
+/* o orçamento nasce com o parceiro: do site, do pedido de roteiro ou da conversa colada */
+const _oyCria = Orc.cria;
+Orc.cria = function (d) {
+  const o = _oyCria.call(this, d);
+  let c = '';
+  if (typeof parceiroDaVisita === 'function' && !(typeof isLoggedIn === 'function' && isLoggedIn()) && !/^#\/adm/.test(location.hash)) c = parceiroDaVisita();
+  if (!c && d && d.pedidoId) { const ped = (DB.pedidos || []).find(x => x.id === d.pedidoId); if (ped && ped.parceiroCodigo) c = ped.parceiroCodigo; }
+  if (!c && d && d.conversa) { const m = String(d.conversa).match(OY_RE_INDIC); if (m) c = m[1].toUpperCase(); }
+  if (c) { o.parceiroCodigo = c; const par = oyParPorCodigo(c); if (par) o.parceiroId = par.id; Orc.salva(o); }
+  return o;
+};
+if (typeof Parceiros !== 'undefined') {
+  /* reserva feita no site com a marca do link também é do parceiro */
+  const _oyParRes = Parceiros.reservas;
+  Parceiros.reservas = function (p) {
+    const a = _oyParRes.call(this, p);
+    if (!p || !p.cupom) return a;
+    const ja = new Set(a.map(b => b.id));
+    /* o cupom que o cliente DIGITOU vale mais que o link (nunca conta para dois) */
+    const mais = DB.bookings.filter(b => b.status !== 'cancelled' && !ja.has(b.id) && !b.parceiroId && !(b.coupon && oyParPorCodigo(b.coupon)) && String(b.parceiroCodigo || '').toUpperCase() === p.cupom);
+    return mais.length ? a.concat(mais).sort((x, y) => String(y.date).localeCompare(String(x.date))) : a;
+  };
+  const _oyParDa = Parceiros.daReserva;
+  Parceiros.daReserva = function (b) { return _oyParDa.call(this, b) || (b && !b.parceiroId ? oyParPorCodigo(b.parceiroCodigo) : null); };
+}
+const oyLinkParceiro = (p) => p && p.cupom ? ppBase() + '?p=' + encodeURIComponent(p.cupom) : '';
+/* a tela "Indicações e cupons": o link de cada parceiro, para copiar e mandar a ele */
+if (typeof admParcerias === 'function') {
+  const _oyAdmPar = admParcerias;
+  admParcerias = function () {
+    const r = _oyAdmPar.apply(this, arguments);
+    for (const p of Parceiros.all()) {
+      const bt = document.querySelector(`[data-pared="${CSS.escape(p.id)}"]`), card = bt && bt.closest('.par-card');
+      if (!card || card.querySelector('.par-link')) continue;
+      const u = oyLinkParceiro(p);
+      const div = document.createElement('div'); div.className = 'par-link';
+      div.innerHTML = u ? `<span class="op-lbl">Link do parceiro</span><code>${esc(u)}</code><button type="button" class="mini strong">copiar o link</button>
+        <small class="why">Quem chega por este link fica marcado por ${PARCEIRO_DIAS} dias: reserva, pedido e WhatsApp vêm com o código, e a comissão entra aqui sozinha.</small>`
+        : `<small class="why">Dê um cupom a este parceiro para ele ganhar o link próprio.</small>`;
+      const b = div.querySelector('button'); if (b) b.onclick = () => opCopia(u).then(() => toast('Link do ' + p.nome + ' copiado'));
+      const pe = card.querySelector('.btnrow'); card.insertBefore(div, pe || null);
+    }
+    if (!document.getElementById('parLinkCss')) { const st = document.createElement('style'); st.id = 'parLinkCss';
+      st.textContent = '.par-link{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:10px 0 4px;padding:10px 12px;border-radius:12px;background:var(--accent-wash)}.par-link code{font-size:13px;overflow-wrap:anywhere;flex:1;min-width:180px}.par-link small{flex-basis:100%}';
+      document.head.appendChild(st); }
+    return r;
+  };
+}
+
 /* o roteiro depois da compra (kit-yalla.js): título, texto, foto e incluso do orçamento */
 if (typeof kitServico === 'function') {
   const _oyKitServ = kitServico;
@@ -183,6 +252,7 @@ if (typeof kitServico === 'function') {
     if (b.orcTitulo) sv.nome = b.orcTitulo;
     if (b.orcTexto) sv.resumo = b.orcTexto;
     if (b.orcFoto) sv.foto = b.orcFoto;
+    if (b.horaFim) sv.horaFim = b.horaFim;
     const inc = String(b.orcIncluso || '').split(/\n|,\s*(?=[A-ZÀ-Ú])/).map(t => t.trim()).filter(Boolean);
     if (inc.length) sv.inclui = inc;
     return sv;
@@ -208,6 +278,7 @@ function ppDados(o) {
     subtotal: Orc.subtotal(o), vatPct: oyVatPct(o), vat: Orc.vat(o),
     total: Orc.total(o), porPessoa: oyPorPessoa(o), pago: +o.pago || 0, pendente: oyPendente(o),
     validade: o.validade || '', obs: o.obs || '',
+    pagar: /^https:\/\//i.test(String(o.linkPagamento || '').trim()) ? String(o.linkPagamento).trim() : '',
     politica: o.politica != null ? o.politica : ppTextoPadrao('politica'),
     condicoes: o.condicoes != null ? o.condicoes : ppTextoPadrao('condicoes'),
     diferencial: o.diferencial != null ? o.diferencial : ppTextoPadrao('diferencial'),
@@ -277,6 +348,7 @@ function ppHtml(d) {
     ${d.vatPct > 0 ? `<p class="pp-vat">Subtotal ${esc(oyM(d.subtotal, d.moeda))} + VAT ${esc(String(d.vatPct).replace('.', ','))}% ${esc(oyM(d.vat, d.moeda))}. O total já inclui o VAT.</p>` : ''}
     ${d.pago > 0 ? `<div class="pp-pago"><span>Pago <b>${esc(oyM(d.pago, d.moeda))}</b></span><span>Pendente <b>${esc(oyM(d.pendente, d.moeda))}</b></span></div>` : ''}
     ${d.pax > 1 ? `<div class="pp-ind">Pagamento individual | ${esc(oyM(d.porPessoa, d.moeda))}</div>` : ''}
+    ${d.pagar ? `<a class="pp-pagar" data-pdf-fora href="${esc(d.pagar)}" target="_blank" rel="noopener">Pagar agora · Pix ou cartão</a>` : ''}
   </section>
   ${d.politica || d.condicoes ? `<section class="pp-box"><h3>Condições e política de cancelamento</h3>
     ${d.politica ? `<p>${ppEsc(d.politica)}</p>` : ''}
@@ -293,9 +365,12 @@ function ppCss() {
   const s = document.createElement('style'); s.id = 'ppCss';
   s.textContent = `
   .pp{--pp-fundo:#F5E8C7;--pp-ouro:#C9A23B;--pp-ouro-t:#8A6D1E;--pp-n:#141414;--pp-t:#4A4335;
-    background:var(--pp-fundo);color:var(--pp-n);font-family:var(--f-ui,Montserrat,system-ui,sans-serif);max-width:794px;margin:0 auto;padding-bottom:28px}
+    background:var(--pp-fundo);color:var(--pp-n);font-family:Montserrat,var(--f-ui),system-ui,sans-serif;max-width:794px;margin:0 auto;padding-bottom:28px}
   .pp p{margin:0 0 8px;font-size:14.5px;line-height:1.55;color:var(--pp-t)}
   .pp-capa{position:relative;aspect-ratio:794/1123;min-height:480px;overflow:hidden;background:#EADBB6;margin-bottom:26px}
+  /* na tela a capa cabe na tela (o nome e as datas aparecem sem rolar); no PDF ocupa a folha inteira */
+  .pp-pg .pp-capa{max-height:calc(100svh - 56px)}
+  .em-pdf .pp-capa{max-height:none!important}
   .pp-fotos{position:absolute;inset:0}
   .pp-f{position:absolute;left:0;right:0;background-size:cover;background-position:center}
   .pp-f1{top:0;height:38%}
@@ -314,7 +389,7 @@ function ppCss() {
   .pp-dia,.pp-box,.pp-inv,.pp-pe{margin-left:5.5%;margin-right:5.5%}
   .pp-bloco{margin:0}
   .pp-kick{font-weight:700;font-size:12.5px!important;letter-spacing:.06em;text-transform:uppercase;color:var(--pp-ouro-t)!important;margin:30px 0 6px!important}
-  .pp-h2{font-family:var(--f-display,'Playfair Display',serif);font-weight:600;font-size:clamp(24px,5.6vw,32px);line-height:1.15;margin:0 0 14px;padding-bottom:14px;border-bottom:3px solid var(--pp-ouro);color:var(--pp-n)}
+  .pp-h2{font-family:Montserrat,var(--f-ui),system-ui,sans-serif;font-weight:800;letter-spacing:-.01em;font-size:clamp(24px,5.6vw,32px);line-height:1.15;margin:0 0 14px;padding-bottom:14px;border-bottom:3px solid var(--pp-ouro);color:var(--pp-n)}
   .pp-h2 span{color:var(--pp-n)}
   .pp-card,.pp-box{background:#fff;border-radius:18px;padding:18px 18px 12px;margin:0 0 16px}
   .pp-box{margin:0 5.5% 16px}
@@ -346,6 +421,9 @@ function ppCss() {
   .pp-cta a,.pp-cta button{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:52px;border-radius:999px;font-weight:800;font-size:15px;text-decoration:none;border:0;cursor:pointer}
   .pp-cta .pp-zap{background:#1a1405;color:#F3E0A2;box-shadow:0 14px 30px -14px rgba(0,0,0,.6)}
   .pp-cta .pp-zap svg{width:22px;height:22px}
+  .pp-cta .pp-pg-pagar{background:#C9A23B;color:#1a1405;box-shadow:0 14px 30px -14px rgba(0,0,0,.5)}
+  .pp-pagar{display:flex;align-items:center;justify-content:center;min-height:52px;margin-top:12px;border-radius:999px;background:#fff;color:#141414;font-weight:800;text-decoration:none}
+  .pp-pagar:focus-visible{outline:3px solid #C9A23B;outline-offset:3px}
   .pp-cta a:focus-visible,.pp-cta button:focus-visible{outline:3px solid var(--pp-ouro-t,#8A6D1E);outline-offset:3px}
   .pp-pg .pdfPronto{margin:12px auto}
   @media(min-width:700px){.pp-foto{height:300px}.pp-card,.pp-box{padding:22px 24px 14px}}
@@ -393,7 +471,7 @@ function ppPagina(d) {
   app.innerHTML = `<div class="pp-pg">
     <header class="pp-topo"><img src="arte/logo-horizontal-escuro.png" alt="${esc(d.negocio || guiaNegocio())}"><button class="mini" id="ppPdf" type="button">Baixar PDF</button></header>
     <main class="pp" id="ppDoc">${ppHtml(d)}</main>
-    <div class="pp-cta" data-pdf-fora><a class="pp-zap" target="_blank" rel="noopener" href="${esc(waLink(`Olá! Vi a proposta ${d.num || ''}${nome ? ' (' + nome + ')' : ''} e quero reservar.`))}">${ICONE_WA} Quero reservar</a></div>
+    <div class="pp-cta" data-pdf-fora>${d.pagar ? `<a class="pp-pg-pagar" target="_blank" rel="noopener" href="${esc(d.pagar)}">Pagar agora</a>` : ''}<a class="pp-zap" target="_blank" rel="noopener" href="${esc(waLink(`Olá! Vi a proposta ${d.num || ''}${nome ? ' (' + nome + ')' : ''} e quero reservar.`))}">${ICONE_WA} ${d.pagar ? 'Falar' : 'Quero reservar'}</a></div>
   </div>`;
   if (typeof pdfLiga === 'function') pdfLiga($('#ppPdf'), () => $('#ppDoc'), () => 'Yalla_Proposta_' + (nome || 'cliente').replace(/\s+/g, '_'));
   document.querySelectorAll('#vtZap').forEach(e => e.remove());
@@ -570,6 +648,7 @@ function oyTela(id) {
             <button type="button" data-step="${k}" data-d="1" aria-label="mais">+</button></div></div>`).join('')}
       </div>
       <label class="fld">Hotel<input id="oyHotel" value="${esc(o.hotel || '')}" autocomplete="off" placeholder="Ex.: W Dubai The Palm"></label>
+      ${typeof Parceiros !== 'undefined' && Parceiros.all().length ? (() => { const par = oyParceiroDe(o); return `<label class="fld">Indicado por (parceiro)<select id="oyPar"><option value="">ninguém</option>${Parceiros.all().map(p => `<option value="${esc(p.id)}" ${par && par.id === p.id ? 'selected' : ''}>${esc(p.nome)}${p.cupom ? ' · ' + esc(p.cupom) : ''}${p.comissao ? ' · ' + p.comissao + '%' : ''}</option>`).join('')}</select></label>`; })() : ''}
       <div class="oy-g2">
         ${[['chegada', 'Chegada'], ['partida', 'Partida']].map(([k, n]) => `<fieldset class="oy-voo"><legend>${n}</legend>
           <div class="oy-vg">
@@ -599,7 +678,7 @@ function oyTela(id) {
         ${bs.length && typeof Kit !== 'undefined' ? `<button type="button" class="cta oy-kitb" id="oyKit" data-kitb="${esc(Kit.daReserva(bs[0]))}">Roteiro da viagem</button><p class="why">O que o cliente recebe depois da compra: o roteiro dia a dia com os horários, os encontros e o pagamento, em link ou PDF.</p>` : ''}
         <details class="oy-res"><summary>Ver as reservas</summary>${bs.map(b => opCardServico(b, { comData: true })).join('')}</details></section>`; })()
       : o.status === 'enviado' ? `<section class="card oy-card oy-fechou"><div class="oy-hrow"><h2 class="oy-h">O cliente fechou?</h2></div>
-        <p class="why">Cada serviço vira reserva e o roteiro da viagem fica pronto para mandar.</p>
+        <p class="why">Cada serviço vira reserva e abre o roteiro da viagem, pronto para mandar no WhatsApp, por link ou PDF.</p>
         <button type="button" class="cta" id="oyFecha2">Fechou — criar as reservas</button></section>` : ''}
 
     <details class="card oy-card oy-mais" ${S.mais ? 'open' : ''}><summary><b>Mais opções</b><small>e-mail, situação, sinal, textos da proposta, arquivos</small></summary>
@@ -646,7 +725,8 @@ function oyValoresHtml(o) {
       <label class="fld">Desconto (USD)<input type="number" min="0" inputmode="decimal" id="oyDesc" value="${+o.desconto || ''}" placeholder="0"></label>
       <label class="fld">Válida até<input type="date" id="oyVal2" value="${esc(o.validade)}"></label>
     </div>
-    <p class="why oy-usd">Tudo em dólar (USD).</p>`;
+    <label class="fld">Link de pagamento (Pix e cartão — da sua plataforma)<input type="url" inputmode="url" id="oyLinkPag" value="${esc(o.linkPagamento || '')}" placeholder="https://…" autocomplete="off"></label>
+    <p class="why oy-usd">Tudo em dólar (USD). Com o link, a proposta mostra o botão "Pagar agora".</p>`;
 }
 
 /* salva o que está na tela (sem redesenhar) */
@@ -655,6 +735,7 @@ function oyLe(o) {
   const nome = v('#oyNome'); if (nome == null) return;
   o.cliente = { nome: nome.trim(), whats: (v('#oyWhats') || '').trim(), email: (v('#oyEmail') ?? o.cliente.email ?? '').trim() };
   o.hotel = (v('#oyHotel') || '').trim();
+  if (v('#oyPar') != null) { o.parceiroId = v('#oyPar'); if (!o.parceiroId) o.parceiroCodigo = ''; }
   $$('[data-v]').forEach(e => { const [k, c] = e.dataset.v.split('.'); o[k] = o[k] || {}; o[k][c] = c === 'hora' ? (oyHm(e.value) || e.value.trim()) : e.value.trim(); });
   document.querySelectorAll('.oy [data-it]').forEach(box => {
     const i = o.itens.find(z => z.id === box.dataset.it); if (!i) return;
@@ -672,6 +753,7 @@ function oyLe(o) {
   });
   const n = (s, d) => { const x = v(s); return x == null ? d : (+x || 0); };
   o.pago = n('#oyPago', o.pago); o.desconto = n('#oyDesc', o.desconto);
+  if (v('#oyLinkPag') != null) o.linkPagamento = String(v('#oyLinkPag')).trim();
   o.moeda = OY_MOEDA; o.validade = v('#oyVal2') || o.validade;
   if (v('#oySt')) o.status = v('#oySt');
   if (v('#oyPct') != null) o.sinalPct = +v('#oyPct') || 0;
@@ -807,7 +889,10 @@ function oyFechar(o) {
     <div class="btnrow"><button type="button" class="cta sm" id="oyFOk">Fechou — criar as reservas</button></div>`);
   d.querySelector('#oyFOk').onclick = () => {
     const bs = Orc.fecha(o.id, { sinalRecebido: d.querySelector('#oyFSin').checked, conta: d.querySelector('#oyFConta').value });
-    d.close(); toast(`${bs.length} ${bs.length === 1 ? 'reserva criada' : 'reservas criadas'} 🎉 · o roteiro da viagem está pronto`); oyTela(o.id); scrollTo(0, 0);
+    d.close();
+    /* fechou → já abre o ROTEIRO DA VIAGEM, pronto para mandar (WhatsApp, link ou PDF) */
+    if (bs.length && typeof Kit !== 'undefined') { toast(`${bs.length} ${bs.length === 1 ? 'reserva criada' : 'reservas criadas'} 🎉 · agora é só mandar o roteiro`); Kit.abrir(Kit.daReserva(bs[0])); }
+    else { toast(`${bs.length} ${bs.length === 1 ? 'reserva criada' : 'reservas criadas'} 🎉`); oyTela(o.id); scrollTo(0, 0); }
   };
 }
 
@@ -968,6 +1053,7 @@ opDocOrc = (id) => go('/adm/proposta/' + id);
     chegada: { ...VOO, description: 'chegada do cliente: dia, hora e voo' }, partida: { ...VOO, description: 'partida: dia, hora e voo' },
     pago: { type: 'number', description: 'quanto o cliente já pagou, em USD' },
     desconto: { type: 'number' }, validade: { type: 'string', description: 'AAAA-MM-DD' },
+    link_pagamento: { type: 'string', description: 'link de pagamento da plataforma dela (https://…): vira o botão Pagar agora na proposta' },
   };
   const ITEM_EXTRA = { hora_fim: { type: 'string' }, texto: { type: 'string', description: 'o que o cliente lê sobre o serviço (passeio do catálogo já vem preenchido)' },
     incluso: { type: 'string' }, destaque: { type: 'string', description: 'ex.: manhã livre, à noite' }, voo: { type: 'string' },
@@ -990,6 +1076,7 @@ opDocOrc = (id) => go('/adm/proposta/' + id);
     for (const k of ['chegada', 'partida']) if (i[k]) o[k] = { data: isoOk(i[k].data) ? i[k].data : ((o[k] || {}).data || ''), hora: oyHm(i[k].hora) || ((o[k] || {}).hora || ''), voo: i[k].voo || ((o[k] || {}).voo || '') };
     o.moeda = OY_MOEDA; if (i.pago != null) o.pago = +i.pago || 0; if (i.desconto != null) o.desconto = +i.desconto || 0;
     if (isoOk(i.validade)) o.validade = i.validade;
+    if (/^https:\/\//i.test(String(i.link_pagamento || ''))) o.linkPagamento = String(i.link_pagamento).trim();
     if (i.adultos != null || i.criancas != null) { o.pax = oyPax(o); o.paxNota = oyPaxTexto(o); }
     return antes;
   };
@@ -1077,6 +1164,7 @@ opDocOrc = (id) => go('/adm/proposta/' + id);
 - Antes de criar, tenha o BÁSICO: nome do cliente, WhatsApp, quantas pessoas (adultos e crianças), hotel e os dias de chegada e partida (com hora e voo, se ela souber). Falta algum? Pergunte UMA coisa por vez — mas não trave: com nome e pessoas já dá para criar e completar depois com editar_orcamento.
 - Monte o roteiro DIA A DIA: cada serviço com data e hora. Passeio do catálogo SEMPRE com passeio_id (de ver_passeios): traz preço, foto, texto e incluso. Traslado de aeroporto: item com traslado:"chegada" ou "saida" (pega o voo e o hotel). O resto: descricao + texto.
 - Moeda: SOMENTE DÓLAR (USD), sempre. Nunca escreva valor em dirham, real ou euro. Os valores dos serviços são SEM imposto: o app soma 5% de VAT no fim sozinho (nunca some de novo). Total e por pessoa saem sozinhos.
+- "(Indicação: CÓDIGO)" na conversa = veio pelo link de um parceiro: o app liga o orçamento a ele sozinho e a comissão entra em Indicações e cupons.
 - Depois de criar ou mudar, ofereça em uma linha: "Quer que eu abra a proposta para gerar o PDF ou mandar o link?" → proposta_orcamento. Quem manda é ela.` });
     return b;
   };

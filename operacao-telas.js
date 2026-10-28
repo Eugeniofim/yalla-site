@@ -507,7 +507,7 @@ function admHoje(arg) {
   }
   Coach.start([
     { sel: '#hjBusca',     audio: 'adm-5', txt: { pt: 'Emergência: digite um pedaço do nome, o voo ou o telefone e o serviço aparece na hora.', en: 'Emergency: type part of the name, the flight or the phone and the service shows up at once.' } },
-    { sel: '#nb-guias',    audio: 'adm-6', txt: { pt: 'Suas guias e motoristas: quem está livre, por preferência, e o WhatsApp pronto para perguntar.', en: 'Your guides and drivers: who is free, by preference, with the WhatsApp message ready.' } },
+    { sel: '#nb-tours',    audio: 'adm-6', txt: { pt: 'Catálogo: seus passeios e preços, e as guias e motoristas — quem está livre, por preferência, e o WhatsApp pronto para perguntar.', en: 'Catalog: your tours and prices, plus guides and drivers — who is free, by preference, with the WhatsApp message ready.' } },
     { sel: '#nb-consulta', audio: 'adm-7', txt: { pt: 'Pedidos sob consulta: o app deixa o orçamento pronto, você confere e manda.', en: 'Quote requests: the app drafts the quote, you check and send it.' } },
     { sel: '#nb-money',    audio: 'adm-8', txt: { pt: 'Contabilidade: cada conta no seu lado — ' + ladoNome('brasil') + ' para um contador, ' + ladoNome('europa') + ' para o outro.', en: 'Accounting: each account on its side — Brazil for one accountant, Europe for the other.' } },
   ], 'tutorialAdm');
@@ -717,6 +717,8 @@ function admGuias(arg) {
 ===================================================== */
 /* O topo da aba Clientes: as duas partes dela */
 function cliTopo(qual) {
+  /* 28/10/2026: as partes agora ficam na barrinha do menu (subNav, app.js) */
+  if (typeof subNav === 'function') return '';
   return `<div class="cli-seg" role="tablist">
     <a class="cli-seg-b ${qual === 'planilha' ? 'on' : ''}" href="#/adm/planilha" role="tab">Planilha</a>
     <a class="cli-seg-b ${qual === 'crm' ? 'on' : ''}" href="#/adm/consulta" role="tab">Orçamentos</a>
@@ -2546,6 +2548,7 @@ function tfLembretesHtml(hoje) {
 const IC_CAL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>';
 const IC_LISTA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M3.5 6l1.2 1.2L7 5M3.5 12l1.2 1.2L7 11M3.5 18l1.2 1.2L7 17"/></svg>';
 function agSeg(qual) {
+  if (typeof subNav === 'function') return '';   /* 28/10/2026: a barrinha do menu já tem Calendário e Tarefas */
   const G = Tarefas.grupos(isoToday());
   const pend = G.atrasadas.length + G.hoje.length;
   const aba = (k, href, ic, nome, extra) => `<a href="${href}" class="${qual === k ? 'on' : ''}" ${qual === k ? 'aria-current="page"' : ''}>${ic}<span>${nome}</span>${extra || ''}</a>`;

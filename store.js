@@ -27,8 +27,23 @@ function canalAtual() {
   } catch (e) { return 'direto'; }
 }
 const canalNome = (c) => (CANAIS.find(x => x[0] === c) || [c, c || 'Direto'])[1];
+/* O LINK DO PARCEIRO (28/10/2026): yallaexperiences.com/?p=CUPOM. Quem chega por
+   ele fica marcado por 60 dias (neste aparelho) e a marca vai na reserva, no
+   pedido de roteiro, no pedido de orçamento e na mensagem do WhatsApp — a
+   comissão entra sozinha em "Indicações e cupons" (o código é o cupom dele). */
+const PARCEIRO_KEY = 'yalla_parceiro_v1', PARCEIRO_DIAS = 60;
+function parceiroDaVisita() {
+  try {
+    const q = new URLSearchParams(location.search);
+    const c = String(q.get('p') || q.get('parceiro') || '').toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 24);
+    if (c) { localStorage.setItem(PARCEIRO_KEY, JSON.stringify({ c, em: Date.now() })); return c; }
+    const g = JSON.parse(localStorage.getItem(PARCEIRO_KEY) || 'null');
+    return g && g.c && Date.now() - g.em < PARCEIRO_DIAS * 864e5 ? g.c : '';
+  } catch (e) { return ''; }
+}
 /* grava o canal já na chegada: o ?de= some quando a pessoa reabre o app */
 if (typeof location !== 'undefined' && typeof sessionStorage !== 'undefined') canalAtual();
+if (typeof location !== 'undefined' && typeof localStorage !== 'undefined') parceiroDaVisita();
 
 /* ---------- modelo ----------
 Tour       {id, type, region, name:{pt,en}, desc:{pt,en}, meeting, photo,
@@ -751,6 +766,8 @@ const Bookings = {
       createdAt: new Date().toISOString(), origin: origin || 'site',
       /* de que canal a pessoa chegou (link com ?de=instagram, ?de=whatsapp…) */
       canal: (typeof canalAtual === 'function') ? canalAtual() : '',
+      /* veio pelo link de um parceiro (?p=CUPOM): a comissão é dele */
+      parceiroCodigo: (typeof parceiroDaVisita === 'function' && !(typeof isLoggedIn === 'function' && isLoggedIn())) ? parceiroDaVisita() : '',
       /* Em que idioma ele reservou. Sem isto o e-mail de recibo sai em
          portugues para um frances que leu a tela inteira em ingles. */
       lang: (typeof LANG !== 'undefined' && (LANG === 'en' || LANG === 'es')) ? LANG : 'pt',
@@ -929,6 +946,7 @@ const Roteiros = {
       obs: limpa(r.obs), modo: r.modo || '',
       lang: (typeof LANG !== 'undefined' && (LANG === 'en' || LANG === 'es')) ? LANG : 'pt',
       canal: (typeof canalAtual === 'function') ? canalAtual() : '',
+      parceiroCodigo: (typeof parceiroDaVisita === 'function' && !(typeof isLoggedIn === 'function' && isLoggedIn())) ? parceiroDaVisita() : '',
     };
     DB.pedidos = DB.pedidos || [];
     DB.pedidos.push(ped);

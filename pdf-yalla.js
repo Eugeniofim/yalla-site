@@ -56,6 +56,7 @@ async function pdfDoElemento(el, nome) {
     onclone: (doc) => {
       const c = el.id ? doc.getElementById(el.id) : null; if (!c) return;
       c.style.width = LARG + 'px'; c.style.maxWidth = LARG + 'px'; c.style.margin = '0';
+      c.classList.add('em-pdf');   /* o CSS sabe que é o papel (ex.: a capa da proposta ocupa a folha inteira) */
       /* o que só serve na tela (botões, "pagar agora", "pôr na agenda") não vai para o papel */
       c.querySelectorAll('.kt-tela,[data-pdf-fora]').forEach(x => { x.style.display = 'none'; });
       c.querySelectorAll('*').forEach(x => { const cs = doc.defaultView.getComputedStyle(x); if (cs.boxShadow !== 'none') x.style.boxShadow = 'none'; });
