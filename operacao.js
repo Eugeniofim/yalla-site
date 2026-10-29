@@ -442,7 +442,9 @@ const Orc = {
     for (const i of o.itens) {
       /* do catalogo, ou escrito a mao com data (a planilha dela) */
       const avulso = !(i.tourId && Tours.get(i.tourId));
-      if (avulso && (!i.data || !String(i.desc || '').trim() || i.sugestao)) continue;
+      /* pedido do cliente que ela não confirmou (sem valor) não estava na proposta: não vira reserva (29/10/2026) */
+      if (i.sugestao) continue;
+      if (avulso && (!i.data || !String(i.desc || '').trim())) continue;
       const b = Bookings.criarManual({
         tourId: avulso ? tourAvulso(RE_TRANSFER.test(i.desc) ? 'transfer' : 'servico') : i.tourId, date: i.data || isoToday(), time: i.hora || '09:00',
         name: o.cliente.nome || 'Cliente', whats: o.cliente.whats, email: o.cliente.email,

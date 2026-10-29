@@ -92,7 +92,7 @@ Orc.fecha = function (id, opts) {
   const soma = o ? o.itens.reduce((t, i) => t + (+i.valor || 0), 0) : 0;
   const k = o && soma > 0 ? Orc.total(o) / soma : 1;
   /* os serviços que viram reserva, na mesma ordem e com a mesma regra do Orc.fecha */
-  const usados = o ? o.itens.filter(i => { const av = !(i.tourId && Tours.get(i.tourId)); return !(av && (!i.data || !String(i.desc || '').trim() || i.sugestao)); }) : [];
+  const usados = o ? o.itens.filter(i => { const av = !(i.tourId && Tours.get(i.tourId)); return !i.sugestao && !(av && (!i.data || !String(i.desc || '').trim())); }) : [];
   const bs = _oyFechaBase(id, opts);
   bs.forEach((b, n) => {
     /* o roteiro depois da compra (kit) mostra o que ela escreveu no orçamento */
