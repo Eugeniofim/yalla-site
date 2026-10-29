@@ -110,7 +110,12 @@ route = function () {
 /* o app.js registrou o route() antigo no hashchange e ele desenha a capa primeiro; este ouvinte
    roda logo depois, no mesmo instante (antes da tela pintar), e põe a página do cliente.
    Os outros ouvintes (assistente, endereço novo) continuam valendo. */
-addEventListener('hashchange', () => { if (pubRotaDe()) route(); });
+addEventListener('hashchange', () => {
+  if (pubRotaDe()) return route();
+  /* saiu da proposta/viagem por um link: quem desenha é o route() antigo (ouvinte do app.js), então a aba
+     volta a ser do site AQUI — ficava "Proposta · Gisele" no site inteiro (29/10/2026) */
+  if (route._pub) { document.title = _tituloApp; route._pub = ''; }
+});
 (function () {
   if (document.getElementById('pubCss')) return;
   const s = document.createElement('style'); s.id = 'pubCss';
