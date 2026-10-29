@@ -585,8 +585,9 @@ function ppCss() {
   .pp{--pp-fundo:#F5E8C7;--pp-ouro:#C9A23B;--pp-ouro-t:#8A6D1E;--pp-n:#141414;--pp-t:#4A4335;
     background:var(--pp-fundo);color:var(--pp-n);font-family:Montserrat,var(--f-ui),system-ui,sans-serif;max-width:794px;margin:0 auto;padding-bottom:28px}
   .pp p{margin:0 0 8px;font-size:14.5px;line-height:1.55;color:var(--pp-t)}
-  .pp-capa{position:relative;aspect-ratio:794/1123;min-height:480px;overflow:hidden;background:#EADBB6;margin-bottom:26px}
+  .pp-capa{position:relative;width:100%;aspect-ratio:794/1123;min-height:480px;overflow:hidden;background:#EADBB6;margin-bottom:26px}
   /* na tela a capa cabe na tela (o nome e as datas aparecem sem rolar); no PDF ocupa a folha inteira */
+  /* com a altura limitada à tela, a largura não encolhe junto (sobrava uma faixa vazia ao lado no computador, 29/10/2026) */
   .pp-pg .pp-capa{max-height:calc(100svh - 56px)}
   .em-pdf .pp-capa{max-height:none!important}
   .pp-fotos{position:absolute;inset:0}
