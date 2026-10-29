@@ -2193,8 +2193,10 @@ const ADM_IC = {
 const ADM_MENU = [
   /* 28/10/2026, ele: "cadê a AGENDA no menu" — o item se chama Agenda; dentro, Hoje · Calendário · Tarefas */
   /* e as tarefas DENTRO da agenda, numa tela só (ele, 28/10: "juntar TAREFAS dentro de AGENDA") */
-  { id: 'hoje',     nome: 'Agenda',   subs: [['today', 'Hoje'], ['agenda', 'Agenda']] },
-  { id: 'vendas',   nome: 'Vendas',   subs: [['consulta', 'Orçamentos'], ['pipeline', 'Pipeline'], ['planilha', 'Planilha'], ['bookings', 'Reservas'], ['transfer', 'Transfers']] },
+  /* 29/10/2026, ele: "pipeline poderia estar no menu AGENDA?" — o Pipeline acompanha cada cliente até a viagem
+     e o pós-venda: é o trabalho do dia, junto de Hoje e da Agenda (a rota #/adm/pipeline não mudou) */
+  { id: 'hoje',     nome: 'Agenda',   subs: [['today', 'Hoje'], ['agenda', 'Agenda'], ['pipeline', 'Pipeline']] },
+  { id: 'vendas',   nome: 'Vendas',   subs: [['consulta', 'Orçamentos'], ['planilha', 'Planilha'], ['bookings', 'Reservas'], ['transfer', 'Transfers']] },
   { id: 'clientes', nome: 'Clientes', subs: [['clients', 'Clientes']] },
   /* o atendimento automático (WhatsApp e Instagram): só no app de quem contratou */
   ...((typeof APP_CONFIG !== 'undefined' && APP_CONFIG.atendimento) ? [{ id: 'atend', nome: 'Conversas', subs: [['inbox', 'Atendimento']] }] : []),
