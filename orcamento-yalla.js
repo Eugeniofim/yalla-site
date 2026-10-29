@@ -710,12 +710,10 @@ ROTAS_EXTRA['p'] = async (partes) => {
   const tok = String((partes || [])[0] || '').replace(/[^A-Za-z0-9]/g, '');
   if (!tok) return paginaPublicaErro();
   app.innerHTML = '<main class="wrap"><p class="why center" style="margin-top:40px">Abrindo a sua proposta…</p></main>';
-  try {
-    const r = await supaFetch('rpc/kit', { method: 'POST', body: JSON.stringify({ p_token: tok }) });
-    const d = r.ok ? await r.json() : null;
-    if (!d || d.tipo !== 'proposta') return paginaPublicaErro('Esta proposta não existe mais. Peça uma nova pelo WhatsApp.');
-    ppPagina(d);
-  } catch (e) { paginaPublicaErro('Sem internet para abrir a proposta. Tente de novo em instantes.'); }
+  const { ok, d } = await lerLinkPublico(tok);
+  if (!ok) return paginaPublicaErro('A conexão falhou ao abrir a sua proposta. Confira a internet e toque em "Tentar de novo".', true);
+  if (!d || d.tipo !== 'proposta') return paginaPublicaErro('Esta proposta não existe mais. Peça uma nova pelo WhatsApp.');
+  try { ppPagina(d); } catch (e) { paginaPublicaErro('Não consegui montar a proposta agora. Toque em "Tentar de novo".', true); }
 };
 ROTAS_EXTRA['pp'] = (partes) => abrePublico(partes, (d) => d && d.tipo === 'proposta' ? ppPagina(d) : paginaPublicaErro());
 

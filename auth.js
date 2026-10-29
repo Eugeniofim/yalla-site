@@ -97,9 +97,15 @@ async function authRefresh() {
 }
 
 /* mantém a sessão viva sem ela precisar entrar de novo */
+let _authRenovando = null;
+function authVencida() { return !!(SESSION && SESSION.refresh_token && Date.now() > (SESSION.expires_at || 0) - 60000); }
 async function authEnsure() {
   if (!SESSION) return false;
-  if (Date.now() > SESSION.expires_at - 60000) return authRefresh();
+  if (Date.now() > SESSION.expires_at - 60000) {
+    /* uma renovação só por vez: duas com o mesmo refresh_token derrubam a sessão */
+    if (!_authRenovando) _authRenovando = authRefresh().finally(() => { _authRenovando = null; });
+    return _authRenovando;
+  }
   return true;
 }
 

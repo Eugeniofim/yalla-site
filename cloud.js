@@ -22,8 +22,16 @@ function supaFetch(path, opts = {}) {
   /* Sem nuvem configurada, nada vai para a rede: a fila local segura tudo,
      como se estivesse offline. E o modo "prototipo" de um cliente novo. */
   if (!SUPA_URL) return Promise.reject(new Error('sem nuvem configurada (config.js)'));
-  /* logada, fala como ela; deslogado, fala como visitante */
-  const tok = (typeof authToken === 'function' && authToken()) || SUPA_KEY;
+  /* Login vencido (celular parado a noite toda): renova ANTES de falar com o banco.
+     Mandar o vencido = 401 = a tela entende "não existe" (29/10/2026). */
+  if (!opts.visitante && typeof authVencida === 'function' && authVencida() && typeof authEnsure === 'function')
+    return authEnsure().then(() => supaFetchJa(path, opts), () => supaFetchJa(path, opts));
+  return supaFetchJa(path, opts);
+}
+function supaFetchJa(path, tudo) {
+  const { visitante, ...opts } = tudo;
+  /* logada, fala como ela; deslogado (ou link público), fala como visitante */
+  const tok = (!visitante && typeof authToken === 'function' && authToken()) || SUPA_KEY;
   const ctrl = new AbortController();
   const corta = setTimeout(() => ctrl.abort(), REDE_TIMEOUT);
   return fetch(SUPA_URL + '/rest/v1/' + path, {
