@@ -125,6 +125,7 @@ async function fotoNaNuvem(src, pasta) {
   src = String(src || '');
   if (!/^data:image\//.test(src)) return src;                       /* já é endereço (arte/…, https://…) */
   try {
+    if (typeof authEnsure === 'function') await authEnsure();   /* login vencido: renova antes (o upload caía calado na foto pesada) */
     if (typeof temNuvem === 'function' && temNuvem() && typeof isLoggedIn === 'function' && isLoggedIn() && typeof SUPA_URL !== 'undefined' && SUPA_URL) {
       const { blob } = await oyReduz(src, 1600, 0.84);
       const sala = (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.sala) || '', balde = (sala ? sala + '-' : '') + 'fotos';

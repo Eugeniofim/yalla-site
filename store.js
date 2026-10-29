@@ -585,7 +585,13 @@ function save() {
 function resetDemo() { DB = _seed(); save(); }
 
 const uid = () => Math.random().toString(36).slice(2, 9);
-const bookCode = () => PREFIXO + '-' + Math.floor(1000 + Math.random() * 9000);
+/* 4 dígitos repetiam (com ~100 reservas, mais de 50% de chance) e o assistente abria a reserva errada
+   pelo código: confere as que este aparelho conhece e tenta de novo (29/10/2026) */
+const bookCode = () => {
+  const usados = new Set(((typeof DB !== 'undefined' && DB.bookings) || []).map(b => b.code));
+  for (let i = 0; i < 50; i++) { const c = PREFIXO + '-' + Math.floor(1000 + Math.random() * 9000); if (!usados.has(c)) return c; }
+  return PREFIXO + '-' + Math.floor(10000 + Math.random() * 90000);
+};
 
 /* ---------- passeios ---------- */
 const Tours = {
@@ -781,7 +787,8 @@ const Bookings = {
     if (typeof cadastroDaReserva === 'function') cadastroDaReserva(b);
     if (couponCode) Coupons.consume(couponCode, email);
     localStorage.setItem(DB_KEY, JSON.stringify(DB));
-    if (typeof cloudPushBooking === 'function') cloudPushBooking(b);
+    /* a promessa do envio fica à mão (fora da reserva): o checkout só diz "reservado" quando o banco confirmou */
+    Bookings._envio = typeof cloudPushBooking === 'function' ? cloudPushBooking(b) : null;
     if (couponCode && typeof cloudPushState === 'function') cloudPushState();
     return b;
   },

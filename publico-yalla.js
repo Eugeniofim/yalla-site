@@ -84,11 +84,18 @@ function abrePublico(partes, desenha) {
 /* ---------- liga no app: #/<rota>/<…> das ROTAS_EXTRA ---------- */
 const pubRotaDe = () => { const p = (location.hash.replace(/^#\/?/, '') || '').split('/'); return Object.prototype.hasOwnProperty.call(ROTAS_EXTRA, p[0]) && typeof ROTAS_EXTRA[p[0]] === 'function' && p.length > 1 && p[1] ? p : null; };
 const _routeSemPublico = route;
+const _tituloApp = document.title;
 route = function () {
   const p = pubRotaDe();
-  if (!p) { route._pub = ''; return _routeSemPublico(); }
-  /* a nuvem chegou / o relógio virou: a página do cliente já está desenhada — não redesenha por cima */
-  if (route._pub === location.hash && document.getElementById('pubPrint')) return;
+  /* saiu da proposta/viagem: a aba volta a ser do site (ficava "Proposta · Gisele" no site inteiro) */
+  if (!p) { if (route._pub) document.title = _tituloApp; route._pub = ''; return _routeSemPublico(); }
+  /* a nuvem chegou / o relógio virou: a página do cliente já está desenhada — não redesenha por cima.
+     29/10/2026: a proposta (#ppDoc) ficava de fora — a Milla mexia em qualquer passeio e o cliente,
+     lendo a proposta, via "Abrindo a sua proposta…" e voltava para o topo. */
+  if (route._pub === location.hash && (document.getElementById('pubPrint') || document.getElementById('ppDoc'))) return;
+  /* este mesmo link já está abrindo: cada arquivo chama route() ao carregar e o #/k buscava 3 vezes —
+     a última a terminar desenhava, e uma falha atrasada cobria a viagem já mostrada (29/10/2026) */
+  if (route._abrindo === location.hash) return;
   route._pub = location.hash;
   document.body.classList.remove('em-adm');
   try { if (typeof Coach !== 'undefined') Coach.hide(); } catch (e) {}
@@ -96,7 +103,9 @@ route = function () {
   if (typeof visualAplica === 'function') try { visualAplica(false); } catch (e) {}
   document.documentElement.lang = 'pt-BR';
   scrollTo(0, 0);
-  return ROTAS_EXTRA[p[0]](p.slice(1));
+  const h = location.hash, r = ROTAS_EXTRA[p[0]](p.slice(1));
+  if (r && typeof r.then === 'function') { route._abrindo = h; r.finally(() => { if (route._abrindo === h) route._abrindo = ''; }); }
+  return r;
 };
 /* o app.js registrou o route() antigo no hashchange e ele desenha a capa primeiro; este ouvinte
    roda logo depois, no mesmo instante (antes da tela pintar), e põe a página do cliente.

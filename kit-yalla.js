@@ -170,7 +170,9 @@ async function kitDados(chave) {
   const st = DB.settings;
   const d = { v: 1, nome: (c && c.nome) || bs[0].name || '', periodo: kitPeriodo(sv), servicos: sv, dicas: kitDicas(), parceiros: kitParceiros(),
     brindes: [], roteiro: '', whats: kitDig(st.whats), email: (typeof GUIA_CFG !== 'undefined' && GUIA_CFG.email) || '',
-    insta: String(st.insta || '').replace(/^@/, ''), negocio: guiaNegocio(), gerado: new Date().toISOString() };
+    insta: String(st.insta || '').replace(/^@/, ''), negocio: guiaNegocio(), gerado: new Date().toISOString(),
+    /* a política DELA vai dentro do link: o cliente abre num aparelho que ainda não leu os ajustes dela (29/10/2026) */
+    politica: String((DB.settings && DB.settings.propPolitica) || '') };
   const blocos = kitBlocos(bs); if (blocos.length) d.blocos = blocos;
   const ms = [...new Set(sv.map(s => s.moeda || ''))]; if (ms.length === 1 && ms[0]) d.moeda = ms[0];
   return d;

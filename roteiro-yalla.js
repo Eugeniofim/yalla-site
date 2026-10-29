@@ -129,7 +129,7 @@ function rtDocHtml(d) {
   }).join('');
 
   /* as informações importantes */
-  const pol = (DB.settings && DB.settings.propPolitica) || (typeof PP_POLITICA !== 'undefined' ? PP_POLITICA : '');
+  const pol = d.politica || (DB.settings && DB.settings.propPolitica) || (typeof PP_POLITICA !== 'undefined' ? PP_POLITICA : '');
   const contato = [d.whats ? `WhatsApp: ${esc(typeof foneBonito === 'function' ? foneBonito(d.whats) : d.whats)}` : '', d.email ? esc(d.email) : '', insta ? `Instagram: ${esc(insta)}` : ''].filter(Boolean);
   const info = pagina('DETALHES DA SUA RESERVA', 'Informações importantes', linhaCli, '',
     rtLista(d.blocos).map(b => `<div class="rt-bl kt-bl">${b.titulo ? `<h3 class="rt-up">${esc(b.titulo)}</h3>` : ''}${typeof kitFmt === 'function' ? kitFmt(b.texto) : `<p>${rtP(b.texto)}</p>`}</div>`).join('')

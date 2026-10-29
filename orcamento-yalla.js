@@ -80,6 +80,9 @@ function oyHoteis(o, comVazios) {
 /* SÓ DÓLAR (28/10/2026, pedido dele: "deixar tudo em dólares, somente
    dólares"): o orçamento, a proposta e as reservas que saem dele são em USD */
 const OY_MOEDA = 'USD';
+/* lembretes do app para ELA (nunca vão para o cliente): "Sem preço na tabela", "O cliente pediu — escolha…",
+   "Defina o valor…". 29/10/2026: o do pedido da conversa aparecia na proposta da cliente. */
+const OY_OBS_INTERNA = /^(Sem preço na tabela|O cliente pediu — escolha|Defina o valor)/;
 /* fechou: as reservas somam o que o cliente paga (desconto e VAT repartidos
    na proporção de cada serviço) e saem em dólar */
 const _oyFechaBase = Orc.fecha;
@@ -94,7 +97,7 @@ Orc.fecha = function (id, opts) {
   bs.forEach((b, n) => {
     /* o roteiro depois da compra (kit) mostra o que ela escreveu no orçamento */
     const i = usados[n]; if (!i) return;
-    Object.assign(b, { orcTitulo: i.desc || '', orcTexto: i.texto || '', orcIncluso: i.incluso || '', orcFoto: i.foto || '', orcObs: /^Sem preço na tabela/.test(i.obs || '') ? '' : (i.obs || '') });
+    Object.assign(b, { orcTitulo: i.desc || '', orcTexto: i.texto || '', orcIncluso: i.incluso || '', orcFoto: i.foto || '', orcObs: OY_OBS_INTERNA.test(i.obs || '') ? '' : (i.obs || '') });
     const par = oyParceiroDe(o); if (par && !b.parceiroId) b.parceiroId = par.id;
     if (i.horaFim) b.horaFim = i.horaFim;
     /* serviço sem horário no orçamento: a reserva guarda 09:00 por dentro (a agenda precisa de uma
@@ -460,7 +463,7 @@ function ppDados(o) {
       const x = i.tourId && Tours.get(i.tourId);
       return { ...(o.mostraValores ? { valor: i.aParte ? null : +i.valor || 0 } : {}), data: i.data || '', hora: i.hora || '', horaFim: i.horaFim || '', rotulo: i.rotulo || '', titulo: i.desc || '', horas: x && x.priceMode === 'hora' ? +i.horas || +x.minHoras || 1 : 0,
         texto: i.texto || '', incluso: i.incluso || '', naoIncluso: i.naoIncluso || '', aParte: !!i.aParte,
-        obs: i.sugestao || /^Sem preço na tabela/.test(i.obs || '') ? '' : (i.obs || ''), foto: i.foto || '', tipo: i.tipo, voo: i.voo || '',
+        obs: i.sugestao || OY_OBS_INTERNA.test(i.obs || '') ? '' : (i.obs || ''), foto: i.foto || '', tipo: i.tipo, voo: i.voo || '',
         cidade: x && regs[x.region] && !['deserto', 'oriente'].includes(x.region) ? regs[x.region] : '' };
     }),
     subtotal: Orc.subtotal(o), vatPct: oyVatPct(o), vat: Orc.vat(o),
@@ -733,6 +736,7 @@ async function ppAdm(id) {
       ${o.status === 'fechado' && (o.bookingIds || []).length && typeof Kit !== 'undefined' ? `<button class="mini" id="ppKit" type="button">Roteiro da viagem</button>` : ''}
     </div>
     <p class="why pp-adwhy">É assim que o cliente vê. ${temWa ? '' : 'Sem o WhatsApp do cliente: copie o link e mande você.'}</p>
+    ${(() => { const f = o.itens.filter(i => i.sugestao); return f.length ? `<p class="alert warn pp-adwhy">${f.length === 1 ? 'Ficou fora desta proposta' : `Ficaram fora desta proposta ${f.length} pedidos`} da conversa, ainda sem valor: ${esc(f.map(i => i.desc).join(', '))}. Volte em ← editar, ponha o valor (ou apague).</p>` : ''; })()}
     <main class="pp" id="ppDoc">${ppHtml(ppDados(o))}</main>
   </div>`;
   if (typeof pdfLiga === 'function') pdfLiga($('#ppPdf'), () => $('#ppDoc'), () => 'Yalla_Proposta_' + (o.cliente.nome || o.num).replace(/\s+/g, '_'),
@@ -798,7 +802,7 @@ function oyTela(id) {
         <label class="fld">Incluso<textarea data-k="incluso" rows="2">${esc(i.incluso)}</textarea></label>
         <label class="fld">Não incluso<textarea data-k="naoIncluso" rows="2">${esc(i.naoIncluso || '')}</textarea></label>
         <div class="oy-rap" role="group" aria-label="Não incluso de um toque">${oyRapidos().map(t => `<button type="button" class="chip ${oyTemFrase(i.naoIncluso, t) ? 'on' : ''}" data-rap="${esc(t)}" aria-pressed="${oyTemFrase(i.naoIncluso, t)}">${esc(t)}</button>`).join('')}</div>
-        <label class="fld">Observação <small class="why">(aparece num balão na proposta e no roteiro)</small><textarea data-k="obs" rows="2" placeholder="Ex.: volta para o hotel por conta do cliente · Sugestão: jantar em Dubai Marina">${esc(/^Sem preço na tabela/.test(i.obs || '') ? '' : (i.obs || ''))}</textarea></label>
+        <label class="fld">Observação <small class="why">(aparece num balão na proposta e no roteiro)</small><textarea data-k="obs" rows="2" placeholder="Ex.: volta para o hotel por conta do cliente · Sugestão: jantar em Dubai Marina">${esc(OY_OBS_INTERNA.test(i.obs || '') ? '' : (i.obs || ''))}</textarea></label>
         <label class="optin oy-aparte"><input type="checkbox" data-k="aParte" ${i.aParte ? 'checked' : ''}><span><b>À parte</b><small>entra no roteiro, por conta do cliente, sem valor (ex.: Beach Club, brunch)</small></span></label>
         ${x ? (() => { const pc = oyPrecoCrianca(x, i.opcao), idade = +((oyOpcoes(x)[+i.opcao || 0] || {}).idadeCrianca || x.idadeCrianca || 0);
           return `<div class="oy-g3 oy-opc">
@@ -832,7 +836,7 @@ function oyTela(id) {
     return `<article class="oy-it ${aberto ? 'aberto' : ''}" data-it="${esc(i.id)}">
       <button type="button" class="oy-itcab" data-oyabre="${esc(i.id)}" aria-expanded="${aberto}">
         <span class="oy-ithr">${esc(ppHoras(i) || 'sem horário')}</span>
-        <span class="oy-itn">${i.foto ? `<span class="oy-itf" style="background-image:url('${esc(i.foto)}')" aria-hidden="true"></span>` : ''}<b>${esc(i.desc || 'Sem título')}</b>${i.tipo === 'traslado' && i.voo ? `<small>voo ${esc(i.voo)}</small>` : ''}${i.aParte ? '<small>à parte</small>' : !i.valor ? '<small class="oy-alerta">sem valor</small>' : ''}</span>
+        <span class="oy-itn">${i.foto ? `<span class="oy-itf" style="background-image:url('${esc(i.foto)}')" aria-hidden="true"></span>` : ''}<b>${esc(i.desc || 'Sem título')}</b>${i.tipo === 'traslado' && i.voo ? `<small>voo ${esc(i.voo)}</small>` : ''}${i.sugestao ? '<small class="oy-alerta">pedido da conversa · fora da proposta até você pôr o valor</small>' : i.aParte ? '<small>à parte</small>' : !i.valor ? '<small class="oy-alerta">sem valor</small>' : ''}</span>
         <span class="oy-itv">${i.aParte ? 'à parte' : i.valor ? esc(oyM(i.valor, m)) : '—'}</span>
         <span class="oy-chev">${oyIc('seta')}</span>
       </button>
@@ -859,7 +863,7 @@ function oyTela(id) {
             <textarea class="oy-cx" data-k="texto" rows="${Math.min(10, Math.max(2, nl + 1))}" placeholder="detalhes (opcional)" aria-label="Detalhes, um por linha">${esc(i.texto)}</textarea>
             ${i.foto ? `<button type="button" class="oy-cfoto" data-oyabre="${esc(i.id)}" style="background-image:url('${esc(i.foto)}')" aria-label="Foto deste serviço na proposta (toque para trocar)" title="foto na proposta"></button>` : ''}
             ${i.tipo === 'traslado' && i.voo ? `<small class="oy-cvoo">voo ${esc(i.voo)}</small>` : ''}
-            ${i.obs && !/^Sem preço na tabela/.test(i.obs) ? `<small class="oy-cobs" title="${esc(i.obs)}">obs: ${esc(i.obs.length > 60 ? i.obs.slice(0, 60) + '…' : i.obs)}</small>` : ''}
+            ${i.obs && !OY_OBS_INTERNA.test(i.obs) ? `<small class="oy-cobs" title="${esc(i.obs)}">obs: ${esc(i.obs.length > 60 ? i.obs.slice(0, 60) + '…' : i.obs)}</small>` : ''}
           </div>
           <label class="oy-c oy-cv" role="cell"><span class="sr">Valor ${esc(m)}</span>${i.aParte ? '<span class="oy-aparte-v">à parte</span>' : `<input type="number" min="0" inputmode="decimal" data-k="valor" value="${i.valor || ''}" placeholder="0">`}</label>
           <span class="oy-c oy-cacs" role="cell"><button type="button" class="oy-cm" data-oyabre="${esc(i.id)}" aria-expanded="${aberto}" aria-label="Mais deste serviço: incluso, foto, pessoas, custo, observação">⋯</button><button type="button" class="oy-cm oy-crm" data-rmi="${esc(i.id)}" aria-label="Tirar este serviço" title="tirar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:17px;height:17px"><path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13M10 11v6M14 11v6"/></svg></button></span>
@@ -1011,7 +1015,7 @@ function oyLe(o) {
   $$('[data-v]').forEach(e => { const [k, c] = e.dataset.v.split('.'); o[k] = o[k] || {}; o[k][c] = c === 'hora' ? (oyHm(e.value) || e.value.trim()) : e.value.trim(); });
   document.querySelectorAll('.oy [data-it]').forEach(box => {
     const i = o.itens.find(z => z.id === box.dataset.it); if (!i) return;
-    const antes = { opcao: +i.opcao || 0, pax: +i.pax || 1, cri: +i.criancas || 0, horas: +i.horas || 0 }, x = i.tourId && Tours.get(i.tourId);
+    const antes = { opcao: +i.opcao || 0, pax: +i.pax || 1, cri: +i.criancas || 0, horas: +i.horas || 0, desc: i.desc, data: i.data }, x = i.tourId && Tours.get(i.tourId);
     const tituloAuto = x && i.desc === oyTituloDe(x, antes.opcao);
     const ad = box.querySelector('[data-k="adultosIt"]'), cr = box.querySelector('[data-k="criancas"]');
     if (ad && cr && ad.closest('[data-it]') === box) { const a = Math.max(0, +ad.value || 0), c = Math.max(0, +cr.value || 0); i.pax = Math.max(1, a + c); i.criancas = Math.min(c, i.pax); }
@@ -1037,6 +1041,9 @@ function oyLe(o) {
       if (i.auto) i.valor = oyPrecoItem(x, i).total || i.valor;
       if (tituloAuto && i.opcao !== antes.opcao) i.desc = oyTituloDe(x, i.opcao);
     }
+    /* SUGESTÃO da conversa (29/10/2026): fica fora da proposta até ela confirmar — pôr o valor, marcar
+       "à parte" ou mudar o nome/dia já é confirmar. Antes nada tirava a marca e o serviço sumia da proposta. */
+    if (i.sugestao && (+i.valor > 0 || i.aParte || i.desc !== antes.desc || i.data !== antes.data)) i.sugestao = false;
   });
   const n = (s, d) => { const x = v(s); return x == null ? d : (+x || 0); };
   o.pago = n('#oyPago', o.pago); o.desconto = n('#oyDesc', o.desconto); o.totalInformado = n('#oyTotInf', o.totalInformado || 0);

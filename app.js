@@ -2110,7 +2110,7 @@ function renderBook() {
       if (part.erro) return toast(part.erro);
       if (Cal.seatsLeft(x.id, S.date, S.time, S.cap || x.max) < S.pax) { S.step = 1; S.time = null; renderBook(); return toast(t('lastSpotGone')); }
       const btn = $('#payBtn'); btn.disabled = true; btn.textContent = t('confirming');
-      setTimeout(() => {
+      setTimeout(async () => {
         S.booking = Bookings.create({
           tourId: x.id, date: S.date, time: S.time, name, email, whats,
           insta: $('#fI').value.trim(), pax: S.pax, coupon: S.coupon,
@@ -2120,6 +2120,15 @@ function renderBook() {
           idiomaGuia: (x.idiomasGuia || []).length ? S.idiomaGuia : '', janela: S.ate ? S.time + '–' + S.ate : '',
           policy: (x.priceMode === 'transfer' && pr.sinal) ? 'sinal' : splitAllowed ? S.policy : 'full', origin: 'site',
         });
+        /* 29/10/2026: dizia "Está reservado" sem saber se a reserva chegou ao banco. Com rede ruim ela
+           ficava só no celular do cliente e a Yalla recebia um código que não existia no painel.
+           Agora espera a resposta (até 15 s); se não chegou, a tela diz e pede o WhatsApp. */
+        const envio = Bookings._envio; Bookings._envio = null;
+        S.naoChegou = false;
+        if (envio && typeof temNuvem === 'function' && temNuvem()) {
+          const r = await Promise.race([envio, new Promise(res => setTimeout(() => res({ ok: false }), 15000))]).catch(() => ({ ok: false }));
+          S.naoChegou = !(r && r.ok);
+        }
         S.step = 4; renderBook();
       }, 900);
     };
@@ -2127,7 +2136,12 @@ function renderBook() {
 
   if (S.step === 4) {
     const b = S.booking, due = Bookings.due(b);
-    book.innerHTML = `
+    book.innerHTML = S.naoChegou ? `
+      <div class="okc" style="background:var(--warn,#b7791f)">!</div>
+      <h2 class="okh">${L3('Falta só confirmar', 'One step left', 'Falta confirmar')}</h2>
+      <p class="hint center">${L3('A internet falhou e o seu pedido ainda não chegou até nós. Toque no botão do WhatsApp abaixo e mande a mensagem: é ela que garante a sua vaga.',
+        'The connection failed and your request has not reached us yet. Tap the WhatsApp button below and send the message: that is what secures your spot.',
+        'La conexión falló y tu pedido aún no nos llegó. Toca el botón de WhatsApp y envía el mensaje: eso asegura tu lugar.')}</p>` : `
       <div class="okc">✓</div>
       <h2 class="okh">${t('booked')}</h2>
       <p class="hint center">${t('sentAll')}</p>

@@ -405,8 +405,11 @@ const Orc = {
   /* um servico do catalogo, ja com o preco da tabela dela para aquele grupo */
   itemDoCatalogo(tourId, { pax, data, hora, opcao } = {}) {
     const x = Tours.get(tourId); if (!x) return null;
-    const h = hora || (DB.rules.find(r => r.tourId === tourId) || {}).time || '09:00';
-    const pr = Bookings.precoDe(x, tourId, data || isoToday(), h, Math.max(1, +pax || 1), { opcao: +opcao || 0 });
+    /* hora só se for certa: a que ela deu ou a do horário fixo do passeio. O "09:00" de reserva
+       ia para o orçamento e para o roteiro do cliente como se fosse combinado (29/10/2026);
+       fica só para a conta do preço (transfer noturno, vagas). */
+    const h = hora || (DB.rules.find(r => r.tourId === tourId) || {}).time || '';
+    const pr = Bookings.precoDe(x, tourId, data || isoToday(), h || '09:00', Math.max(1, +pax || 1), { opcao: +opcao || 0 });
     return Orc._item({ tourId, desc: x.name.pt, data: data || '', hora: h, pax, opcao,
                        valor: pr.total || 0, sinal: x.priceMode === 'transfer' ? (pr.sinal || null) : null,
                        obs: pr.consultar ? 'Sem preço na tabela — defina o valor' : '' });
@@ -506,8 +509,17 @@ function lerConversa(txt) {
   const datas = new Set();
   for (const d of semCarimbo.matchAll(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/g)) { const i = _isoDe(d[1], d[2], d[3]); if (i) datas.add(i); }
   const semCarLow = semCarimbo.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-  for (const d of semCarLow.matchAll(/\b(\d{1,2})\s+de\s+([a-z]+)/g)) {
-    const mi = MESES_PT.indexOf(d[2]); if (mi >= 0) { const i = _isoDe(d[1], mi + 1); if (i) datas.add(i); }
+  /* "18 de março de 2027": o ano dito vale (antes ficava de fora e o app chutava) */
+  for (const d of semCarLow.matchAll(/\b(\d{1,2})\s+de\s+([a-z]+)(?:\s+de\s+(\d{4}))?/g)) {
+    const mi = MESES_PT.indexOf(d[2]); if (mi >= 0) { const i = _isoDe(d[1], mi + 1, d[3]); if (i) datas.add(i); }
+  }
+  /* PERÍODO (29/10/2026): "de 12 a 18 de março" / "12 a 18/03" — o 12 sumia e a chegada virava o dia 18,
+     com os passeios depois do fim da viagem. Agora o primeiro dia do período entra também. */
+  for (const d of semCarLow.matchAll(/\b(\d{1,2})\s*(?:a|ao|ate|-|–|e)\s*(\d{1,2})\s+de\s+([a-z]+)(?:\s+de\s+(\d{4}))?/g)) {
+    const mi = MESES_PT.indexOf(d[3]); if (mi >= 0 && +d[1] < +d[2]) { const i = _isoDe(d[1], mi + 1, d[4]); if (i) datas.add(i); }
+  }
+  for (const d of semCarLow.matchAll(/\b(\d{1,2})\s*(?:a|ao|ate|-|–)\s*(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/g)) {
+    if (+d[1] < +d[2]) { const i = _isoDe(d[1], d[3], d[4]); if (i) datas.add(i); }
   }
   const num = (re) => { const x = low.match(re); return x ? +x[1] : 0; };
   /* "somos 4 pessoas (2 adultos e 2 criancas)": o total e 4, nao 6 */
@@ -527,13 +539,27 @@ function lerConversa(txt) {
   if (cidades.length) partes.push(cidades.join(', '));
   if (servicos.length) partes.push(servicos.map(s => s === 'transfer'
     ? 'transfer' + (chegada && partida ? ' (chegada e partida)' : chegada ? ' (chegada)' : partida ? ' (partida)' : '')
-    : ((typeof Tours !== 'undefined' && Tours.get(s)) ? Tours.get(s).name.pt : s)).join(', '));
+    : (typeof tourPublicado === 'function' && tourPublicado(s) ? tourPublicado(s).name.pt : (typeof PEDIDO_NOME !== 'undefined' && PEDIDO_NOME[s]) || s)).join(', '));
   if (voo) partes.push('voo ' + voo);
   return { nome, whats: tel, datas: [...datas].sort(), adultos, criancas, pax, cidades, servicos, chegada, partida, voo,
            resumo: partes.join(' · ') };
 }
 /* O rascunho: cada servico reconhecido vira um item com o preco da tabela.
    Marcado como SUGESTAO — e ela quem confere antes de mandar. */
+/* 29/10/2026: o rascunho automático (conversa colada e "Monte seu roteiro") apontava para os
+   passeios-modelo do app ("Safári no deserto (exemplo)", US$ 350; "Iate na Dubai Marina (exemplo)",
+   US$ 1.500…). No catálogo da Milla eles existem como RASCUNHO, com preço de exemplo — e iam para
+   o orçamento dela como se fossem dela. Agora: só entra passeio PUBLICADO; sem ele, entra um item
+   SEM PREÇO dizendo o que o cliente pediu, para ela escolher no catálogo. Nada inventado. */
+const tourPublicado = (id) => { const x = id && Tours.get(id); return x && x.status !== 'draft' ? x : null; };
+const PEDIDO_NOME = { 'safari-deserto': 'Deserto / safári', 'city-tour-dubai': 'Dubai — city tour / atrações',
+  'abu-dhabi-dia': 'Abu Dhabi', 'iate-marina': 'Passeio de barco / iate', transfer: 'Traslado aeroporto ↔ hotel' };
+function itemPedido(id, { pax, data, hora } = {}) {
+  if (tourPublicado(id)) { const it = Orc.itemDoCatalogo(id, { pax, data, hora }); if (it) { it.sugestao = true; return it; } }
+  const nome = PEDIDO_NOME[id === TRANSFER_PADRAO ? 'transfer' : id];
+  if (!nome) return null;
+  return Orc._item({ desc: nome, pax, data: data || '', valor: 0, sugestao: true, obs: 'O cliente pediu — escolha no catálogo e ponha o valor' });
+}
 function rascunhoDaConversa(c) {
   const itens = [];
   const pax = c.pax || 2;
@@ -552,12 +578,12 @@ function rascunhoDaConversa(c) {
   };
   for (const s of c.servicos || []) {
     if (s === 'transfer') {
-      if (c.chegada || !c.partida) { const it = Orc.itemDoCatalogo(TRANSFER_PADRAO, { pax, data: datas[0] || '' }); if (it) { it.sugestao = true; it.desc += ' — chegada'; it.voo = c.voo || ''; itens.push(it); } }
-      if (c.partida) { const it = Orc.itemDoCatalogo(TRANSFER_PADRAO, { pax, data: datas[datas.length - 1] || '' }); if (it) { it.sugestao = true; it.desc += ' — partida'; itens.push(it); } }
+      if (c.chegada || !c.partida) { const it = itemPedido(TRANSFER_PADRAO, { pax, data: datas[0] || '' }); if (it) { it.desc += ' — chegada'; it.voo = c.voo || ''; itens.push(it); } }
+      if (c.partida) { const it = itemPedido(TRANSFER_PADRAO, { pax, data: datas[datas.length - 1] || '' }); if (it) { it.desc += ' — partida'; itens.push(it); } }
       continue;
     }
-    const it = Orc.itemDoCatalogo(s, { pax, data: proxData() });
-    if (it) { it.sugestao = true; itens.push(it); }
+    const it = itemPedido(s, { pax, data: proxData() });
+    if (it) itens.push(it);
   }
   return itens;
 }
@@ -570,15 +596,16 @@ function rascunhoDoRoteiro(ped) {
   const pax = (+ped.adultos || 1) + (+ped.criancas || 0);
   let dia = ped.ini || '';
   const prox = () => { const d = dia; if (dia) dia = addDays(dia, 1); return d; };
-  const poe = (id) => { const it = Orc.itemDoCatalogo(id, { pax, data: prox() }); if (it) { it.sugestao = true; itens.push(it); } };
+  const poe = (id) => { const it = itemPedido(id, { pax, data: prox() }); if (it) itens.push(it); };
   if ((ped.precisa || []).includes('transfer')) {
-    const it = Orc.itemDoCatalogo(TRANSFER_PADRAO, { pax, data: ped.ini || '' });
-    if (it) { it.sugestao = true; it.desc += ' — chegada'; itens.push(it); }
+    const it = itemPedido(TRANSFER_PADRAO, { pax, data: ped.ini || '' });
+    if (it) { it.desc += ' — chegada'; itens.push(it); }
   }
   const vistos = new Set();
   for (const g of ped.gosto || []) {
     const id = (R.sugestao || {})[g];
     if (id && !vistos.has(id) && Tours.get(id)) { vistos.add(id); poe(id); continue; }
+    if (id && vistos.has(id)) continue;
     const livre = (R.gostoLivre || {})[g];
     if (livre) itens.push(Orc._item({ desc: livre, pax, data: '', valor: 0, sugestao: true, obs: 'Defina o valor' }));
   }
@@ -588,10 +615,10 @@ function rascunhoDoRoteiro(ped) {
     const nome = (R.ondeSemTabela || {})[o];
     if (nome) itens.push(Orc._item({ desc: 'Passeio particular em ' + nome, pax, data: '', valor: 0, sugestao: true, obs: 'Defina o valor — ainda não há tabela deste lugar' }));
   }
-  if (!itens.some(i => i.tourId && i.tourId !== TRANSFER_PADRAO) && R.padrao && Tours.get(R.padrao) && !vistos.has(R.padrao)) poe(R.padrao);
+  if (!itens.some(i => i.tourId && i.tourId !== TRANSFER_PADRAO) && R.padrao && tourPublicado(R.padrao) && !vistos.has(R.padrao)) poe(R.padrao);
   if ((ped.precisa || []).includes('transfer') && ped.fim) {
-    const it = Orc.itemDoCatalogo(TRANSFER_PADRAO, { pax, data: ped.fim });
-    if (it) { it.sugestao = true; it.desc += ' — partida'; itens.push(it); }
+    const it = itemPedido(TRANSFER_PADRAO, { pax, data: ped.fim });
+    if (it) { it.desc += ' — partida'; itens.push(it); }
   }
   return itens;
 }
@@ -1730,9 +1757,12 @@ const LINKS_PLANILHA = [['lPdf', 'PDF'], ['lOrc', 'Orçamento'], ['lVoucher', 'V
 const RE_TRANSFER = /\b(FCO|CIA|MXP|LIN|BGY|VCE|NAP|FLR|PSA)\b|transfer|aeroporto|porto|esta[cç][aã]o| x /i;
 function tourAvulso(tipo) {
   const id = tipo === 'transfer' ? 'avulso-transfer' : 'avulso-servico';
-  if (!Tours.get(id)) DB.tours.push({ id, type: tipo === 'transfer' ? 'transfer' : 'walk', region: (typeof regioes === 'function' && (regioes()[0] || [])[0]) || 'base',
+  if (Tours.get(id)) return id;
+  DB.tours.push({ id, type: tipo === 'transfer' ? 'transfer' : 'walk', region: (typeof regioes === 'function' && (regioes()[0] || [])[0]) || 'base',
     name: { pt: tipo === 'transfer' ? 'Transfer (da planilha)' : 'Serviço (da planilha)', en: tipo === 'transfer' ? 'Transfer' : 'Service' },
     desc: { pt: '', en: '' }, meeting: '', price: 0, priceMode: 'session', min: 1, max: 60, payPolicy: 'sinal', status: 'draft', order: 999, photo: 'capa.jpg' });
+  /* o passeio-ponte mora no catálogo da nuvem também (só no aparelho, o pull apagava e o serviço virava "?") */
+  if (typeof save === 'function') save();
   return id;
 }
 function importarPlanilha(txt, simular) {
@@ -1814,6 +1844,8 @@ function importarPlanilha(txt, simular) {
       if (p) { if (r.emReal && restaSinal.get(k) === r.sinal) { p.reais = r.emReal; _opSaveBooking(b); } restaSinal.set(k, restaSinal.get(k) - p.amount); }
     }
     if (r.veio && !b.indicadoPor) { const c = Cadastro.get(b.clienteId); if (c && !c.obs) c.obs = 'veio por: ' + r.veio; }
+    /* o serviço, a obs, o custo e a origem foram preenchidos DEPOIS do envio: sobem agora (sumiam no pull seguinte) */
+    _opSaveBooking(b);
     criadas++;
   }
   _opSave();

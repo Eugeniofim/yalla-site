@@ -516,6 +516,13 @@ function admHoje(arg) {
 /* =====================================================
    GUIAS — bater a agenda delas com os passeios
 ===================================================== */
+/* o LINK DO GUIA (guia-link.js) lê a escala e grava a disponibilidade no aparelho de quem abre. Com a nuvem,
+   o celular do guia não tem os dados dela (só a dona sincroniza) e o link caía na capa do site, e o "Salvo ✓"
+   dele nunca chegava a ela. Enquanto não houver o leitor público do guia, o botão não aparece (29/10/2026). */
+function glBotoes(p) {
+  if (typeof temNuvem === 'function' && temNuvem()) return '';
+  return `<button class="mini" data-gllink="${esc(p.id)}" title="o link dele: marca os dias livres e vê os serviços">🔗 link</button>${p.whats ? `<a class="mini" target="_blank" rel="noopener" href="${waLink(glt('msgLink', { nome: opPrimeiro(p.nome), link: glLink(p) }), opNum(p.whats))}" title="mandar o link no WhatsApp dele">📲</a>` : ''}`;
+}
 function admGuias(arg) {
   const S = admGuias._s = admGuias._s || { data: addDays(isoToday(), 1), turno: 'manha', cidade: baseNome(), tipo: 'guia', servico: '', sem: isoToday(), ed: '' };
   if (arg && arg.startsWith('servico:')) {
@@ -639,7 +646,7 @@ function admGuias(arg) {
         <span class="gl-pref">${i + 1}</span>
         <div class="gl-nome"><b>${esc(p.nome)}</b><small>${esc((p.cidades || []).join(', '))}${p.whats ? ' · ' + esc(p.whats) : ''}${p.obs ? ' · ' + esc(p.obs) : ''}</small></div>
         <div class="tacts"><button class="mini" data-mv="${esc(p.id)}|-1" aria-label="subir">↑</button><button class="mini" data-mv="${esc(p.id)}|1" aria-label="descer">↓</button>
-          <button class="mini" data-gllink="${esc(p.id)}" title="o link dele: marca os dias livres e vê os serviços">🔗 link</button>${p.whats ? `<a class="mini" target="_blank" rel="noopener" href="${waLink(glt('msgLink', { nome: opPrimeiro(p.nome), link: glLink(p) }), opNum(p.whats))}" title="mandar o link no WhatsApp dele">📲</a>` : ''}
+          ${glBotoes(p)}
           <button class="mini" data-ed="${esc(p.id)}">editar</button><button class="mini danger" data-rm="${esc(p.id)}">remover</button></div>
       </div>`).join('') || '<p class="why">Ninguém cadastrado ainda.</p>'}
     </section>`);
@@ -1538,11 +1545,22 @@ function admConsulta(arg, modo) {
     const txt = $('#ccTxt').value;
     if (!txt.trim()) return toast('Cole a conversa primeiro.');
     const c = lerConversa(txt), itens = rascunhoDaConversa(c);
+    /* o aviso diz a verdade: quantos vieram com preço da tabela dela e quantos ela escolhe (29/10/2026) */
+    const comPreco = itens.filter(i => i.tourId && i.valor > 0).length, escolher = itens.length - comPreco;
+    const rasc = !itens.length ? 'nenhum serviço reconhecido — monte no editor'
+      : [comPreco && `${comPreco} com preço da sua tabela`, escolher && `${escolher} para você escolher no catálogo e pôr o valor`].filter(Boolean).join(' · ');
     $('#ccPrev').innerHTML = `<div class="cc-lido"><p><b>O que o app entendeu</b> — confira:</p>
-      <ul><li>Nome: <b>${esc(c.nome || '?')}</b></li><li>WhatsApp: <b>${esc(c.whats || '?')}</b></li><li>Resumo: ${esc(c.resumo || '—')}</li><li>Rascunho: ${itens.length} ${itens.length === 1 ? 'serviço' : 'serviços'} com preço da tabela</li></ul>
+      <ul><li>Nome: <b>${esc(c.nome || '?')}</b></li><li>WhatsApp: <b>${esc(c.whats || '?')}</b></li><li>Resumo: ${esc(c.resumo || '—')}</li><li>Rascunho: ${esc(rasc)}</li></ul>
       <button class="cta sm" id="ccCria">Criar o orçamento</button></div>`;
     $('#ccCria').onclick = () => {
       const o = Orc.cria({ origem: 'whats', status: 'rascunho', cliente: { nome: c.nome, whats: c.whats }, conversa: txt, resumo: c.resumo, pax: c.pax, datas: c.datas, itens });
+      /* o que a conversa DISSE vai para os campos: adultos e crianças (a criança pagava como adulto),
+         chegada com o voo e, num período "de 12 a 18", o dia da partida. Hora e hotel só se ela puser. */
+      const mais = {};
+      if (c.criancas || c.adultos) { mais.criancas = +c.criancas || 0; mais.adultos = Math.max(0, (+c.pax || 0) - mais.criancas) || +c.adultos || 0; }
+      if (c.chegada && c.datas[0]) mais.chegada = { data: c.datas[0], hora: '', voo: c.voo || '' };
+      if (c.datas.length === 2) mais.partida = { data: c.datas[1], hora: '', voo: '' };
+      if (Object.keys(mais).length) Orc.salva({ ...o, ...mais });
       Tarefas.cria({ tipo: 'nota', origem: 'whats', texto: `Resumo do WhatsApp — ${c.nome || 'cliente novo'}`, detalhe: c.resumo, orcId: o.id, clienteNome: c.nome, whats: c.whats });
       go('/adm/consulta/' + o.id);
     };
@@ -1631,7 +1649,8 @@ function opMsgOrc(o) {
   const formas = [DB.settings.pixKey && 'Pix', DB.settings.wiseLink && 'Wise', DB.settings.iban && 'transferência (IBAN)'].filter(Boolean);
   if (formas.length) l.push('Formas de pagamento: ' + formas.join(' · '));
   l.push(`Orçamento válido até ${opCurta(o.validade)}.`);
-  if (o.termos) l.push('', 'Ao pagar o sinal você declara que leu e aceita os termos e condições:', termosTexto().replace(/^MODELO.*\n\n?/, ''));
+  /* termos ainda no MODELO do app não são dela: não vão para o cliente como se fossem (29/10/2026) */
+  if (o.termos && !/^MODELO/.test(termosTexto())) l.push('', 'Ao pagar o sinal você declara que leu e aceita os termos e condições:', termosTexto());
   l.push('', guiaNome());
   return l.join('\n');
 }
@@ -2095,6 +2114,9 @@ function viewPedido() {
         ? { ...Orc.itemDoCatalogo(i.tourId, { pax: i.pax, data: i.data, hora: i.hora, opcao: i.opcao }), obs: '' }
         : { desc: i.nome, pax: i.pax, data: i.data, valor: i.valor || 0 }),
     });
+    /* o cliente no site não tem a numeração dela: o pedido nascia "ORC-0001" (o número de outro cliente
+       no painel). Vira SITE-XXXXX, só letras — não mexe na sequência ORC dela (29/10/2026). */
+    if (!(typeof isLoggedIn === 'function' && isLoggedIn())) { o.num = 'SITE-' + Array.from({ length: 5 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ'[Math.floor(Math.random() * 24)]).join(''); Orc.salva(o); }
     if (typeof itPedidoPublico === 'function') itPedidoPublico('orcamentos', o);
     const msg = [L(`Olá ${guiaNome()}! Meu pedido (${o.num}):`, `Hi ${guiaNome()}! My request (${o.num}):`), '',
       ...itens.map((i, n) => `${n + 1}. ${i.nome}${i.data ? ' — ' + opCurta(i.data) + (i.hora ? ' ' + i.hora : '') : ''} · ${i.pax}p`),
@@ -2102,7 +2124,8 @@ function viewPedido() {
     cestaSalva([]);
     window.open(waLink(msg), '_blank');
     app.querySelector('main').innerHTML = `<div class="okc">✓</div><h2 class="okh">${L('Pedido enviado', 'Request sent', 'Pedido enviado')}</h2>
-      <p class="hint center">${L(`${esc(guiaNome())} recebeu tudo e responde com o orçamento.`, `${esc(guiaNome())} got everything and will reply with the quote.`)}</p>
+      <p class="hint center">${L(`O WhatsApp abriu com tudo preenchido — é só tocar em enviar. ${esc(guiaNome())} responde com o orçamento.`, `WhatsApp opened with everything filled in — just tap send. ${esc(guiaNome())} will reply with the quote.`, `WhatsApp se abrió con todo listo: solo toca enviar. ${esc(guiaNome())} responde con el presupuesto.`)}</p>
+      <a class="cta" style="text-decoration:none;text-align:center" target="_blank" rel="noopener" href="${esc(waLink(msg))}">${typeof ICONE_WA_BTN !== 'undefined' ? ICONE_WA_BTN : ''} ${L('Abrir o WhatsApp de novo', 'Open WhatsApp again', 'Abrir WhatsApp de nuevo')}</a>
       <a class="cta soft" href="#/">${L('Voltar ao início', 'Back to start', 'Volver al inicio')}</a>`;
   };
 }

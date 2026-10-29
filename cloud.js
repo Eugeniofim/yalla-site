@@ -188,7 +188,17 @@ function marcaSincronizada(id) {
   if (b && !b.naNuvem) { b.naNuvem = true; localStorage.setItem(DB_KEY, JSON.stringify(DB)); }
 }
 
-async function cloudPushBooking(b) {
+/* A reserva sobe em dois passos: o POST (cria) e os PATCH (o que vem depois: sinal, textos, VAT…).
+   Saíam juntos — e se um PATCH chegava ao banco antes do POST, achava 0 linhas, o resto ficava só no
+   aparelho e o pull seguinte trocava pela versão crua (29/10/2026). Agora o PATCH espera o POST da mesma reserva. */
+const _postando = new Map();
+function cloudPushBooking(b) {
+  const p = _cloudPushBooking(b);
+  _postando.set(b.id, p);
+  p.finally(() => { if (_postando.get(b.id) === p) _postando.delete(b.id); });
+  return p;
+}
+async function _cloudPushBooking(b) {
   const body = { id: b.id, data: b };
   try {
     const r = await supaFetch('bookings', { method: 'POST', body: JSON.stringify(body) });
@@ -199,6 +209,8 @@ async function cloudPushBooking(b) {
   } catch (e) { qPush({ path: 'bookings', method: 'POST', body }); return { ok: false }; }
 }
 async function cloudUpdateBooking(b) {
+  const pend = _postando.get(b.id);
+  if (pend) await pend.catch(() => {});
   const body = { data: b };
   const path = 'bookings?id=eq.' + encodeURIComponent(b.id);
   try {
@@ -229,7 +241,13 @@ async function cloudPull() {
         const hR = await supaFetch('appstate?id=eq.1&select=updated_at', { headers: { Prefer: '' } });
         if (hR.ok) {
           const h = (await hR.json())[0];
-          if (h && h.updated_at === lastStamp) return { ok: true, semMudanca: true };
+          if (h && h.updated_at === lastStamp) {
+            /* as vagas mudam sem o catálogo mudar (outra pessoa reservou): eram lidas uma vez e nunca mais,
+               e o checkout conferia lotação com número velho (29/10/2026). Relê só elas — é pequeno. */
+            try { const sR = await supaFetch('seat_counts?select=*', { headers: { Prefer: '' } });
+              if (sR.ok) DB.seatCounts = (await sR.json()).map(r => ({ tourId: r.tour_id, date: r.date, time: r.time, pax: +r.pax })); } catch (e) {}
+            return { ok: true, semMudanca: true };
+          }
         }
       } catch (e) { /* sem rede: segue para o caminho normal */ }
     }
