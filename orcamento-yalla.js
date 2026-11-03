@@ -149,8 +149,54 @@ function oyDobroPoe(volta) {
     oyDobroLiga(volta);
   } catch (e) {}
 }
-if (typeof admBookings === 'function') { const _oyAdmB = admBookings; admBookings = function () { const r = _oyAdmB.apply(this, arguments); oyDobroPoe(() => admBookings()); return r; }; }
-if (typeof admConsulta === 'function') { const _oyAdmC = admConsulta; admConsulta = function (arg, modo) { const r = _oyAdmC.apply(this, arguments); if (!arg && modo !== 'planilha') oyDobroPoe(() => admConsulta()); return r; }; }
+/* TIRAR UM PASSEIO E MARCAR O PAGAMENTO ONDE ELA OLHA (03/11/2026). A Milla, no kit da Ana Paula:
+   "não consigo retirar Abu Dhabi" e "como faço pra editar que a cliente já pagou?". Cancelar uma
+   reserva só existia no aviso de dobro e na planilha; agora tem botão no kit, no cartão do pedido e
+   em Reservas, com "desfazer". O link do kit que o cliente tem se atualiza sozinho (cloudUpdateBooking). */
+function oyDesfazAviso(txt, desfaz) {
+  document.querySelectorAll('.oy-desfaz').forEach(e => e.remove());
+  const el = document.createElement('div'); el.className = 'oy-desfaz'; el.setAttribute('role', 'status');
+  el.innerHTML = `<span>${esc(txt)}</span><button type="button">desfazer</button>`;
+  document.body.appendChild(el);
+  const some = setTimeout(() => el.remove(), 8000);
+  el.querySelector('button').onclick = () => { clearTimeout(some); el.remove(); desfaz(); };
+}
+function oyTiraReserva(b, volta) {
+  if (!b || b.status === 'cancelled') return;
+  const pago = Bookings.paid(b), qual = `${nomeDoServico(b)} · ${opCurta(b.date)}`;
+  if (!confirm(`Cancelar ${qual} (${b.name}, ${b.code})?\n\nSai da agenda, do total e do kit da viagem. O link que o cliente tem se atualiza sozinho.`
+    + (pago ? `\n\nJá tem ${valorReserva(b, pago)} pago nesta reserva: o pagamento continua registrado. Se for devolver, combine com o cliente.` : ''))) return;
+  const antes = b.status;
+  Bookings.cancel(b.id);
+  try { if (typeof Tarefas !== 'undefined' && Tarefas.sincroniza) Tarefas.sincroniza(); } catch (e) {}
+  if (volta) volta();
+  oyDesfazAviso('Cancelado: ' + qual, () => {
+    const x = Bookings.get(b.id); if (!x) return;
+    x.status = antes || 'confirmed'; _opSaveBooking(x);
+    try { if (typeof Tarefas !== 'undefined' && Tarefas.sincroniza) Tarefas.sincroniza(); } catch (e) {}
+    toast('Voltou: ' + qual); if (volta) volta();
+  });
+}
+function oyTiraLiga(volta) {
+  document.querySelectorAll('#stage [data-tira]').forEach(bt => bt.onclick = (e) => { e.preventDefault(); oyTiraReserva(Bookings.get(bt.dataset.tira), volta); });
+}
+/* no kit da viagem: os passeios que estão nele, cada um com pagamento e "tirar do kit" */
+function oyKitPasseios(chave) {
+  const tela = document.querySelector('.ktTela'), est = document.getElementById('ktEstado');
+  if (!tela || !est || tela.querySelector('.oy-ktps') || typeof kitReservas !== 'function') return;
+  const bs = kitReservas(chave); if (!bs.length) return;
+  est.insertAdjacentHTML('afterend', `<section class="card oy-ktps"><h3>Passeios neste kit</h3>
+    <p class="why">Para tirar um passeio, cancele aqui: ele sai do kit, da agenda e do total, e o link do cliente se atualiza sozinho.</p>
+    ${bs.map(b => { const due = Bookings.due(b);
+      return `<div class="oy-ktp"><span><b>${esc(opCurta(b.date))}${b.time ? ' · ' + esc(b.time) : ''}</b> ${esc(nomeDoServico(b))} · ${b.pax} ${+b.pax > 1 ? 'pessoas' : 'pessoa'} · <span class="mono">${esc(b.code)}</span><br>${due > 0 ? `<em>falta ${esc(valorReserva(b, due))} de ${esc(valorReserva(b, b.total))}</em>` : '<em class="ok">pago ✓</em>'}</span>
+        <span class="oy-ja-acs">${due > 0 ? `<button type="button" class="mini strong" data-ktpag="${esc(b.id)}">registrar pagamento</button>` : ''}<button type="button" class="mini ghost danger" data-kttira="${esc(b.id)}">tirar do kit</button></span></div>`; }).join('')}
+  </section>`);
+  tela.querySelectorAll('[data-ktpag]').forEach(bt => bt.onclick = () => { const b = Bookings.get(bt.dataset.ktpag); if (b) ATALHO.pagto(b); });
+  tela.querySelectorAll('[data-kttira]').forEach(bt => bt.onclick = () => oyTiraReserva(Bookings.get(bt.dataset.kttira), () => admKit(chave)));
+}
+if (typeof admKit === 'function') { const _oyAdmK = admKit; admKit = async function (chave) { const r = await _oyAdmK.apply(this, arguments); try { oyKitPasseios(chave); } catch (e) {} return r; }; }
+if (typeof admBookings === 'function') { const _oyAdmB = admBookings; admBookings = function () { const r = _oyAdmB.apply(this, arguments); oyDobroPoe(() => admBookings()); oyTiraLiga(() => admBookings()); return r; }; }
+if (typeof admConsulta === 'function') { const _oyAdmC = admConsulta; admConsulta = function (arg, modo) { const r = _oyAdmC.apply(this, arguments); if (!arg && modo !== 'planilha') { oyDobroPoe(() => admConsulta()); oyTiraLiga(() => admConsulta()); } return r; }; }
 /* fechou: as reservas somam o que o cliente paga (desconto e VAT repartidos
    na proporção de cada serviço) e saem em dólar */
 const _oyFechaBase = Orc.fecha;
@@ -1496,9 +1542,6 @@ function oyCss() {
   .oy-cacs{display:flex;gap:2px}
   .oy-crm:hover{color:var(--danger);background:var(--danger-wash)}
   .oy-barra-acs{display:flex;gap:8px;align-items:center}
-  .oy-desfaz{position:fixed;left:50%;bottom:calc(150px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:1001;display:flex;align-items:center;gap:14px;padding:10px 10px 10px 16px;border-radius:999px;background:var(--ink);color:var(--paper);box-shadow:var(--sh-2);max-width:92vw}
-  .oy-desfaz span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px}
-  .oy-desfaz button{border:0;border-radius:999px;padding:8px 14px;background:var(--accent);color:var(--accent-ink);font:inherit;font-weight:700;cursor:pointer}
   .oy-shh{background:#141414;color:#D4AF37;font-size:11.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase}
   .oy-shh > span{padding:9px 12px}
   .oy-r{text-align:right}

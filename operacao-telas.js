@@ -1507,7 +1507,8 @@ function admConsulta(arg, modo) {
       <button class="mini" data-fecha="${esc(o.id)}">fechou ✓</button><button class="mini ghost" data-perde="${esc(o.id)}">perdido</button><button class="mini ghost danger" data-orcrm="${esc(o.id)}" aria-label="Apagar o orçamento ${esc(o.num)}">apagar</button>`;
     if (r.tipo === 'orcamento' && r.etapa === 'perdido') return `<span class="why">${esc(o.motivoPerda || '')}</span><button class="mini ghost" data-reabre="${esc(o.id)}">reabrir</button><button class="mini ghost danger" data-orcrm="${esc(o.id)}" aria-label="Apagar o orçamento ${esc(o.num)}">apagar</button>`;
     const ficha = `<a class="mini" href="#/adm/clients/${encodeURIComponent('c:' + (b.clienteId || ''))}">ficha</a>`;
-    if (r.etapa === 'confirmado') return `${ficha}<a class="mini" href="#/adm/voucher/${esc(b.id)}">voucher</a>`;
+    const devendo = p.linhas.map(x => x.tipo === 'reserva' ? x.b : null).find(x => x && x.status !== 'cancelled' && Bookings.due(x) > 0);
+    if (r.etapa === 'confirmado') return `${devendo ? `<button class="mini strong" data-jpag="${esc(devendo.id)}">registrar pagamento</button>` : ''}${ficha}<a class="mini" href="#/adm/voucher/${esc(b.id)}">voucher</a>`;
     if (r.etapa === 'avaliar') return `${ficha}${b.whats ? `<a class="mini strong" target="_blank" rel="noopener" data-avalia="${esc(p.linhas.map(x => x.id).join(','))}" href="${waLink(msgAvaliacao(b), opNum(b.whats))}">pedir avaliação</a>` : ''}
       <button class="mini ghost" data-final="${esc(p.linhas.map(x => x.id).join(','))}">finalizado</button>`;
     return ficha;
@@ -1519,7 +1520,8 @@ function admConsulta(arg, modo) {
       <div class="crm-top"><b class="crm-nome">${esc(r.nome || 'Sem nome')}</b>${crmEtapaPill(r.etapa, r.status)}
         ${r.veio ? `<span class="crm-veio">${esc(r.veio)}${r.indicou ? ': <b>' + esc(r.indicou) + '</b>' : ''}</span>` : ''}${r.parceiro ? `<span class="crm-veio">🤝 ${esc(r.parceiro)}</span>` : ''}</div>
       ${r.tipo === 'orcamento' && r.etapa === 'aberto' && typeof oyJaReservadoHtml === 'function' ? oyJaReservadoHtml(r.o) : ''}
-      <ul class="crm-linhas">${p.linhas.map(x => `<li><span class="mono">${crmData(x.dataServ)}${x.hora ? ' ' + esc(x.hora) : ''}</span><span>${esc(x.servico)}${x.pax ? ` <small>· ${esc(x.pax)}p</small>` : ''}${x.obs ? `<small> · ${esc(x.obs)}</small>` : ''}</span><b class="mono">${x.clientePaga ? eur(x.clientePaga) : '—'}</b></li>`).join('')}</ul>
+      <ul class="crm-linhas">${p.linhas.map(x => { const cancelada = x.tipo === 'reserva' && x.b.status === 'cancelled';
+        return `<li${cancelada ? ' class="cancel"' : ''}><span class="mono">${crmData(x.dataServ)}${x.hora ? ' ' + esc(x.hora) : ''}</span><span>${esc(x.servico)}${x.pax ? ` <small>· ${esc(x.pax)}p</small>` : ''}${x.obs ? `<small> · ${esc(x.obs)}</small>` : ''}${cancelada ? ' <small>· cancelado</small>' : ''}</span><b class="mono">${x.clientePaga ? eur(x.clientePaga) : '—'}</b>${x.tipo === 'reserva' && x.etapa === 'confirmado' ? `<button type="button" class="crm-tira" data-tira="${esc(x.id)}" aria-label="Cancelar ${esc(x.servico)} de ${crmData(x.dataServ)}" title="cancelar este passeio">×</button>` : ''}</li>`; }).join('')}</ul>
       <div class="crm-pe"><span>Total <b>${eur(tot)}</b>${r.sinal ? ` · sinal ${eur(r.sinal)}` : ''}${r.forma ? ` · ${esc(r.forma)}` : ''}</span>
         ${rp ? `<small class="crm-rp">Repescagem: ${esc(rp)}</small>` : ''}
         <div class="tacts">${acoes(p)}${r.whats ? `<a class="mini ghost" target="_blank" rel="noopener" href="${waLink('', opNum(r.whats))}">WhatsApp</a>` : ''}</div></div>
@@ -2008,7 +2010,9 @@ function opDocVoucher(id) {
   /* o ponto de encontro: ela escolhe o deste cliente (so aparece aqui, nao no PDF) */
   const opcoes = Pontos.doPasseio(b.tourId), atual = pontoDoServico(b);
   const sel = opcoes.length ? `<label class="doc-ponto-sel">Ponto de encontro <select id="docPonto">${opcoes.map(p => `<option value="${esc(p.id)}" ${atual && atual.id === p.id ? 'selected' : ''}>${esc(p.nome)}</option>`).join('')}</select></label>` : '';
-  opDoc('Voucher', corpo, sel + (b.whats ? `<a class="mini cta-ish" id="docVoucherWa" target="_blank" rel="noopener" href="${waLink(opVoucherTexto(b), opNum(b.whats))}">💬 mandar ao cliente</a>` : ''));
+  opDoc('Voucher', corpo, sel + (b.status !== 'cancelled' && Bookings.due(b) > 0 ? '<button class="mini strong" id="docPagto">registrar pagamento</button>' : '')
+    + (b.whats ? `<a class="mini cta-ish" id="docVoucherWa" target="_blank" rel="noopener" href="${waLink(opVoucherTexto(b), opNum(b.whats))}">💬 mandar ao cliente</a>` : ''));
+  const dp = $('#docPagto'); if (dp) dp.onclick = () => ATALHO.pagto(b);
   const ds = $('#docPonto'); if (ds) ds.onchange = () => { escolhePonto(b.id, ds.value); opDocVoucher(id); toast('Ponto de encontro escolhido'); };
   /* mandou: o lembrete "mandar o voucher" some sozinho */
   const vw = $('#docVoucherWa');

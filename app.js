@@ -3184,7 +3184,7 @@ function admBookings() {
         <div class="tinfo"><b>${esc(b.name)}</b>
           <small>${esc(x ? x.name.pt : '?')}${b.opcaoNome ? ' – ' + esc(b.opcaoNome) : ''} · ${fmtDate(b.date)} ${esc(b.time)} · ${esc(b.pax)}p${veic} · <span class="mono">${esc(b.code)}</span></small>${grupo}</div>
         <b class="mono">${valorReserva(b, b.total)}</b>${b.idiomaGuia ? `<span class="pill n" title="idioma do guia">${esc(b.idiomaGuia.toUpperCase())}</span>` : ''}${pill}
-        <div class="tacts" id="ta-${esc(b.id)}">${cobrar}${act}${conf}</div>
+        <div class="tacts" id="ta-${esc(b.id)}">${cobrar}${act}${conf}${b.status !== 'cancelled' ? `<button class="mini ghost danger" data-tira="${esc(b.id)}" aria-label="Cancelar a reserva ${esc(b.code)}">cancelar</button>` : ''}</div>
       </div>`;
     }).join('')}</div>`
     : `<div class="emptybox"><p>${t('emptyBookings')}</p></div>`}`);
