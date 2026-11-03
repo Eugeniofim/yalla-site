@@ -3252,6 +3252,8 @@ function admBookings() {
       const b = Bookings.get(id);
       Bookings.payBalance(id, b2.dataset.m);
       toast(t('charged', { v: valorReserva(b, b.payments.at(-1).amount), n: b.name.split(' ')[0] }));
+      /* pagou tudo: já oferece mandar o voucher pago (o "Avisar cliente" ao lado, 03/11/2026) */
+      if (typeof podeAvisarPago === 'function' && Bookings.due(b) <= 0 && podeAvisarPago(b) && confirm(t('confClienteAsk', { email: b.email }))) Bookings.confirmarCliente(b.id);
       admBookings();
     });
   });

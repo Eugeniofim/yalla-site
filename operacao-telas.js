@@ -3237,6 +3237,13 @@ function atBusca(d, soDevendo, escolhe) {
     box.querySelectorAll('[data-res]').forEach(x => x.onclick = () => escolhe(Bookings.get(x.dataset.res))); };
   inp.oninput = pinta; pinta(); inp.focus();
 }
+/* PAGOU TUDO → O VOUCHER PAGO POR E-MAIL NO MESMO TOQUE (03/11/2026). O "Avisar cliente" morava só em
+   Reservas e a Milla não sabia dele: a Ana Paula pagou e ficou só com o recibo, que diz "falta pagar".
+   Vem marcado, mas ela vê para quem vai e pode desmarcar — e-mail que saiu não volta. */
+function podeAvisarPago(b) { return !!(b && DB.settings.avisarClientes && b.email && b.status !== 'cancelled' && !b.clienteConfirmado); }
+function avisoPagoHtml(email) {
+  return `<label class="optin at-avisa"><input type="checkbox" id="atAvisa" checked><span><b>Mandar o voucher pago por e-mail</b><small>para ${esc(email)} · e-mail enviado não volta</small></span></label>`;
+}
 const ATALHO = {
   orc() {
     const d = opJanela('＋ Novo orçamento', `<p class="why">Cole a conversa do WhatsApp (ou Instagram, e-mail). O app monta o rascunho com os preços da sua tabela; você confere e manda.</p>
@@ -3287,9 +3294,10 @@ const ATALHO = {
         <div class="frow"><label class="fld">Valor (${moedaSigla()})<input id="atVal" inputmode="decimal" value="${falta}"></label>
           <label class="fld">Onde caiu<select id="atConta"><option value="">escolha…</option>${Contas.all().map(c => `<option value="${esc(c.id)}">${esc(c.nome)}</option>`).join('')}<option value="${CONTA_PRESTADOR}">${esc(Contas.nome(CONTA_PRESTADOR))}</option></select></label></div>
         <label class="fld">Comprovante (foto ou PDF) — vai para a ficha e para a pasta do cliente no Google Drive<input id="atArq" type="file" accept="image/*,application/pdf"></label>
+        ${podeAvisarPago(b) ? avisoPagoHtml(b.email) : ''}
         <button class="cta sm" id="atPgOk">Registrar ${eur(falta)}</button>`;
-      const val = d.querySelector('#atVal'), bt = d.querySelector('#atPgOk');
-      val.oninput = () => { bt.textContent = 'Registrar ' + eur(+String(val.value).replace(',', '.') || 0); };
+      const val = d.querySelector('#atVal'), bt = d.querySelector('#atPgOk'), av = d.querySelector('.at-avisa');
+      val.oninput = () => { const v = +String(val.value).replace(',', '.') || 0; bt.textContent = 'Registrar ' + eur(v); if (av) av.hidden = v < falta; };
       bt.onclick = async () => {
         const conta = d.querySelector('#atConta').value; if (!conta) return toast('Em que conta caiu?');
         const p = registraPagamento(b.id, { valor: +String(val.value).replace(',', '.') || 0, conta }); if (!p) return toast('Nada a registrar (já está pago?)');
@@ -3300,7 +3308,8 @@ const ATALHO = {
           p.arquivoId = arquivo.id; _opSaveBooking(b);
         }
         Tarefas.sincroniza();
-        d.close(); toast(`💵 ${valorReserva(b, p.amount)} registrado · ${Contas.nome(conta)}${Bookings.due(b) ? ' · ainda falta ' + valorReserva(b, Bookings.due(b)) : ' · pago ✓'}`);
+        const avisou = !!(av && !av.hidden && d.querySelector('#atAvisa').checked && Bookings.due(b) <= 0 && podeAvisarPago(b) && Bookings.confirmarCliente(b.id));
+        d.close(); toast(`💵 ${valorReserva(b, p.amount)} registrado · ${Contas.nome(conta)}${Bookings.due(b) ? ' · ainda falta ' + valorReserva(b, Bookings.due(b)) : ' · pago ✓'}${avisou ? ' · voucher pago indo por e-mail' : ''}`);
         route();
       };
     };

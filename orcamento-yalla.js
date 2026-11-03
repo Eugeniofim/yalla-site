@@ -1417,6 +1417,8 @@ function oyFechar(o) {
   const novos = somaTodos > 0 ? oyCent(tot * somaViram / somaTodos) : 0;
   const jaPago = ja.reduce((s, b) => s + Bookings.paid(b), 0), falta = oyCent(ja.reduce((s, b) => s + Bookings.due(b), 0) + novos);
   const sin = oyCent(Math.min(Orc.sinal(o), falta));
+  /* pagou tudo: o voucher pago já vai por e-mail (o mesmo "Avisar cliente" de Reservas, 03/11/2026) */
+  const emailCli = DB.settings.avisarClientes && falta > 0 ? String(o.cliente.email || (ja.find(b => b.email) || {}).email || '').trim() : '';
   const d = opJanela('Fechou?', `${viram.length ? `<p class="why">${viram.length === 1 ? 'O serviço vira uma reserva' : `Os ${viram.length} serviços viram reservas`}, com o cliente e o dia. Aparece no Hoje, na agenda e na ficha.</p>` : ''}
     ${ja.length ? `<p class="oy-ja-nota">✓ Já reservado pelo site: ${ja.map(b => `<b>${esc(b.code)}</b> (${esc(nomeDoServico(b))}, ${esc(opCurta(b.date))})`).join(', ')}. Não vou criar de novo: entra neste orçamento.</p>` : ''}
     <fieldset class="oy-pagou"><legend>Quanto o cliente já pagou?</legend>
@@ -1427,10 +1429,14 @@ function oyFechar(o) {
       <label class="fld oy-fout" hidden>Valor (${esc(m)})<input type="number" min="0" step="0.01" inputmode="decimal" id="oyFOutro"></label>
     </fieldset>
     <label class="fld oy-fcta" hidden>Onde caiu<select id="oyFConta"><option value="">escolha…</option>${opContaOpts('')}</select></label>
+    ${emailCli && typeof avisoPagoHtml === 'function' ? avisoPagoHtml(emailCli).replace('class="optin at-avisa"', 'class="optin at-avisa" hidden') : ''}
     <div class="btnrow"><button type="button" class="cta sm" id="oyFOk">${viram.length ? 'Fechou — criar as reservas' : 'Fechou'}</button></div>`);
   const modo = () => (d.querySelector('[name="oyFPg"]:checked') || {}).value || 'nada';
-  const mostra = () => { const k = modo(); d.querySelector('.oy-fout').hidden = k !== 'outro'; d.querySelector('.oy-fcta').hidden = k === 'nada'; };
+  const outroV = () => Math.max(0, +String(d.querySelector('#oyFOutro').value).replace(',', '.') || 0);
+  const av = d.querySelector('.at-avisa');
+  const mostra = () => { const k = modo(); d.querySelector('.oy-fout').hidden = k !== 'outro'; d.querySelector('.oy-fcta').hidden = k === 'nada'; if (av) av.hidden = !(k === 'tudo' || (k === 'outro' && outroV() >= falta)); };
   d.querySelectorAll('[name="oyFPg"]').forEach(r => r.onchange = mostra);
+  d.querySelector('#oyFOutro').oninput = mostra;
   d.querySelector('#oyFOk').onclick = () => {
     const k = modo(), conta = d.querySelector('#oyFConta').value;
     const valor = k === 'tudo' ? falta : k === 'sinal' ? sin : k === 'outro' ? Math.max(0, +String(d.querySelector('#oyFOutro').value).replace(',', '.') || 0) : 0;
@@ -1441,8 +1447,10 @@ function oyFechar(o) {
     let resto = oyCent(valor);
     for (const b of todas) { if (resto <= 0) break; const v = oyCent(Math.min(resto, Bookings.due(b))); if (v > 0) { registraPagamento(b.id, { valor: v, conta }); resto = oyCent(resto - v); } }
     if (typeof Tarefas !== 'undefined' && Tarefas.sincroniza) Tarefas.sincroniza();
+    const manda = !!(av && !av.hidden && d.querySelector('#atAvisa').checked);
+    const avisadas = manda ? todas.filter(b => Bookings.due(b) <= 0 && podeAvisarPago(b) && Bookings.confirmarCliente(b.id)).length : 0;
     d.close();
-    const pagoTxt = valor > 0 ? ` · ${oyM(valor, m)} registrado` : '';
+    const pagoTxt = (valor > 0 ? ` · ${oyM(valor, m)} registrado` : '') + (avisadas ? ' · voucher pago indo por e-mail' : '');
     /* fechou → já abre o ROTEIRO DA VIAGEM (com os vouchers), pronto para mandar (WhatsApp, link ou PDF) */
     if (todas.length && typeof Kit !== 'undefined') { toast(`${bs.length ? bs.length + (bs.length === 1 ? ' reserva criada' : ' reservas criadas') : 'Orçamento fechado'}${pagoTxt} 🎉 · agora é só mandar o roteiro`); Kit.abrir(Kit.daReserva(todas[0])); }
     else { toast(`${bs.length} ${bs.length === 1 ? 'reserva criada' : 'reservas criadas'}${pagoTxt} 🎉`); if ($('#oyNome')) { oyTela(o.id); scrollTo(0, 0); } else route(); }
