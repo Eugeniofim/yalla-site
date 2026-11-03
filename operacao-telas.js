@@ -1467,6 +1467,7 @@ function admConsulta(arg, modo) {
   const ICO = { repescar: icT('<path d="M20 11a8 8 0 0 0-14.5-4.5L4 8M4 4v4h4M4 13a8 8 0 0 0 14.5 4.5L20 16M20 20v-4h-4"/>'), montar: icT('<path d="M4 20h4L19 9l-4-4L4 16v4Z"/><path d="M13.5 6.5l4 4"/>'),
     sinal: icT('<circle cx="12" cy="12" r="8.5"/><path d="M14.5 9.5c-.5-1-1.5-1.5-2.5-1.5-1.4 0-2.5.8-2.5 2s1.1 1.7 2.5 2 2.5.8 2.5 2-1.1 2-2.5 2c-1 0-2-.5-2.5-1.5M12 6.5V8M12 16v1.5"/>'), avaliar: icT('<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8L3.5 9.7l5.9-.9L12 3.5Z"/>') };
   const agoraAcao = (a) => {
+    if (a.tipo === 'montar' && typeof oyJaReservadas === 'function' && oyJaReservadas(a.o).length) { const jb = oyJaReservadas(a.o)[0]; return `${Bookings.due(jb) > 0 ? `<button class="mini strong" data-jpag="${esc(jb.id)}">registrar pagamento</button>` : ''}<a class="mini" href="#/adm/voucher/${esc(jb.id)}">voucher</a>`; }
     if (a.tipo === 'montar') return `<a class="mini strong" href="#/adm/consulta/${esc(a.o.id)}">montar e mandar</a>`;
     if (a.tipo === 'repescar') return a.o.cliente.whats ? `<a class="mini strong" target="_blank" rel="noopener" data-repesca="${esc(a.o.id)}" href="${waLink(`Oi ${opPrimeiro(a.o.cliente.nome)}! Tudo bem? Conseguiu ver o orçamento que te mandei (${a.o.num})? Se quiser, ajusto alguma coisa. ${guiaNome()}`, opNum(a.o.cliente.whats))}">💬 repescar</a>` : `<a class="mini" href="#/adm/consulta/${esc(a.o.id)}">abrir</a>`;
     if (a.tipo === 'sinal') return `<a class="mini" href="#/adm/clients/${encodeURIComponent('c:' + (a.r.b.clienteId || ''))}">ficha</a>${a.r.whats ? `<a class="mini strong" target="_blank" rel="noopener" href="${waLink(`Oi ${opPrimeiro(a.r.nome)}! Para garantir a sua reserva (${nomeDoServico(a.r.b)}, ${opCurta(a.r.dataServ)}), falta só o sinal. Te mando os dados para pagamento? ${guiaNome()}`, opNum(a.r.whats))}">💬 cobrar sinal</a>` : ''}`;
@@ -1498,6 +1499,9 @@ function admConsulta(arg, modo) {
 
   const acoes = (p) => {
     const r = p.r, b = r.b, o = r.o;
+    /* tudo o que ela pediu já está reservado pelo site: não há o que montar — só fechar (03/11/2026) */
+    const tudoReservado = r.tipo === 'orcamento' && typeof oyJaReservadas === 'function' && o.itens.filter(i => !i.sugestao).length && o.itens.filter(i => !i.sugestao).every(i => orcReservaDoItem(o, i));
+    if (r.tipo === 'orcamento' && r.etapa === 'aberto' && tudoReservado) return `<button class="mini strong" data-fecha="${esc(o.id)}">fechou ✓</button><a class="mini" href="#/adm/consulta/${esc(o.id)}">abrir</a><button class="mini ghost danger" data-orcrm="${esc(o.id)}" aria-label="Apagar o orçamento ${esc(o.num)}">apagar</button>`;
     if (r.tipo === 'orcamento' && r.etapa === 'aberto') return `<a class="mini strong" href="#/adm/consulta/${esc(o.id)}">${o.status === 'enviado' ? 'abrir' : 'montar e mandar'}</a>
       ${o.cliente.whats && o.status === 'enviado' ? `<a class="mini" target="_blank" rel="noopener" data-repesca="${esc(o.id)}" href="${waLink(`Oi ${opPrimeiro(o.cliente.nome)}! Tudo bem? Conseguiu ver o orçamento que te mandei (${o.num})? Se quiser, ajusto alguma coisa. ${guiaNome()}`, opNum(o.cliente.whats))}">💬 repescar</a>` : ''}
       <button class="mini" data-fecha="${esc(o.id)}">fechou ✓</button><button class="mini ghost" data-perde="${esc(o.id)}">perdido</button><button class="mini ghost danger" data-orcrm="${esc(o.id)}" aria-label="Apagar o orçamento ${esc(o.num)}">apagar</button>`;
@@ -1514,6 +1518,7 @@ function admConsulta(arg, modo) {
     return `<article class="crm-card">
       <div class="crm-top"><b class="crm-nome">${esc(r.nome || 'Sem nome')}</b>${crmEtapaPill(r.etapa, r.status)}
         ${r.veio ? `<span class="crm-veio">${esc(r.veio)}${r.indicou ? ': <b>' + esc(r.indicou) + '</b>' : ''}</span>` : ''}${r.parceiro ? `<span class="crm-veio">🤝 ${esc(r.parceiro)}</span>` : ''}</div>
+      ${r.tipo === 'orcamento' && r.etapa === 'aberto' && typeof oyJaReservadoHtml === 'function' ? oyJaReservadoHtml(r.o) : ''}
       <ul class="crm-linhas">${p.linhas.map(x => `<li><span class="mono">${crmData(x.dataServ)}${x.hora ? ' ' + esc(x.hora) : ''}</span><span>${esc(x.servico)}${x.pax ? ` <small>· ${esc(x.pax)}p</small>` : ''}${x.obs ? `<small> · ${esc(x.obs)}</small>` : ''}</span><b class="mono">${x.clientePaga ? eur(x.clientePaga) : '—'}</b></li>`).join('')}</ul>
       <div class="crm-pe"><span>Total <b>${eur(tot)}</b>${r.sinal ? ` · sinal ${eur(r.sinal)}` : ''}${r.forma ? ` · ${esc(r.forma)}` : ''}</span>
         ${rp ? `<small class="crm-rp">Repescagem: ${esc(rp)}</small>` : ''}
@@ -1579,7 +1584,9 @@ function admConsulta(arg, modo) {
     $('#crmImpOk').onclick = () => { const r = importarPlanilha(txt); if (P) S.e = 'todos'; toast(r.erro || `${r.orcamentos ? r.orcamentos + ' orçamentos · ' : ''}${r.criadas} reservas importadas${r.repetidas ? ` · ${r.repetidas} já estavam no app` : ''}`); S.e = 'todos'; re(); };
   };
   $$('tr[data-ir]').forEach(tr => tr.onclick = (e) => { if (!e.target.closest('a')) location.hash = tr.dataset.ir; });
-  $$('[data-fecha]').forEach(b => b.onclick = () => go('/adm/consulta/' + b.dataset.fecha));
+  /* "fechou ✓" abre o Fechou na hora (03/11/2026: antes levava ao orçamento, onde o Fechou ficava escondido) */
+  $$('[data-fecha]').forEach(b => b.onclick = () => { const o = Orc.get(b.dataset.fecha); if (o && typeof oyFechar === 'function') oyFechar(o); else go('/adm/consulta/' + b.dataset.fecha); });
+  $$('[data-jpag]').forEach(b => b.onclick = () => { const bk = Bookings.get(b.dataset.jpag); if (bk) ATALHO.pagto(bk); });
   /* apagar um orçamento que deu errado (28/10/2026, "como a Milla apaga algo que deu errado?") */
   $$('[data-orcrm]').forEach(b => b.onclick = () => {
     const o = Orc.get(b.dataset.orcrm); if (!o) return;

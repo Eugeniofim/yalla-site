@@ -1007,3 +1007,32 @@ p.ag-leg{display:flex;flex-wrap:wrap;gap:6px 18px}
   .trow.trow-ph>.tinfo{grid-column:2}.trow.trow-ph>.pill{grid-column:3}
   .trow.trow-ph>.tacts{grid-column:1/-1}
 }
+
+/* JÁ RESERVADO PELO SITE, RESERVA EM DOBRO, QUANTO JÁ PAGOU E A LIXEIRA À VISTA (03/11/2026, a 1ª cliente que fechou pelo app) */
+.oy-ja{margin:10px 0 4px;padding:10px 12px;border-radius:12px;background:var(--ok-wash,#E8F5EC);border:1px solid rgba(31,143,78,.25);display:grid;gap:6px}
+.oy-ja > b{font-size:13.5px;color:var(--ok)}
+.oy-ja-r{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 10px;font-size:13.5px}
+.oy-ja-r em{font-style:normal;font-weight:700;color:var(--warn)}
+.oy-ja-r em.ok{color:var(--ok)}
+.oy-ja-acs{display:flex;gap:6px;flex-wrap:wrap}
+.oy-ja small{font-size:12.5px}
+.oy-ja-nota{margin:0 0 12px;padding:10px 12px;border-radius:12px;background:var(--ok-wash,#E8F5EC);color:var(--ink);font-size:14px}
+.oy-dobro{border:1px solid var(--warn);background:var(--warn-wash,#FFF6E5);margin-bottom:14px}
+.oy-dobro h3{color:var(--ink);margin:0 0 4px}
+.oy-dobro-g{display:grid;gap:6px;padding:10px 0;border-top:1px solid var(--line)}
+.oy-dobro-g:first-of-type{border-top:0}
+.oy-dobro-r{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 12px;font-size:14px;padding:6px 10px;border-radius:10px;background:var(--surface)}
+.oy-dobro-g > .mini{justify-self:start}
+.oy-pagou{border:0;margin:0 0 12px;padding:0;display:grid;gap:8px}
+.oy-pagou legend{font-weight:700;margin-bottom:6px;padding:0}
+.oy-pagou .optin{padding:10px 12px;border:1px solid var(--line-2);border-radius:12px;min-height:46px;align-items:center}
+.oy-pagou .optin:has(input:checked){border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.oy-pagou .fld{margin:0}
+.oy-itcabw{display:flex;align-items:center}
+.oy-itcabw .oy-itcab{flex:1;min-width:0}
+.oy-itrm{flex:none;display:grid;place-items:center;width:44px;height:44px;margin-right:4px;border:0;border-radius:50%;background:none;color:var(--ink-3);cursor:pointer}
+.oy-itrm svg{width:18px;height:18px}
+.oy-itrm:hover{color:var(--danger);background:var(--danger-wash)}
+.oy-itrm:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.oy-itja{margin:0 12px 10px;padding:6px 10px;border-radius:10px;background:var(--ok-wash,#E8F5EC);color:var(--ok);font-size:12.5px;font-weight:600}
+small.oy-itja{display:inline-block;margin:2px 8px 4px}

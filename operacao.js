@@ -444,6 +444,8 @@ const Orc = {
       const avulso = !(i.tourId && Tours.get(i.tourId));
       /* pedido do cliente que ela não confirmou (sem valor) não estava na proposta: não vira reserva (29/10/2026) */
       if (i.sugestao) continue;
+      /* a cliente já reservou este passeio, neste dia, pelo site: não cria outra (03/11/2026) */
+      if (typeof orcReservaDoItem === 'function' && orcReservaDoItem(o, i)) continue;
       if (avulso && (!i.data || !String(i.desc || '').trim())) continue;
       const b = Bookings.criarManual({
         tourId: avulso ? tourAvulso(RE_TRANSFER.test(i.desc) ? 'transfer' : 'servico') : i.tourId, date: i.data || isoToday(), time: i.hora || '09:00',
@@ -2172,7 +2174,9 @@ function crmPainel(linhas, hoje) {
   const agora = [];
   for (const p of abertos) {
     const o = p.r.o; if (!o) continue;
-    if (o.status === 'novo' || o.status === 'rascunho') agora.push({ tipo: 'montar', ordem: 2, nome: p.r.nome, o, txt: 'orçamento ainda não mandado' });
+    /* a cliente já reservou pelo site: não é "montar e mandar", é registrar o pagamento e mandar o voucher (03/11/2026) */
+    if ((o.status === 'novo' || o.status === 'rascunho') && typeof oyJaReservadas === 'function' && oyJaReservadas(o).length) agora.push({ tipo: 'montar', ordem: 1, nome: p.r.nome, o, txt: 'já reservou pelo site — registre o pagamento e mande o voucher' });
+    else if (o.status === 'novo' || o.status === 'rascunho') agora.push({ tipo: 'montar', ordem: 2, nome: p.r.nome, o, txt: 'orçamento ainda não mandado' });
     else {
       const t = Tarefas.all().find(t2 => !t2.feita && t2.orcId === o.id && t2.etapa === 'aguardar');
       if (t && t.prazo && t.prazo <= hoje) agora.push({ tipo: 'repescar', ordem: 1, nome: p.r.nome, o, txt: `mandado e sem resposta${(o.repescagens || []).length ? ` · já foram ${o.repescagens.length} repescagem(ns)` : ''}` });

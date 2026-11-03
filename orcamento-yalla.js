@@ -83,6 +83,74 @@ const OY_MOEDA = 'USD';
 /* lembretes do app para ELA (nunca vão para o cliente): "Sem preço na tabela", "O cliente pediu — escolha…",
    "Defina o valor…". 29/10/2026: o do pedido da conversa aparecia na proposta da cliente. */
 const OY_OBS_INTERNA = /^(Sem preço na tabela|O cliente pediu — escolha|Defina o valor)/;
+/* JÁ RESERVADO PELO SITE (03/11/2026, a 1ª cliente que fechou pelo app): a Ana Paula montou "Meu pedido"
+   no site e, minutos depois, reservou o mesmo passeio direto. A Milla viu o orçamento "Em montagem",
+   tocou em "fechou" e não achou como marcar o pagamento — e o Fechou criaria uma 2ª reserva do mesmo
+   passeio. Agora o serviço que a cliente já reservou aparece como reservado (com pagamento e voucher),
+   e o Fechou liga a reserva que existe em vez de criar outra. */
+function oyMesmoCliente(o, b) {
+  const c = (o && o.cliente) || {}, em = String(c.email || '').trim().toLowerCase(), w = String(c.whats || '').replace(/\D/g, '').slice(-8);
+  if (em && em === String(b.email || '').trim().toLowerCase()) return true;
+  if (w.length >= 8 && w === String(b.whats || '').replace(/\D/g, '').slice(-8)) return true;
+  if (o.clienteId && b.clienteId === o.clienteId) return true;
+  return !!(c.nome && _nomeN(c.nome) === _nomeN(b.name));
+}
+function orcReservaDoItem(o, i) {
+  if (!o || !i || !i.tourId || !i.data) return null;
+  return (DB.bookings || []).find(b => b.status !== 'cancelled' && b.tourId === i.tourId && b.date === i.data && b.orcamentoId !== o.id && oyMesmoCliente(o, b)) || null;
+}
+const oyJaReservadas = (o) => [...new Set((o.itens || []).filter(i => !i.sugestao).map(i => orcReservaDoItem(o, i)).filter(Boolean))];
+/* o cartão do orçamento na lista: o que a cliente já reservou, com pagamento e voucher num toque */
+function oyJaReservadoHtml(o) {
+  const l = oyJaReservadas(o); if (!l.length) return '';
+  return `<div class="oy-ja"><b>✓ ${l.length === 1 ? 'A cliente já reservou pelo site' : 'A cliente já reservou ' + l.length + ' serviços pelo site'}</b>${l.map(b => { const due = Bookings.due(b);
+    return `<div class="oy-ja-r"><span>${esc(nomeDoServico(b))} · ${esc(opCurta(b.date))}${b.time ? ' ' + esc(b.time) : ''} <span class="mono">${esc(b.code)}</span> · ${due > 0 ? `<em>falta ${esc(valorReserva(b, due))}</em>` : '<em class="ok">pago ✓</em>'}</span>
+      <span class="oy-ja-acs">${due > 0 ? `<button type="button" class="mini strong" data-jpag="${esc(b.id)}">registrar pagamento</button>` : ''}<a class="mini" href="#/adm/voucher/${esc(b.id)}">voucher</a></span></div>`; }).join('')}
+    <small class="why">Não precisa fechar este orçamento para criar a reserva: ela já existe.</small></div>`;
+}
+/* RESERVA EM DOBRO (03/11/2026): a mesma cliente reservou o mesmo passeio no mesmo dia duas vezes
+   (a Ana Paula, Grande Mesquita 06/11: uma para 2 pessoas e, 7 minutos depois, outra para 1) */
+function reservasEmDobro() {
+  const desde = addDays(isoToday(), -1), g = {};
+  for (const b of DB.bookings || []) {
+    if (b.status === 'cancelled' || b.naoDobro || !b.tourId || !b.date || b.date < desde) continue;
+    const quem = String(b.email || '').trim().toLowerCase() || String(b.whats || '').replace(/\D/g, '').slice(-8) || _nomeN(b.name);
+    if (!quem) continue;
+    const k = quem + '|' + b.tourId + '|' + b.date; (g[k] = g[k] || []).push(b);
+  }
+  return Object.values(g).filter(l => l.length > 1).map(l => l.sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || ''))));
+}
+function oyDobroHtml() {
+  const gs = reservasEmDobro(); if (!gs.length) return '';
+  return `<section class="card oy-dobro" role="alert"><h3>Reserva em dobro?</h3>
+    <p class="why">A mesma cliente reservou o mesmo passeio no mesmo dia mais de uma vez. Confirme com ela qual vale e cancele a outra.</p>
+    ${gs.map(l => `<div class="oy-dobro-g"><b>${esc(l[0].name)} · ${esc(nomeDoServico(l[0]))} · ${esc(opCurta(l[0].date))}</b>
+      ${l.map(b => `<div class="oy-dobro-r"><span><span class="mono">${esc(b.code)}</span> · ${b.pax} ${+b.pax > 1 ? 'pessoas' : 'pessoa'} · ${esc(valorReserva(b, b.total))}${Bookings.paid(b) ? ' · pago ' + esc(valorReserva(b, Bookings.paid(b))) : ''}${b.createdAt ? ' · feita ' + esc(opCurta(String(b.createdAt).slice(0, 10))) + ' ' + esc(new Date(b.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })) : ''}</span>
+        <button type="button" class="mini danger" data-dbcancel="${esc(b.id)}">cancelar esta</button></div>`).join('')}
+      <button type="button" class="mini ghost" data-dbok="${esc(l.map(b => b.id).join(','))}">as duas valem</button></div>`).join('')}
+  </section>`;
+}
+function oyDobroLiga(volta) {
+  document.querySelectorAll('[data-dbcancel]').forEach(bt => bt.onclick = () => {
+    const b = Bookings.get(bt.dataset.dbcancel); if (!b) return;
+    if (!confirm(`Cancelar a reserva ${b.code} (${b.name}, ${nomeDoServico(b)} ${opCurta(b.date)}, ${b.pax} ${+b.pax > 1 ? 'pessoas' : 'pessoa'})?`)) return;
+    Bookings.cancel(b.id); toast(`Reserva ${b.code} cancelada`); volta();
+  });
+  document.querySelectorAll('[data-dbok]').forEach(bt => bt.onclick = () => {
+    for (const id of bt.dataset.dbok.split(',')) { const b = Bookings.get(id); if (b) { b.naoDobro = true; _opSaveBooking(b); } }
+    toast('Certo: as duas reservas ficam'); volta();
+  });
+}
+function oyDobroPoe(volta) {
+  try {
+    const html = oyDobroHtml(), stage = document.getElementById('stage'); if (!html || !stage || stage.querySelector('.oy-dobro')) return;
+    const ph = stage.querySelector('.pagehead');
+    if (ph) ph.insertAdjacentHTML('afterend', html); else stage.insertAdjacentHTML('afterbegin', html);
+    oyDobroLiga(volta);
+  } catch (e) {}
+}
+if (typeof admBookings === 'function') { const _oyAdmB = admBookings; admBookings = function () { const r = _oyAdmB.apply(this, arguments); oyDobroPoe(() => admBookings()); return r; }; }
+if (typeof admConsulta === 'function') { const _oyAdmC = admConsulta; admConsulta = function (arg, modo) { const r = _oyAdmC.apply(this, arguments); if (!arg && modo !== 'planilha') oyDobroPoe(() => admConsulta()); return r; }; }
 /* fechou: as reservas somam o que o cliente paga (desconto e VAT repartidos
    na proporção de cada serviço) e saem em dólar */
 const _oyFechaBase = Orc.fecha;
@@ -92,8 +160,11 @@ Orc.fecha = function (id, opts) {
   const soma = o ? o.itens.reduce((t, i) => t + (+i.valor || 0), 0) : 0;
   const k = o && soma > 0 ? Orc.total(o) / soma : 1;
   /* os serviços que viram reserva, na mesma ordem e com a mesma regra do Orc.fecha */
-  const usados = o ? o.itens.filter(i => { const av = !(i.tourId && Tours.get(i.tourId)); return !i.sugestao && !(av && (!i.data || !String(i.desc || '').trim())); }) : [];
+  const usados = o ? o.itens.filter(i => { const av = !(i.tourId && Tours.get(i.tourId)); return !i.sugestao && !orcReservaDoItem(o, i) && !(av && (!i.data || !String(i.desc || '').trim())); }) : [];
+  const ja = o && o.status !== 'fechado' ? oyJaReservadas(o) : [];
   const bs = _oyFechaBase(id, opts);
+  /* o que a cliente já tinha reservado pelo site entra no orçamento fechado (sem criar de novo) */
+  if (ja.length) { const x = Orc.get(id); if (x) { x.bookingIds = [...new Set([...(x.bookingIds || []), ...ja.map(b => b.id)])]; _opSave(); } }
   bs.forEach((b, n) => {
     /* o roteiro depois da compra (kit) mostra o que ela escreveu no orçamento */
     const i = usados[n]; if (!i) return;
@@ -834,13 +905,16 @@ function oyTela(id) {
   /* celular: um cartão por serviço (toque abre) */
   const linhaItem = (i) => {
     const aberto = S.aberto === i.id;
+    const jr = orcReservaDoItem(o, i);
+    /* a lixeira à vista (03/11/2026, a Milla: "tentei apagar o outro tour mas não consigo" — o "tirar" ficava escondido dentro do cartão) */
     return `<article class="oy-it ${aberto ? 'aberto' : ''}" data-it="${esc(i.id)}">
-      <button type="button" class="oy-itcab" data-oyabre="${esc(i.id)}" aria-expanded="${aberto}">
+      <div class="oy-itcabw"><button type="button" class="oy-itcab" data-oyabre="${esc(i.id)}" aria-expanded="${aberto}">
         <span class="oy-ithr">${esc(ppHoras(i) || 'sem horário')}</span>
         <span class="oy-itn">${i.foto ? `<span class="oy-itf" style="background-image:url('${esc(i.foto)}')" aria-hidden="true"></span>` : ''}<b>${esc(i.desc || 'Sem título')}</b>${i.tipo === 'traslado' && i.voo ? `<small>voo ${esc(i.voo)}</small>` : ''}${i.sugestao ? '<small class="oy-alerta">pedido da conversa · fora da proposta até você pôr o valor</small>' : i.aParte ? '<small>à parte</small>' : !i.valor ? '<small class="oy-alerta">sem valor</small>' : ''}</span>
         <span class="oy-itv">${i.aParte ? 'à parte' : i.valor ? esc(oyM(i.valor, m)) : '—'}</span>
         <span class="oy-chev">${oyIc('seta')}</span>
-      </button>
+      </button><button type="button" class="oy-itrm" data-rmi="${esc(i.id)}" aria-label="Tirar ${esc(i.desc || 'este serviço')} do orçamento" title="tirar do orçamento"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13M10 11v6M14 11v6"/></svg></button></div>
+      ${jr ? `<p class="oy-itja">✓ já reservado pelo site · <span class="mono">${esc(jr.code)}</span> · ${Bookings.due(jr) > 0 ? 'falta ' + esc(valorReserva(jr, Bookings.due(jr))) : 'pago ✓'}</p>` : ''}
       ${aberto ? `<div class="oy-ited">${campos(i, false)}</div>` : ''}
     </article>`;
   };
@@ -864,6 +938,7 @@ function oyTela(id) {
             <textarea class="oy-cx" data-k="texto" rows="${Math.min(10, Math.max(2, nl + 1))}" placeholder="detalhes (opcional)" aria-label="Detalhes, um por linha">${esc(i.texto)}</textarea>
             ${i.foto ? `<button type="button" class="oy-cfoto" data-oyabre="${esc(i.id)}" style="background-image:url('${esc(i.foto)}')" aria-label="Foto deste serviço na proposta (toque para trocar)" title="foto na proposta"></button>` : ''}
             ${i.tipo === 'traslado' && i.voo ? `<small class="oy-cvoo">voo ${esc(i.voo)}</small>` : ''}
+            ${(() => { const jr = orcReservaDoItem(o, i); return jr ? `<small class="oy-itja">✓ já reservado pelo site · <span class="mono">${esc(jr.code)}</span> · ${Bookings.due(jr) > 0 ? 'falta ' + esc(valorReserva(jr, Bookings.due(jr))) : 'pago ✓'}</small>` : ''; })()}
             ${i.obs && !OY_OBS_INTERNA.test(i.obs) ? `<small class="oy-cobs" title="${esc(i.obs)}">obs: ${esc(i.obs.length > 60 ? i.obs.slice(0, 60) + '…' : i.obs)}</small>` : ''}
           </div>
           <label class="oy-c oy-cv" role="cell"><span class="sr">Valor ${esc(m)}</span>${i.aParte ? '<span class="oy-aparte-v">à parte</span>' : `<input type="number" min="0" inputmode="decimal" data-k="valor" value="${i.valor || ''}" placeholder="0">`}</label>
@@ -932,8 +1007,8 @@ function oyTela(id) {
       return `<section class="card oy-card oy-fechou"><div class="oy-hrow"><h2 class="oy-h">Fechou${o.fechadoEm ? ' em ' + esc(opCurta(o.fechadoEm)) : ''}</h2><span class="oy-sub">${bs.length} ${bs.length === 1 ? 'reserva' : 'reservas'}</span></div>
         ${bs.length && typeof Kit !== 'undefined' ? `<button type="button" class="cta oy-kitb" id="oyKit" data-kitb="${esc(Kit.daReserva(bs[0]))}">Roteiro da viagem</button><p class="why">O que o cliente recebe depois da compra: o roteiro dia a dia com os horários, os encontros e o pagamento, em link ou PDF.</p>` : ''}
         <details class="oy-res"><summary>Ver as reservas</summary>${bs.map(b => opCardServico(b, { comData: true })).join('')}</details></section>`; })()
-      : o.status === 'enviado' ? `<section class="card oy-card oy-fechou"><div class="oy-hrow"><h2 class="oy-h">O cliente fechou?</h2></div>
-        <p class="why">Cada serviço vira reserva e abre o roteiro da viagem, pronto para mandar no WhatsApp, por link ou PDF.</p>
+      : o.status === 'enviado' || oyJaReservadas(o).length ? `<section class="card oy-card oy-fechou"><div class="oy-hrow"><h2 class="oy-h">O cliente fechou?</h2></div>
+        <p class="why">${oyJaReservadas(o).length ? 'A cliente já reservou pelo site: o Fechou liga essa reserva ao orçamento (não cria outra), marca o que ela pagou e abre o roteiro da viagem.' : 'Cada serviço vira reserva e abre o roteiro da viagem, pronto para mandar no WhatsApp, por link ou PDF.'}</p>
         <button type="button" class="cta" id="oyFecha2">Fechou — criar as reservas</button></section>` : ''}
 
     <details class="card oy-card oy-mais" ${S.mais ? 'open' : ''}><summary><b>Mais opções</b><small>e-mail, situação, sinal, textos da proposta, arquivos</small></summary>
@@ -1281,20 +1356,50 @@ function oyCatalogo(o, diaFixo) {
 
 /* fechou: o mesmo de antes (cada serviço vira reserva), numa janelinha */
 function oyFechar(o) {
-  const sin = Orc.sinal(o), m = oyMoeda(o);
-  if (!o.cliente.nome) { toast('Falta o nome do cliente.'); const e = $('#oyNome'); if (e) e.focus(); return; }
-  const semData = o.itens.filter(i => i.tourId && !i.data);
-  if (semData.length) return toast('Falta o dia em ' + semData.map(i => i.desc).join(', '));
-  const d = opJanela('Fechou?', `<p class="why">Cada serviço vira uma reserva, com o cliente, o dia e o sinal. Aparece no Hoje, na agenda e na ficha dele.</p>
-    <label class="optin"><input type="checkbox" id="oyFSin" ${sin ? 'checked' : ''}><span><b>O sinal de ${esc(oyM(sin, m))} já caiu</b><small>registra o pagamento na conta abaixo</small></span></label>
-    <label class="fld">Conta<select id="oyFConta">${opContaOpts('nubank')}</select></label>
-    <div class="btnrow"><button type="button" class="cta sm" id="oyFOk">Fechou — criar as reservas</button></div>`);
+  const m = oyMoeda(o);
+  /* do cartão da lista não há campo para completar: abre o orçamento no que falta */
+  if (!o.cliente.nome) { toast('Falta o nome do cliente.'); if (!$('#oyNome')) go('/adm/consulta/' + o.id); else $('#oyNome').focus(); return; }
+  const semData = o.itens.filter(i => i.tourId && !i.data && !i.sugestao);
+  if (semData.length) { toast('Falta o dia em ' + semData.map(i => i.desc).join(', ')); if (!$('#oyNome')) go('/adm/consulta/' + o.id); return; }
+  /* QUANTO JÁ PAGOU (03/11/2026, a Milla: "como faço pra colocar como pago os 349?") — antes só dava
+     para marcar o sinal; agora: nada, o sinal, tudo ou outro valor, e o app reparte pelas reservas */
+  const ja = oyJaReservadas(o), tot = Orc.total(o);
+  const viram = o.itens.filter(i => !i.sugestao && !orcReservaDoItem(o, i) && ((i.tourId && Tours.get(i.tourId)) || (i.data && String(i.desc || '').trim())));
+  /* o que falta pagar: o que falta nas reservas que a cliente já fez + o valor dos serviços que vão virar reserva
+     (o total do orçamento pode ser 0 quando o pedido veio do site sem preço — a reserva é que tem o valor) */
+  const somaTodos = o.itens.reduce((s, i) => s + (+i.valor || 0), 0), somaViram = viram.reduce((s, i) => s + (+i.valor || 0), 0);
+  const novos = somaTodos > 0 ? oyCent(tot * somaViram / somaTodos) : 0;
+  const jaPago = ja.reduce((s, b) => s + Bookings.paid(b), 0), falta = oyCent(ja.reduce((s, b) => s + Bookings.due(b), 0) + novos);
+  const sin = oyCent(Math.min(Orc.sinal(o), falta));
+  const d = opJanela('Fechou?', `${viram.length ? `<p class="why">${viram.length === 1 ? 'O serviço vira uma reserva' : `Os ${viram.length} serviços viram reservas`}, com o cliente e o dia. Aparece no Hoje, na agenda e na ficha.</p>` : ''}
+    ${ja.length ? `<p class="oy-ja-nota">✓ Já reservado pelo site: ${ja.map(b => `<b>${esc(b.code)}</b> (${esc(nomeDoServico(b))}, ${esc(opCurta(b.date))})`).join(', ')}. Não vou criar de novo: entra neste orçamento.</p>` : ''}
+    <fieldset class="oy-pagou"><legend>Quanto o cliente já pagou?</legend>
+      <label class="optin"><input type="radio" name="oyFPg" value="nada" checked><span><b>Ainda não pagou</b></span></label>
+      ${sin > 0 && sin < falta ? `<label class="optin"><input type="radio" name="oyFPg" value="sinal"><span><b>O sinal · ${esc(oyM(sin, m))}</b></span></label>` : ''}
+      ${falta > 0 ? `<label class="optin"><input type="radio" name="oyFPg" value="tudo"><span><b>Pagou tudo · ${esc(oyM(falta, m))}</b>${jaPago ? `<small>já tinha ${esc(oyM(jaPago, m))} registrado</small>` : ''}</span></label>` : `<p class="why">${jaPago ? 'Já está tudo pago ✓' : 'Sem valor para cobrar ainda.'}</p>`}
+      <label class="optin"><input type="radio" name="oyFPg" value="outro"><span><b>Outro valor</b></span></label>
+      <label class="fld oy-fout" hidden>Valor (${esc(m)})<input type="number" min="0" step="0.01" inputmode="decimal" id="oyFOutro"></label>
+    </fieldset>
+    <label class="fld oy-fcta" hidden>Onde caiu<select id="oyFConta"><option value="">escolha…</option>${opContaOpts('')}</select></label>
+    <div class="btnrow"><button type="button" class="cta sm" id="oyFOk">${viram.length ? 'Fechou — criar as reservas' : 'Fechou'}</button></div>`);
+  const modo = () => (d.querySelector('[name="oyFPg"]:checked') || {}).value || 'nada';
+  const mostra = () => { const k = modo(); d.querySelector('.oy-fout').hidden = k !== 'outro'; d.querySelector('.oy-fcta').hidden = k === 'nada'; };
+  d.querySelectorAll('[name="oyFPg"]').forEach(r => r.onchange = mostra);
   d.querySelector('#oyFOk').onclick = () => {
-    const bs = Orc.fecha(o.id, { sinalRecebido: d.querySelector('#oyFSin').checked, conta: d.querySelector('#oyFConta').value });
+    const k = modo(), conta = d.querySelector('#oyFConta').value;
+    const valor = k === 'tudo' ? falta : k === 'sinal' ? sin : k === 'outro' ? Math.max(0, +String(d.querySelector('#oyFOutro').value).replace(',', '.') || 0) : 0;
+    if (valor > 0 && !conta) { toast('Em que conta caiu?'); d.querySelector('#oyFConta').focus(); return; }
+    const bs = Orc.fecha(o.id, { sinalRecebido: false });
+    /* o pagamento vai para as reservas deste orçamento, na ordem dos dias */
+    const todas = [...bs, ...ja].sort((a, b) => ((a.date || '') + (a.time || '')).localeCompare((b.date || '') + (b.time || '')));
+    let resto = oyCent(valor);
+    for (const b of todas) { if (resto <= 0) break; const v = oyCent(Math.min(resto, Bookings.due(b))); if (v > 0) { registraPagamento(b.id, { valor: v, conta }); resto = oyCent(resto - v); } }
+    if (typeof Tarefas !== 'undefined' && Tarefas.sincroniza) Tarefas.sincroniza();
     d.close();
-    /* fechou → já abre o ROTEIRO DA VIAGEM, pronto para mandar (WhatsApp, link ou PDF) */
-    if (bs.length && typeof Kit !== 'undefined') { toast(`${bs.length} ${bs.length === 1 ? 'reserva criada' : 'reservas criadas'} 🎉 · agora é só mandar o roteiro`); Kit.abrir(Kit.daReserva(bs[0])); }
-    else { toast(`${bs.length} ${bs.length === 1 ? 'reserva criada' : 'reservas criadas'} 🎉`); oyTela(o.id); scrollTo(0, 0); }
+    const pagoTxt = valor > 0 ? ` · ${oyM(valor, m)} registrado` : '';
+    /* fechou → já abre o ROTEIRO DA VIAGEM (com os vouchers), pronto para mandar (WhatsApp, link ou PDF) */
+    if (todas.length && typeof Kit !== 'undefined') { toast(`${bs.length ? bs.length + (bs.length === 1 ? ' reserva criada' : ' reservas criadas') : 'Orçamento fechado'}${pagoTxt} 🎉 · agora é só mandar o roteiro`); Kit.abrir(Kit.daReserva(todas[0])); }
+    else { toast(`${bs.length} ${bs.length === 1 ? 'reserva criada' : 'reservas criadas'}${pagoTxt} 🎉`); if ($('#oyNome')) { oyTela(o.id); scrollTo(0, 0); } else route(); }
   };
 }
 
@@ -1391,7 +1496,7 @@ function oyCss() {
   .oy-cacs{display:flex;gap:2px}
   .oy-crm:hover{color:var(--danger);background:var(--danger-wash)}
   .oy-barra-acs{display:flex;gap:8px;align-items:center}
-  .oy-desfaz{position:fixed;left:50%;bottom:calc(150px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:300;display:flex;align-items:center;gap:14px;padding:10px 10px 10px 16px;border-radius:999px;background:var(--ink);color:var(--paper);box-shadow:var(--sh-2);max-width:92vw}
+  .oy-desfaz{position:fixed;left:50%;bottom:calc(150px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:1001;display:flex;align-items:center;gap:14px;padding:10px 10px 10px 16px;border-radius:999px;background:var(--ink);color:var(--paper);box-shadow:var(--sh-2);max-width:92vw}
   .oy-desfaz span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px}
   .oy-desfaz button{border:0;border-radius:999px;padding:8px 14px;background:var(--accent);color:var(--accent-ink);font:inherit;font-weight:700;cursor:pointer}
   .oy-shh{background:#141414;color:#D4AF37;font-size:11.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase}
@@ -1759,4 +1864,5 @@ opDocOrc = (id) => go('/adm/proposta/' + id);
 /* abriu direto num destes endereços (link da proposta, editor, proposta no painel):
    o route() do começo rodou antes deste arquivo existir — desenha de novo */
 if (typeof pubRotaDe === 'function' && pubRotaDe()) route();
-else if (/^#\/adm\/(consulta\/[^/]+|proposta\/)/.test(location.hash)) route();
+/* 03/11/2026: a lista de Orçamentos e as Reservas também (o "já reservou pelo site" e o aviso de dobro moram aqui) */
+else if (/^#\/adm\/(consulta|proposta|bookings)(\/|$)/.test(location.hash)) route();

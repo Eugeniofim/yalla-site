@@ -337,6 +337,7 @@ function _camposSujos() {
   const l = [];
   document.querySelectorAll('#app input[id], #app textarea[id], #app select[id]').forEach(e => {
     if (e.type === 'checkbox' || e.type === 'radio') { if (e.checked !== e.defaultChecked) l.push({ id: e.id, chk: e.checked, ori: e.defaultChecked }); }
+    else if (e.type === 'file') return;
     else if (e.tagName === 'SELECT') { const d = [...e.options].find(o => o.defaultSelected); const ori = d ? d.value : ''; if (e.value !== ori) l.push({ id: e.id, v: e.value, ori, sel: true }); }
     else if (e.value !== e.defaultValue) l.push({ id: e.id, v: e.value, ori: e.defaultValue });
   });
@@ -353,12 +354,20 @@ function _devolveCampos(l) {
 function redesenhaSuave(forcar) {
   if (!forcar && assinaturaTela() === _assinaturaTela) return false;          /* nada mudou: a tela fica quieta */
   if (isBusyEditing()) { pendingSync = true; return false; }
-  const y = scrollY, sujos = _camposSujos();
+  const y = scrollY, sujos = _camposSujos(), raiz = document.documentElement, alto = app.offsetHeight;
+  /* a rolagem do site é suave (html{scroll-behavior:smooth}): o scrollTo(0, 0) do route() e a volta
+     viravam uma animação de subir e descer. E, trocando o conteúdo, a página encolhia até as fotos
+     carregarem e o navegador puxava para cima. Durante a troca: rolagem seca e altura segura. */
+  raiz.style.scrollBehavior = 'auto';
+  app.style.minHeight = alto + 'px';
   document.body.classList.add('sem-anima');
   route();
   _devolveCampos(sujos);
   scrollTo(0, y);
-  requestAnimationFrame(() => { scrollTo(0, y); setTimeout(() => document.body.classList.remove('sem-anima'), 450); });
+  requestAnimationFrame(() => {
+    scrollTo(0, y);
+    setTimeout(() => { document.body.classList.remove('sem-anima'); app.style.minHeight = ''; raiz.style.scrollBehavior = ''; }, 450);
+  });
   return true;
 }
 
