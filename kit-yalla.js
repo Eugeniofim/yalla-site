@@ -18,7 +18,8 @@
    O formato é o v1 do contrato (KIT-CONTRATO.md, igual em todos os apps e no
    servidor). Campos a mais, opcionais (o desenho tolera a falta):
    servico.voo/origem/destino/veiculo, servico.mapa, servico.encontroObs,
-   servico.moeda; kit.blocos [{titulo, texto}], kit.moeda.
+   servico.moeda; kit.blocos [{titulo, texto}], kit.moeda, kit.base (a cidade que ela
+   escreveu no kit; sem ela, o desenho descobre pelo hotel e pelo ponto de encontro).
    Nunca vai o e-mail nem o telefone DO CLIENTE (a página é pública).
 
    O LINK CURTO E SEMPRE ATUALIZADO (#/k/<código>): o kit fica numa tabela só
@@ -75,6 +76,32 @@ function kitPeriodo(sv) {
   const f = (iso, ano) => new Date(iso + 'T12:00:00').toLocaleDateString('pt-BR', Object.assign({ day: 'numeric', month: 'long' }, ano ? { year: 'numeric' } : {}));
   return a === b ? f(a, true) : f(a, false) + ' a ' + f(b, true);
 }
+/* a cidade onde o cliente fica (05/11/2026, a Milla: cliente hospedada em Abu Dhabi e o kit abria
+   com "Dubai" e "Sua base em Dubai"). Ordem: o que ela escreveu no kit (kit.base) > a cidade do
+   hotel > a do ponto de encontro dos passeios > "saindo de X" no nome > a base do app. */
+const KIT_CIDADES = [['Abu Dhabi', /abu\s*dh?abi/i], ['Dubai', /dub[aá]i/i], ['Sharjah', /sharjah?/i], ['Ras Al Khaimah', /ras\s*al\s*khaimah/i],
+  ['Ajman', /ajman/i], ['Fujairah', /fujairah/i], ['Al Ain', /\bal\s*ain\b/i], ['Umm Al Quwain', /umm\s*al\s*quwain/i]];
+/* a primeira cidade que aparece no texto ("de Dubai para Abu Dhabi" = Dubai) */
+function kitCidadeEm(txt) {
+  const t = String(txt || ''); let melhor = '', pos = Infinity;
+  for (const [nome, re] of KIT_CIDADES) { const m = t.match(re); if (m && m.index < pos) { pos = m.index; melhor = nome; } }
+  return melhor;
+}
+const KIT_SAINDO = /(?:saindo|partindo|sa[ií]da)\s+de\s+([^)–—,;]+)|\bfrom\s+([^)–—,;]+)/i;
+function kitBaseAuto(sv) {
+  sv = Array.isArray(sv) ? sv : [];
+  const h = kitCidadeEm((sv.find(s => s.hotel) || {}).hotel); if (h) return h;
+  const conta = {};
+  for (const s of sv) {
+    if (s.tipo === 'transfer') continue;
+    const m = String(s.nome || '').match(KIT_SAINDO);
+    const c = kitCidadeEm(s.encontro) || kitCidadeEm(s.encontroObs) || (m ? kitCidadeEm(m[1] || m[2]) : '');
+    if (c) conta[c] = (conta[c] || 0) + 1;
+  }
+  return Object.keys(conta).sort((a, b) => conta[b] - conta[a])[0] || '';
+}
+/* o que ela ajustou à mão neste kit (cidade e hotel), junto do código do link curto */
+const kitAjuste = (chave) => (DB.privado && DB.privado.kits && DB.privado.kits[chave]) || {};
 
 /* as reservas do cliente que entram no kit: as que estão por vir (e as de ontem); se a viagem já passou, as 3 últimas */
 const kitVale = (b) => b && (b.status || 'confirmed') === 'confirmed' && !b.apagado;
@@ -164,15 +191,18 @@ function kitBlocos(bs) {
 /* o kit inteiro (é ISTO que vai para o cliente: sem e-mail nem telefone dele) */
 async function kitDados(chave) {
   const bs = kitReservas(chave); if (!bs.length) return null;
-  const hotel = kitHotel(bs);
-  const sv = bs.map(b => kitServico(b, hotel));
   const c = bs[0].clienteId && typeof Cadastro !== 'undefined' ? Cadastro.get(bs[0].clienteId) : null;
+  const aj = kitAjuste(chave);
+  /* o hotel: o que ela escreveu no kit > o do transfer > o da ficha do cliente */
+  const hotel = String(aj.hotel || '').trim() || kitHotel(bs) || String((c && c.viagem && c.viagem.hotel) || '').trim();
+  const sv = bs.map(b => kitServico(b, hotel));
   const st = DB.settings;
   const d = { v: 1, nome: (c && c.nome) || bs[0].name || '', periodo: kitPeriodo(sv), servicos: sv, dicas: kitDicas(), parceiros: kitParceiros(),
     brindes: [], roteiro: '', whats: kitDig(st.whats), email: (typeof GUIA_CFG !== 'undefined' && GUIA_CFG.email) || '',
     insta: String(st.insta || '').replace(/^@/, ''), negocio: guiaNegocio(), gerado: new Date().toISOString(),
     /* a política DELA vai dentro do link: o cliente abre num aparelho que ainda não leu os ajustes dela (29/10/2026) */
     politica: String((DB.settings && DB.settings.propPolitica) || '') };
+  if (String(aj.base || '').trim()) d.base = String(aj.base).trim();
   const blocos = kitBlocos(bs); if (blocos.length) d.blocos = blocos;
   const ms = [...new Set(sv.map(s => s.moeda || ''))]; if (ms.length === 1 && ms[0]) d.moeda = ms[0];
   return d;
@@ -196,7 +226,8 @@ const kitPodeNuvem = () => typeof temNuvem === 'function' && temNuvem() && typeo
 async function kitPublica(chave, dados) {
   if (!kitPodeNuvem()) return false;
   const T = kitTokens(); let t = T[chave];
-  if (!t || !t.token) { t = T[chave] = { token: kitNovoToken(), criado: new Date().toISOString() }; save(); }
+  /* o objeto pode já existir sem código (ela ajustou a cidade antes de mandar): guarda o ajuste */
+  if (!t || !t.token) { t = T[chave] = Object.assign(t || {}, { token: kitNovoToken(), criado: new Date().toISOString() }); save(); }
   try {
     const r = await supaFetch('kits', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
       body: JSON.stringify({ token: t.token, dados, atualizado_em: new Date().toISOString() }) });
@@ -272,7 +303,7 @@ function kitBaixaIcs(d) {
   a.download = 'viagem-' + (kitPrim(d.nome) || 'dubai').toLowerCase() + '.ics'; document.body.appendChild(a); a.click(); a.remove();
 }
 /* o mapa: o link do ponto; sem ele, a busca pelo lugar (se for um lugar, não "combinado pelo WhatsApp") */
-const kitMapaDe = (s) => s.mapa || (s.encontro && !/whats|combinad|confirm|após|apos|hotel|hospedagem|aeroporto|airport|desembarque|navio|instru/i.test(s.encontro) ? mapLink(s.encontro + ', Dubai') : '');
+const kitMapaDe = (s, cidade) => s.mapa || (s.encontro && !/whats|combinad|confirm|após|apos|hotel|hospedagem|aeroporto|airport|desembarque|navio|instru/i.test(s.encontro) ? mapLink(s.encontro + (kitCidadeEm(s.encontro) ? '' : ', ' + (cidade || 'Dubai'))) : '');
 /* o valor na moeda do serviço (US$ nos tours da planilha); o kit do servidor não traz a moeda: vem do passeio com o mesmo nome */
 function kitMoeda(s, d) {
   if (s && s.moeda) return s.moeda;
@@ -406,10 +437,19 @@ async function admKit(chave) {
   document.body.classList.add('em-adm');
   document.title = 'Kit da viagem - ' + (d.nome || 'cliente');
   const voltar = Kit._volta ? '#' + Kit._volta : (bs[0].clienteId ? '#/adm/clients/' + encodeURIComponent('c:' + bs[0].clienteId) : '#/adm/clients/' + encodeURIComponent(chave));
+  /* onde o cliente fica: o que ela escreveu, ou o que o app descobriu (o placeholder mostra) */
+  const aj = kitAjuste(chave), cidAuto = kitBaseAuto(d.servicos) || baseNome() || 'Dubai';
+  const hotelAuto = kitHotel(bs) || String((c && c.viagem && c.viagem.hotel) || '').trim();
   app.innerHTML = `<div class="ktTela">
     <div class="doc-barra ktBarra"><a class="mini" href="${esc(voltar)}">← voltar</a>
       <span class="ktAcs"><button class="mini" id="ktCopia">Copiar link</button><button class="mini" id="ktZap">${fone.length >= 8 ? 'Mandar no WhatsApp' : 'Mandar no WhatsApp (escolher contato)'}</button><button class="cta sm" id="ktPdf">Gerar PDF</button></span></div>
     <p class="ktEstado" id="ktEstado">${kitEstadoTxt(chave)}</p>
+    <section class="card ktEd ktOnde"><h3>Onde o cliente fica</h3>
+      <p class="why">Sai no título do kit e em "Sua base em…". Em branco, o app descobre pelo hotel e pelo ponto de encontro: agora está <b>${esc(d.base || cidAuto)}</b>.</p>
+      <div class="frow"><label class="fld">Cidade<input id="ktBase" list="ktBaseL" maxlength="40" autocomplete="off" value="${esc(aj.base || '')}" placeholder="${esc(cidAuto)}"></label>
+        <label class="fld">Hotel<input id="ktHotel" maxlength="120" autocomplete="off" value="${esc(aj.hotel || '')}" placeholder="${esc(hotelAuto || 'nome do hotel (opcional)')}"></label></div>
+      <datalist id="ktBaseL">${KIT_CIDADES.map(([n]) => `<option value="${esc(n)}">`).join('')}</datalist>
+      <div class="ktEdAcs"><button class="cta sm" id="ktOndeOk">Salvar</button></div></section>
     <div id="ktPrint">${kitDocHtml(d)}</div>
     <section class="card ktEd"><h3>Dicas para a viagem</h3><p class="why">Vão em todo kit. Uma por linha.</p>
       <textarea id="ktDicasTx" rows="7">${esc(kitDicas().join('\n'))}</textarea>
@@ -427,6 +467,15 @@ async function admKit(chave) {
     window.open(fone.length >= 8 ? waLink(msg, fone) : 'https://wa.me/?text=' + encodeURIComponent(msg), '_blank', 'noopener'); } catch (x) { toast(x.message); } };
   $('#ktDicasOk').onclick = () => { DB.settings.kitDicas = $('#ktDicasTx').value.split('\n').map(x => x.trim()).filter(Boolean).slice(0, 14); save(); Kit.agendar(chave); toast('Dicas salvas'); admKit(chave); };
   $('#ktDicasPadrao').onclick = () => { delete DB.settings.kitDicas; save(); Kit.agendar(chave); toast('Dicas padrão de volta'); admKit(chave); };
+  $('#ktOndeOk').onclick = () => {
+    const base = $('#ktBase').value.trim().slice(0, 40), hotel = $('#ktHotel').value.trim().slice(0, 120), T = kitTokens();
+    if (!T[chave] && !base && !hotel) return toast('Nada para salvar');
+    const t = T[chave] = T[chave] || {};
+    if (base) t.base = base; else delete t.base;
+    if (hotel) t.hotel = hotel; else delete t.hotel;
+    save(); Kit.agendar(chave);
+    toast(base ? 'Salvo · kit em ' + base : 'Salvo'); admKit(chave);
+  };
   $('#ktParcOk').onclick = () => { DB.settings.kitParceiros = kitParcLe($('#ktParcTx').value); save(); Kit.agendar(chave); toast('Descontos salvos'); admKit(chave); };
   /* abriu o kit: republica (se já tem o curto), para o link do cliente estar igual ao que ela vê */
   if (Kit.curto(chave)) kitPublica(chave, d);

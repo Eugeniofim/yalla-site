@@ -52,7 +52,8 @@ const rtP = (t) => esc(String(t || '').trim()).replace(/\n+/g, '<br>');
 
 function rtDocHtml(d) {
   const sv = (d.servicos || []).slice().sort((a, b) => ((a.data || '') + (a.hora || '')).localeCompare((b.data || '') + (b.hora || '')));
-  const neg = d.negocio || guiaNegocio(), base = (typeof baseNome === 'function' && baseNome()) || 'Dubai';
+  /* a cidade da capa e de "Sua base em…": a que ela escreveu no kit, senão a do hotel / ponto de encontro (05/11/2026) */
+  const neg = d.negocio || guiaNegocio(), base = String(d.base || '').trim() || (typeof kitBaseAuto === 'function' && kitBaseAuto(sv)) || (typeof baseNome === 'function' && baseNome()) || 'Dubai';
   const insta = d.insta ? '@' + String(d.insta).replace(/^@/, '') : '';
   const pes = Math.max(0, ...sv.map(s => +s.pessoas || 0));
   const linhaCli = [d.nome, pes ? pes + (pes > 1 ? ' pessoas' : ' pessoa') : ''].filter(Boolean).join(' | ');
@@ -101,7 +102,7 @@ function rtDocHtml(d) {
   };
   const servico = (s, varios) => {
     const t = s.tipo === 'transfer', k = t ? rtTipoTransfer(s) : '';
-    const mapa = typeof kitMapaDe === 'function' ? kitMapaDe(s) : '';
+    const mapa = typeof kitMapaDe === 'function' ? kitMapaDe(s, base) : '';
     const inclui = rtLista(s.inclui), levar = rtLista(s.levar), par = rtLista(s.paradas);
     /* a hora exata do encontro (09:00); o título usa o jeito dela (09h às 13h) */
     const encontro = [s.encontro ? `${t ? (k === 'saida' ? 'Saída' : 'Encontro') : 'Encontro'}: ${esc(s.encontro)}${s.hora ? ' às ' + esc(s.hora) : ''}.` : (s.hora ? `Às ${esc(s.hora)}.` : ''),
