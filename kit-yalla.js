@@ -442,7 +442,7 @@ async function admKit(chave) {
   const hotelAuto = kitHotel(bs) || String((c && c.viagem && c.viagem.hotel) || '').trim();
   app.innerHTML = `<div class="ktTela">
     <div class="doc-barra ktBarra"><a class="mini" href="${esc(voltar)}">← voltar</a>
-      <span class="ktAcs"><button class="mini" id="ktCopia">Copiar link</button><button class="mini" id="ktZap">${fone.length >= 8 ? 'Mandar no WhatsApp' : 'Mandar no WhatsApp (escolher contato)'}</button><button class="cta sm" id="ktPdf">Gerar PDF</button></span></div>
+      <span class="ktAcs"><button class="mini" id="ktCopia">Copiar link</button><button class="mini" id="ktZap">Mandar no WhatsApp</button><button class="cta sm" id="ktPdf">Gerar PDF</button></span></div>
     <p class="ktEstado" id="ktEstado">${kitEstadoTxt(chave)}</p>
     <section class="card ktEd ktOnde"><h3>Onde o cliente fica</h3>
       <p class="why">Sai no título do kit e em "Sua base em…". Em branco, o app descobre pelo hotel e pelo ponto de encontro: agora está <b>${esc(d.base || cidAuto)}</b>.</p>
@@ -464,7 +464,7 @@ async function admKit(chave) {
   const pega = async (b) => { b.disabled = true; try { const url = await Kit.link(chave); const e = $('#ktEstado'); if (e) e.textContent = kitEstadoTxt(chave); kitLiga(document.getElementById('ktPrint'), d, url); return url; } finally { b.disabled = false; } };
   $('#ktCopia').onclick = async (e) => { try { const url = await pega(e.target); try { await navigator.clipboard.writeText(url); toast('Link copiado'); } catch (x) { prompt('Copie o link:', url); } } catch (x) { toast(x.message); } };
   $('#ktZap').onclick = async (e) => { try { const url = await pega(e.target); const msg = await Kit.mensagem(chave, url);
-    window.open(fone.length >= 8 ? waLink(msg, fone) : 'https://wa.me/?text=' + encodeURIComponent(msg), '_blank', 'noopener'); } catch (x) { toast(x.message); } };
+    waParaQuem({ titulo: 'Mandar o kit no WhatsApp', msg, cliente: { nome: d.nome, whats: fone } }); } catch (x) { toast(x.message); } };
   $('#ktDicasOk').onclick = () => { DB.settings.kitDicas = $('#ktDicasTx').value.split('\n').map(x => x.trim()).filter(Boolean).slice(0, 14); save(); Kit.agendar(chave); toast('Dicas salvas'); admKit(chave); };
   $('#ktDicasPadrao').onclick = () => { delete DB.settings.kitDicas; save(); Kit.agendar(chave); toast('Dicas padrão de volta'); admKit(chave); };
   $('#ktOndeOk').onclick = () => {

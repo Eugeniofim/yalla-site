@@ -32,6 +32,9 @@
 const PP_POLITICA = 'Até 72 horas antes do cronograma: reembolso integral dos serviços, exceto valores de atividades terceirizadas (deserto, ingressos, iate, helicóptero e tour compartilhado). Até 48 horas: reembolso de 50%. Menos de 48 horas ou não comparecimento: sem reembolso. Taxas bancárias não são reembolsáveis. Política válida inclusive em caso de força maior, como fechamento de aeroportos, condições climáticas e restrições governamentais.';
 const PP_CONDICOES = 'Parcelamento em até 12x no cartão.\nHora extra de tour: USD 69, quando aplicável.';
 const PP_DIFERENCIAL = 'Experiência nos Emirados desde 2010. Empresa 100% licenciada nos Emirados. Guias brasileiros e parceiros devidamente licenciados. Roteiros planejados para conforto e otimização do tempo, com acompanhamento e suporte no seu idioma preferido.';
+/* a mensagem que vai com o link da proposta (13/11/2026, o texto dela: "preciso que seja essa resposta").
+   {nome} = o primeiro nome do cliente, {link} = o link da proposta, {negocio} = o nome do negócio. */
+const PP_MSG_WHATS = 'Olá, {nome}! Tudo bem?\n\nPreparei a sua proposta de experiências com a {negocio}: os passeios com fotos, o que está incluso e o investimento:\n{link}\n\n⚠️Lembrando que:\n\n✅ Empresa é licenciada nos Emirados\n✅ Guias, motoristas e parceiros são devidamente licenciados\n✅ Trabalhamos com Plano de pagamento bem flexível em até 12x no cartão! 🙌\n\nDá uma olhada e me diga se tiver alguma dúvida e/ou feedback, por gentileza?\n\nGratidão!🙏';
 const ppTextoPadrao = (k) => {
   const s = DB.settings || {};
   return k === 'politica' ? (s.propPolitica || PP_POLITICA) : k === 'condicoes' ? (s.propCondicoes || PP_CONDICOES) : (s.propDiferencial || PP_DIFERENCIAL);
@@ -819,8 +822,9 @@ function ppRepublica(o) {
   _ppRepub = setTimeout(() => { ppLink(Orc.get(o.id) || o).catch(() => {}); }, 2500);
 }
 function ppMensagem(o, url) {
-  const n = opPrimeiro(o.cliente.nome);
-  return `Olá${n ? ', ' + n : ''}! Tudo bem? 😊 Preparei a sua proposta de experiências${o.hotel ? '' : ''} com a ${guiaNegocio()}: o roteiro dia a dia, com fotos, o que está incluso e o investimento.\n${url}\n\nSe quiser ajustar alguma coisa, é só me falar aqui. ${guiaNome()}`;
+  const n = opPrimeiro(o.cliente.nome), t = String((DB.settings && DB.settings.propMsgWhats) || PP_MSG_WHATS);
+  const msg = t.replace(/\{negocio\}/g, guiaNegocio()).replace(/,?[ \t]*\{nome\}/g, n ? ', ' + n : '');
+  return /\{link\}/.test(msg) ? msg.replace(/\{link\}/g, url) : msg + '\n\n' + url;
 }
 
 /* ---------- a página do cliente: #/p/<código> e #/pp/<tudo dentro> ---------- */
@@ -860,10 +864,10 @@ async function ppAdm(id) {
       <a class="mini" href="#/adm/consulta/${esc(o.id)}">← editar</a>
       <button class="cta sm" id="ppPdf" type="button">Gerar PDF</button>
       <button class="mini" id="ppLk" type="button" disabled>Preparando o link…</button>
-      ${temWa ? `<a class="mini strong" id="ppWa" target="_blank" rel="noopener" aria-disabled="true">WhatsApp</a>` : ''}
+      <button type="button" class="mini strong" id="ppWa" disabled>WhatsApp</button>
       ${o.status === 'fechado' && (o.bookingIds || []).length && typeof Kit !== 'undefined' ? `<button class="mini" id="ppKit" type="button">Roteiro da viagem</button>` : ''}
     </div>
-    <p class="why pp-adwhy">É assim que o cliente vê. ${temWa ? '' : 'Sem o WhatsApp do cliente: copie o link e mande você.'}</p>
+    <p class="why pp-adwhy">É assim que o cliente vê. ${temWa ? '' : 'Sem o WhatsApp do cliente: no botão WhatsApp, mande para você e encaminhe.'}</p>
     ${(() => { const f = o.itens.filter(i => i.sugestao); return f.length ? `<p class="alert warn pp-adwhy">${f.length === 1 ? 'Ficou fora desta proposta' : `Ficaram fora desta proposta ${f.length} pedidos`} da conversa, ainda sem valor: ${esc(f.map(i => i.desc).join(', '))}. Volte em ← editar, ponha o valor (ou apague).</p>` : ''; })()}
     <main class="pp" id="ppDoc">${ppHtml(ppDados(o))}</main>
   </div>`;
@@ -878,7 +882,7 @@ async function ppAdm(id) {
   lk.disabled = false; lk.textContent = 'Copiar link';
   lk.onclick = () => opCopia(url).then(() => toast('Link da proposta copiado'));
   const wa = $('#ppWa');
-  if (wa) { wa.href = waLink(ppMensagem(o, url), opNum(o.cliente.whats)); wa.removeAttribute('aria-disabled'); wa.onclick = () => oyMarcaEnviado(o); }
+  if (wa) { wa.disabled = false; wa.onclick = () => waParaQuem({ titulo: 'Mandar a proposta no WhatsApp', msg: ppMensagem(o, url), cliente: o.cliente, aoCliente: () => oyMarcaEnviado(o) }); }
 }
 function oyMarcaEnviado(o) {
   if (['fechado', 'perdido', 'enviado'].includes(o.status)) return;
@@ -1083,6 +1087,7 @@ function oyTela(id) {
       <label class="fld">Linhas em destaque (uma por linha)<textarea id="oyCond" rows="2">${esc(o.condicoes != null ? o.condicoes : ppTextoPadrao('condicoes'))}</textarea></label>
       <label class="fld">O diferencial<textarea id="oyDif" rows="3">${esc(o.diferencial != null ? o.diferencial : ppTextoPadrao('diferencial'))}</textarea></label>
       <button type="button" class="mini" id="oyPadrao">usar estes textos em todas as propostas</button>
+      <label class="fld">Mensagem do WhatsApp <small class="why">(vai junto com o link; vale para todas as propostas. {nome} vira o primeiro nome do cliente e {link}, o link)</small><textarea id="oyMsgWa" rows="9">${esc((DB.settings && DB.settings.propMsgWhats) || PP_MSG_WHATS)}</textarea></label>
       ${o.conversa ? `<details class="oy-conv"><summary>A conversa original</summary><pre class="pdmsg">${esc(o.conversa)}</pre></details>` : ''}
       <div class="orc-links"><span class="op-lbl">Arquivo: ${esc(Orc.nomeArquivo(o))}</span>
         ${(o.links || []).map(l => `<a class="mini" target="_blank" rel="noopener" href="${esc(l.url)}">${esc(l.nome)}</a>`).join('')}
@@ -1330,6 +1335,7 @@ function oyLiga(o) {
   $('#oyHotAdd').onclick = () => { oyLe(o); o.hoteis = [...oyHoteis(o, true), { nome: '', de: '', ate: '', situacao: '' }]; Orc.salva(o); re(); };
   $$('[data-hrm]').forEach(b => b.onclick = () => { oyLe(o); o.hoteis = oyHoteis(o, true).filter((_, k) => k !== +b.dataset.hrm); o.hotel = (o.hoteis.find(h => String(h.nome || '').trim()) || {}).nome || ''; Orc.salva(o); re(); });
   const det = document.querySelector('.oy-mais'); if (det) det.ontoggle = () => { S.mais = det.open; };
+  $('#oyMsgWa').onchange = (e) => { const v = e.target.value.trim(); if (!v || v === PP_MSG_WHATS) delete DB.settings.propMsgWhats; else DB.settings.propMsgWhats = v; save(); toast('Mensagem do WhatsApp salva'); };
   $('#oyPadrao').onclick = () => { oyLe(o); DB.settings.propPolitica = o.politica; DB.settings.propCondicoes = o.condicoes; DB.settings.propDiferencial = o.diferencial; save(); Orc.salva(o); toast('Textos guardados para as próximas propostas'); };
   $('#orLkAdd').onclick = () => { oyLe(o); const r = Orc.linkAdd(o.id, $('#orLkNome').value, $('#orLkUrl').value); if (r && r.erro) return toast(r.erro); re(); };
   $('#oyApaga').onclick = () => { if (confirm('Apagar este orçamento?')) { Orc.remove(o.id); go('/adm/consulta'); } };

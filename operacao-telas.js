@@ -3257,6 +3257,26 @@ function podeAvisarPago(b) { return !!(b && DB.settings.avisarClientes && b.emai
 function avisoPagoHtml(email) {
   return `<label class="optin at-avisa"><input type="checkbox" id="atAvisa" checked><span><b>Mandar o voucher pago por e-mail</b><small>para ${esc(email)} · e-mail enviado não volta</small></span></label>`;
 }
+/* PARA QUEM VAI (13/11/2026, pedido: "ao clicar no WhatsApp, dar a opção de enviar para os dois números da Milla"):
+   o cliente, ou ela mesma no número do Brasil ou no de Dubai (para encaminhar do celular em que conversa com
+   o cliente). O texto é o mesmo nos três: pronto para o cliente. */
+function waNumerosDela() {
+  const g = (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.guia) || {};
+  return [[g.whatsNome || 'meu número', DB.settings.whats || g.whats || ''], [g.whats2Nome || '2º número', DB.settings.whats2 || g.whats2 || '']]
+    .filter(([, n]) => opNum(n).length >= 8).filter(([, n], k, l) => l.findIndex(x => opNum(x[1]) === opNum(n)) === k);
+}
+function waParaQuem({ titulo, msg, cliente, aoCliente }) {
+  const cli = cliente && opNum(cliente.whats).length >= 8 ? cliente : null;
+  const foneBonito = (n) => { const d = opNum(n); return /^971\d{9}$/.test(d) ? `+971 ${d.slice(3, 5)} ${d.slice(5, 8)} ${d.slice(8)}` : window.foneBonito ? window.foneBonito(n) : n; };
+  const linha = (rot, sub, href, extra) => `<a class="wa-quem" target="_blank" rel="noopener" href="${esc(href)}" ${extra || ''}><b>${rot}</b><small>${sub}</small></a>`;
+  const d = opJanela(titulo || 'Mandar no WhatsApp', `<div class="wa-lista">
+    ${cli ? linha('Para o cliente', `${esc(cliente.nome || '')} · ${esc(foneBonito(cliente.whats))}`, waLink(msg, opNum(cliente.whats)), 'data-wacli') : ''}
+    ${waNumerosDela().map(([nome, n]) => linha(`Para mim · ${esc(nome)}`, esc(foneBonito(n)) + ' · para encaminhar do celular', waLink(msg, opNum(n)))).join('')}
+    ${linha('Escolher o contato', 'abre o WhatsApp e você escolhe para quem mandar', 'https://wa.me/?text=' + encodeURIComponent(msg))}
+  </div>`);
+  d.querySelectorAll('.wa-quem').forEach(a => a.addEventListener('click', () => { if (a.hasAttribute('data-wacli') && aoCliente) aoCliente(); setTimeout(() => d.close(), 150); }));
+  return d;
+}
 const ATALHO = {
   orc() {
     const d = opJanela('＋ Novo orçamento', `<p class="why">Cole a conversa do WhatsApp (ou Instagram, e-mail). O app monta o rascunho com os preços da sua tabela; você confere e manda.</p>

@@ -1069,4 +1069,11 @@ small.oy-itja{display:inline-block;margin:2px 8px 4px}
 .crm-agora small .crm-chega{margin:0;padding:1px 7px;font-size:11px}
 /* o aviso "nenhum com esse filtro" só com a lista vazia (.why mostrava mesmo escondido) e o "limpar" da busca na mesma linha */
 .tf-nada[hidden]{display:none}
+/* para quem vai o WhatsApp */
+.wa-lista{display:flex;flex-direction:column;gap:8px}
+.wa-quem{display:flex;flex-direction:column;gap:2px;padding:14px 16px;border-radius:var(--r);border:1.5px solid var(--line);background:var(--surface);color:var(--ink);text-decoration:none}
+.wa-quem:hover,.wa-quem:focus-visible{border-color:var(--accent);background:var(--accent-wash)}
+.wa-quem b{font-size:16px}
+.wa-quem small{color:var(--ink-3);font-size:13px}
+.wa-quem[data-wacli]{border-color:var(--accent)}
 .crm-achou .linkbtn{display:inline;margin:0 0 0 6px;padding:0;font-size:inherit;color:var(--accent);text-decoration:underline}

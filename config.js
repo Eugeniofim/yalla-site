@@ -50,6 +50,8 @@ var APP_CONFIG = {
     negocio: 'Yalla Experiences',
     cidade: 'Dubai, Emirados Árabes Unidos',
     whats: '+5511951971111',
+    /* o 2º número dela (13/11/2026): o WhatsApp da proposta e do kit deixa escolher para qual mandar */
+    whatsNome: 'Brasil', whats2: '+971556826677', whats2Nome: 'Dubai',
     insta: 'yalla_experiences',
     email: 'info@yallaexperiences.com',   /* o e-mail profissional dela (GoDaddy), no rodapé do site */
     /* o selo dela, do brand kit oficial: a coroa dourada para fundo escuro

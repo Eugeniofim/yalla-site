@@ -3543,6 +3543,7 @@ function admSettings() {
       <p class="why">${t('contactHelp')}</p>
       <div class="frow">
         <label class="fld">${t('yourWhats')}<input id="setWhats" value="${esc(DB.settings.whats)}" placeholder="+33 6 12 34 56 78"></label>
+        <label class="fld">2º WhatsApp <small class="why">(aparece no botão WhatsApp da proposta e do kit)</small><input id="setWhats2" value="${esc(DB.settings.whats2 || (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.guia && APP_CONFIG.guia.whats2) || '')}" placeholder="+971 55 000 0000"></label>
         <label class="fld">${t('yourInsta')}<input id="setInsta" value="${esc(DB.settings.insta)}" placeholder="seu.instagram"></label>
         <button class="cta sm" id="setContactSave">${t('saveBtn')}</button>
       </div>
@@ -3693,6 +3694,7 @@ function admSettings() {
   if (dr) dr.onclick = () => { restoreDemo(); cloudPushState(); toast(t('demoRestored')); admSettings(); };
   $('#setContactSave').onclick = () => {
     DB.settings.whats = $('#setWhats').value.trim();
+    if ($('#setWhats2')) DB.settings.whats2 = $('#setWhats2').value.trim();
     DB.settings.insta = $('#setInsta').value.trim().replace(/^@/, '');
     DB.settings.placeholderContact = false; save();
     toast(t('contactSaved')); admSettings();
