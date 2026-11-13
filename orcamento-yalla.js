@@ -319,6 +319,16 @@ function oyRapidos() {
   const deEla = Object.values(n).filter(x => x.c >= 2).sort((a, b) => b.c - a.c).map(x => x.f);
   return [...OY_RAP_FIXO, ...deEla].filter((f, k, l) => l.findIndex(y => y.toLowerCase() === f.toLowerCase()) === k).slice(0, 6);
 }
+/* DESTAQUE DE UM TOQUE (13/11/2026, pedido: "no balão Destaque ponha manhã livre, igual ao Não incluso, com opções
+   embaixo para selecionar"). Um destaque só: tocar escolhe, tocar de novo tira. Além destes, os que ela mais
+   escreveu (2+ vezes). */
+const OY_DEST_FIXO = ['Manhã livre', 'Tarde livre', 'Noite livre', 'Dia livre'];
+function oyDestaques() {
+  const n = {};
+  for (const o of DB.orcamentos || []) for (const i of o.itens || []) { const f = String(i.rotulo || '').trim(); if (f && f.length <= 30) { const k = f.toLowerCase(); n[k] = n[k] || { f, c: 0 }; n[k].c++; } }
+  const deEla = Object.values(n).filter(x => x.c >= 2).sort((a, b) => b.c - a.c).map(x => x.f);
+  return [...OY_DEST_FIXO, ...deEla].filter((f, k, l) => l.findIndex(y => y.toLowerCase() === f.toLowerCase()) === k).slice(0, 7);
+}
 /* "USD 1.050 por adulto · USD 525 por criança" (sem criança: "USD 1.050 por pessoa") */
 function oyPorTipoTexto(o, curto) {
   const t = oyPorTipo(o), m = oyMoeda(o);
@@ -932,7 +942,9 @@ function oyTela(id) {
         ${x.priceMode === 'hora' ? `<p class="why oy-pcri">Por hora: ${esc(oyM(+x.price || 0, m))} a hora${+x.minHoras > 1 ? ', mínimo ' + x.minHoras + ' horas' : ''}. O valor refaz ao mudar as horas.</p>` : ''}
         <p class="why oy-pcri">${pc > 0 ? `Criança${idade ? ' até ' + idade + ' anos' : ''} paga ${esc(oyM(pc, m))}.` : 'Este passeio não tem preço de criança: criança paga como adulto.'} O valor refaz sozinho ao mudar a opção ou as pessoas.</p>`; })() : ''}
         <div class="oy-g3">
-          ${i.tipo === 'traslado' ? `<label class="fld">Voo<input data-k="voo" value="${esc(i.voo)}" placeholder="EK323"></label>` : `<label class="fld">Destaque<input data-k="rotulo" value="${esc(i.rotulo)}" placeholder="manhã livre"></label>`}
+          ${i.tipo === 'traslado' ? `<label class="fld">Voo<input data-k="voo" value="${esc(i.voo)}" placeholder="EK323"></label>` : `<div class="oy-dest"><label class="fld">Destaque<input data-k="rotulo" value="${esc(i.rotulo)}" placeholder="manhã livre"></label>
+            <div class="oy-rap" role="group" aria-label="Destaque de um toque">${oyDestaques().map(t => { const on = String(i.rotulo || '').trim().toLowerCase() === t.toLowerCase();
+              return `<button type="button" class="chip ${on ? 'on' : ''}" data-dest="${esc(t)}" aria-pressed="${on}">${esc(t)}</button>`; }).join('')}</div></div>`}
           ${x ? '' : `<label class="fld">Pessoas<input type="number" min="1" inputmode="numeric" data-k="pax" value="${i.pax}"></label>`}
           ${so ? `<label class="fld oy-custo2" title="o que você paga a quem faz o serviço — nunca vai para o cliente">Custo (só você vê)<input type="number" min="0" inputmode="decimal" data-k="custo" value="${i.custo || ''}" placeholder="0"></label>`
             : `<label class="fld">Valor ${esc(m)}<input type="number" min="0" inputmode="decimal" data-k="valor" value="${i.valor || ''}" placeholder="0"></label>`}
@@ -1037,12 +1049,11 @@ function oyTela(id) {
 
     <section class="card oy-card">
       <div class="oy-hrow"><h2 class="oy-h">Roteiro</h2><span class="oy-sub">${o.itens.length ? `${o.itens.length} ${o.itens.length === 1 ? 'serviço' : 'serviços'}${nDias ? ' · ' + nDias + (nDias === 1 ? ' dia' : ' dias') : ''}` : ''}</span></div>
-      ${!o.itens.length ? '<p class="why">Nenhum serviço ainda. Comece pelo passeio, pelo traslado de chegada ou por uma linha em branco.</p>'
+      ${!o.itens.length ? '<p class="why">Nenhum serviço ainda. Comece pelo passeio, pelo transfer ou por uma linha em branco.</p>'
         : largo ? planilha() : grupos.map(g => `<div class="oy-dia"><h3 class="oy-diah"><span>${esc(oyDiaCurto(g.d))}</span>${g.d ? `<button type="button" class="oy-band-add" data-adddia="${esc(g.d)}" aria-label="Acrescentar passeio em ${esc(oyDiaCurto(g.d))}">+ neste dia</button>` : ''}</h3>${g.l.map(linhaItem).join('')}</div>`).join('')}
       <div class="oy-add" role="group" aria-label="Acrescentar ao roteiro">
         <button type="button" class="oy-addb oy-addf" id="oyAddP">${oyIc('mais')}<span>Passeio</span></button>
-        <button type="button" class="oy-addb" data-tr="chegada">${oyIc('aviao')}<span>Traslado chegada</span></button>
-        <button type="button" class="oy-addb" data-tr="partida">${oyIc('aviao')}<span>Traslado saída</span></button>
+        <button type="button" class="oy-addb oy-addf" id="oyAddT">${oyIc('aviao')}<span>Transfer</span></button>
         <button type="button" class="oy-addb" id="oyAddL">${oyIc('livre')}<span>${largo ? 'Linha em branco' : 'Item livre'}</span></button>
       </div>
     </section>
@@ -1272,6 +1283,13 @@ function oyLiga(o) {
     if (k === 'adultos' && !o.adultos && !o.criancas) o.adultos = 1;
     oyMudaPax(o, antes); Orc.salva(o); ppRepublica(o); re();
   });
+  $$('[data-dest]').forEach(b => b.onclick = () => {
+    const box = b.closest('[data-it]'), inp = box && box.querySelector('[data-k="rotulo"]'); if (!inp) return;
+    const tem = inp.value.trim().toLowerCase() === b.dataset.dest.toLowerCase();
+    inp.value = tem ? '' : b.dataset.dest;
+    box.querySelectorAll('[data-dest]').forEach(c => { const on = !tem && c === b; c.classList.toggle('on', on); c.setAttribute('aria-pressed', String(on)); });
+    oySalva(o, false);
+  });
   $$('[data-rap]').forEach(b => b.onclick = () => {
     const box = b.closest('[data-it]'), ta = box && box.querySelector('[data-k="naoIncluso"]'); if (!ta) return;
     const l = oyFrases(ta.value), f = b.dataset.rap, tem = l.some(x => x.toLowerCase() === f.toLowerCase());
@@ -1303,13 +1321,9 @@ function oyLiga(o) {
     if (x) { i.valor = oyPrecoItem(x, i).total || (n && n.valor) || 0; if (n) i.sinal = n.sinal; i.auto = true; }
     Orc.salva(o); re();
   });
-  $$('[data-tr]').forEach(b => b.onclick = () => {
-    oyLe(o); const qual = b.dataset.tr, p = o[qual] || {};
-    if (!p.data) { toast(`Coloque o dia da ${qual === 'chegada' ? 'chegada' : 'partida'} primeiro`); const e = document.querySelector(`[data-v="${qual}.data"]`); if (e) e.focus(); return; }
-    const n = oyTraslado(o, qual === 'chegada' ? 'chegada' : 'saida'); o.itens.push(n); S.aberto = n.id; Orc.salva(o); re();
-  });
   $('#oyAddL').onclick = () => { oyLe(o); const ult = oyOrdena(o.itens.filter(i => i.data)).pop(); const n = Orc._item({ tipo: 'livre', desc: '', pax: oyPax(o) || 2, data: S.ultimoDia || (ult && ult.data) || oyProximoDia(o) }); o.itens.push(n); S.aberto = matchMedia('(min-width: 761px)').matches ? '' : n.id; Orc.salva(o); re(); setTimeout(() => { const e = document.querySelector(`[data-it="${n.id}"] [data-k="desc"]`); if (e) e.focus(); }, 60); };
   $('#oyAddP').onclick = () => { oyLe(o); Orc.salva(o); oyCatalogo(o); };
+  $('#oyAddT').onclick = () => { oyLe(o); Orc.salva(o); oyTransfer(o); };
   $$('[data-adddia]').forEach(b => b.onclick = () => { oyLe(o); Orc.salva(o); S.ultimoDia = b.dataset.adddia; oyCatalogo(o, b.dataset.adddia); });
   /* SALVAR (28/10/2026, "onde está o botão de salvar?"): o app já salva sozinho; o botão confirma */
   $('#oySalvar').onclick = () => { oySalva(o, S.pendente ? true : false); oyLigaCliente(o); toast('Orçamento salvo ✓'); };
@@ -1358,7 +1372,7 @@ function oyCatalogo(o, diaFixo) {
   const pinta = () => {
     const q = _nomeN(C.q);
     const ja = new Set(o.itens.map(i => i.tourId).filter(Boolean));
-    const l = Tours.all().filter(x => x.status !== 'draft' || ja.has(x.id))
+    const l = Tours.all().filter(x => x.status !== 'draft' || ja.has(x.id)).filter(x => !oyEhTrf(x))
       .filter(x => !C.r || x.region === C.r)
       .filter(x => !q || _nomeN(x.name.pt + ' ' + oyPt(x.tagline) + ' ' + (x.region || '')).includes(q));
     const pax = oyPax(o) || 2, cri = Math.min(pax, +o.criancas || 0);
@@ -1397,6 +1411,77 @@ function oyCatalogo(o, diaFixo) {
   if (diaOn && fila) fila.scrollLeft += diaOn.getBoundingClientRect().left - fila.getBoundingClientRect().left - (fila.clientWidth - diaOn.offsetWidth) / 2;
   const di = d.querySelector('#oyCDia'); if (di) di.onchange = () => { C.dia = di.value; S0.ultimoDia = C.dia; };
   d.querySelector('#oyCOk').onclick = () => d.close();
+  d.addEventListener('close', () => { if (location.hash.includes(o.id)) { const y = scrollY; oyTela(o.id); scrollTo(0, y); } });
+}
+
+/* TRANSFER (13/11/2026, a Milla: "tirar Traslado chegada e Traslado saída e fazer um TRANSFER, igual ao Passeio,
+   onde ela só acrescenta algo já cadastrado"). Puxa da aba Catálogo → Transfers; escolhendo Chegada ou Saída, o
+   dia, a hora e o voo vêm dos campos de chegada e partida do orçamento (a saída sai 4 h antes do voo, como antes).
+   Os rascunhos entram (transfer não precisa estar no site para ser cotado); "(exemplo)" não. */
+const oyEhTrf = (x) => !!x && (x.type === 'transfer' || x.priceMode === 'transfer');
+function oyTransfer(o) {
+  const m = oyMoeda(o), temCh = !!(o.chegada && o.chegada.data), temSa = !!(o.partida && o.partida.data);
+  const jaCh = o.itens.some(i => i.tipo === 'traslado' && (i.rotulo === 'Chegada' || /Aeroporto\s*→\s*Hotel/i.test(i.desc || '')));
+  const dias = oyDiasDaViagem(o);
+  const C = oyTransfer._s = { dir: temCh && !jaCh ? 'chegada' : temSa ? 'saida' : 'outro', dia: (oyTela._s || {}).ultimoDia || oyProximoDia(o), q: '', n: 0 };
+  const quando = (k) => { const v = k === 'chegada' ? o.chegada : o.partida; return v && v.data ? oyDiaCurto(v.data) + (v.hora ? ' · voo ' + oyHm(v.hora) : '') : 'falta o dia'; };
+  const d = opJanela('Acrescentar transfer', `
+    <div class="oy-tdir" role="radiogroup" aria-label="Que transfer">${[['chegada', 'Chegada', temCh], ['saida', 'Saída', temSa], ['outro', 'Outro dia', true]].map(([k, n, ok]) =>
+      `<button type="button" class="oy-tdb" role="radio" data-tdir="${k}" ${ok ? '' : 'disabled'}><b>${n}</b><small>${k === 'outro' ? 'entre hotéis, à disposição…' : esc(quando(k))}</small></button>`).join('')}</div>
+    <div id="oyTDias"></div>
+    <label class="oy-busca">${oyIc('busca')}<span class="sr">Buscar transfer</span><input type="search" id="oyTQ" placeholder="Buscar: aeroporto, Abu Dhabi, van…" autocomplete="off"></label>
+    <div class="oy-clista" id="oyTL"></div>
+    <div class="btnrow oy-cpe"><span class="why" id="oyTN" aria-live="polite"></span><button type="button" class="cta sm" id="oyTOk">Pronto</button></div>
+    <div class="oy-tsem"><span class="why">Sem cadastro, com o valor à mão:</span><button type="button" class="mini ghost" data-tsem="chegada">Traslado de chegada</button><button type="button" class="mini ghost" data-tsem="saida">Traslado de saída</button><a class="mini" href="#/adm/transfers">Cadastrar transfers</a></div>`);
+  d.classList.add('oy-cdlg');
+  const pax = oyPax(o) || 2;
+  const pintaDir = () => {
+    d.querySelectorAll('[data-tdir]').forEach(b => { const on = b.dataset.tdir === C.dir; b.classList.toggle('on', on); b.setAttribute('aria-checked', on); });
+    d.querySelector('#oyTDias').innerHTML = C.dir !== 'outro' ? '' : dias.length
+      ? `<span class="op-lbl">Para o dia</span><div class="chips">${dias.map(x => `<button type="button" class="chip ${x === C.dia ? 'on' : ''}" data-tdia="${x}">${esc(oyDiaCurto(x))}</button>`).join('')}</div>`
+      : `<label class="fld">Para o dia<input type="date" id="oyTDia" value="${esc(C.dia)}"></label>`;
+    d.querySelectorAll('[data-tdia]').forEach(b => b.onclick = () => { C.dia = b.dataset.tdia; pintaDir(); });
+    const di = d.querySelector('#oyTDia'); if (di) di.onchange = () => { C.dia = di.value; };
+  };
+  const poe = (id) => {
+    const x = Tours.get(id); if (!x) return;
+    const dir = C.dir, ch = o.chegada || {}, sa = o.partida || {};
+    const hVoo = (v) => oyHm(v.hora) || v.hora || '';
+    const data = dir === 'chegada' ? ch.data : dir === 'saida' ? sa.data : C.dia || '';
+    const hora = dir === 'chegada' ? hVoo(ch) : dir === 'saida' ? (hVoo(sa) ? oySoma(hVoo(sa), -240) : '') : '';
+    const n = oyDoCatalogo(o, id, { data, hora }); if (!n) return;
+    const hotel = o.hotel || (oyHoteis(o)[0] || {}).nome || 'o hotel', voo = dir === 'chegada' ? ch.voo || '' : dir === 'saida' ? sa.voo || '' : '';
+    const frase = dir === 'chegada' ? `Chegada prevista${hVoo(ch) ? ' às ' + hVoo(ch) : ''}${voo ? ' (voo ' + voo + ')' : ''}. Recepção e traslado ao ${hotel}.`
+      : dir === 'saida' ? `Saída do hotel${hora ? ' às ' + hora : ''} para o voo${hVoo(sa) ? ' das ' + hVoo(sa) : ''}${voo ? ' (' + voo + ')' : ''}.` : '';
+    Object.assign(n, { tipo: 'traslado', voo, rotulo: dir === 'chegada' ? 'Chegada' : dir === 'saida' ? 'Saída' : n.rotulo || '', texto: [frase, n.texto].filter(Boolean).join('\n\n') });
+    if (hora) n.hora = hora;
+    o.itens.push(n); Orc.salva(o); ppRepublica(o); C.n++;
+    d.querySelector('#oyTN').textContent = `${C.n} acrescentado${C.n > 1 ? 's' : ''} · ${n.desc}${data ? ' em ' + opCurta(data) : ''}`;
+    /* chegada feita: a próxima costuma ser a saída */
+    if (dir === 'chegada' && temSa) { C.dir = 'saida'; pintaDir(); }
+  };
+  const pinta = () => {
+    const q = _nomeN(C.q);
+    const l = Tours.all().filter(oyEhTrf).filter(x => !/\(exemplo\)/i.test(x.name.pt || ''))
+      .filter(x => !q || _nomeN(x.name.pt + ' ' + oyPt(x.tagline) + ' ' + (x.region || '')).includes(q));
+    d.querySelector('#oyTL').innerHTML = l.length ? l.map(x => {
+      const f = oyFotosDe(x)[0], v = oyPrecoItem(x, { pax }).total || 0, li = typeof transferLinha === 'function' && x.priceMode === 'transfer' ? transferLinha(x, pax, 0) : null;
+      return `<button type="button" class="oy-cit" data-tadd="${esc(x.id)}"><span class="oy-cft" ${f ? `style="background-image:url('${esc(f)}')"` : ''} aria-hidden="true"></span>
+        <span class="oy-cnm"><b>${esc(x.name.pt)}</b><small>${v ? esc(oyM(v, m)) + ' · ' + pax + (pax === 1 ? ' pessoa' : ' pessoas') : 'sob consulta'}${li && li.veiculo ? ' · ' + esc(li.veiculo) : ''}${x.status === 'draft' ? ' · não está no site' : ''}</small></span>
+        <span class="oy-cmais">${oyIc('mais')}</span></button>`;
+    }).join('') : `<p class="why">${Tours.all().some(oyEhTrf) ? 'Nada com esse nome.' : 'Nenhum transfer cadastrado ainda. Cadastre em <a href="#/adm/transfers">Catálogo → Transfers</a> (uma vez) e ele aparece aqui.'}</p>`;
+    d.querySelectorAll('[data-tadd]').forEach(b => b.onclick = () => poe(b.dataset.tadd));
+  };
+  d.querySelectorAll('[data-tdir]').forEach(b => b.onclick = () => { if (b.disabled) return; C.dir = b.dataset.tdir; pintaDir(); });
+  d.querySelectorAll('[data-tsem]').forEach(b => b.onclick = () => {
+    const qual = b.dataset.tsem, p = (qual === 'chegada' ? o.chegada : o.partida) || {};
+    if (!p.data) return toast(`Coloque o dia da ${qual === 'chegada' ? 'chegada' : 'partida'} primeiro`);
+    const n = oyTraslado(o, qual); o.itens.push(n); Orc.salva(o); ppRepublica(o); C.n++;
+    d.querySelector('#oyTN').textContent = `${C.n} acrescentado${C.n > 1 ? 's' : ''} · ${n.desc}`;
+  });
+  pintaDir(); pinta();
+  d.querySelector('#oyTQ').oninput = (e) => { C.q = e.target.value; pinta(); };
+  d.querySelector('#oyTOk').onclick = () => d.close();
   d.addEventListener('close', () => { if (location.hash.includes(o.id)) { const y = scrollY; oyTela(o.id); scrollTo(0, y); } });
 }
 
@@ -1510,7 +1595,14 @@ function oyCss() {
   .oy-ft:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   .oy-itacs{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px}
   .oy-custo{flex:1;min-width:140px;margin:0}
-  .oy-add{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:12px}
+  .oy-add{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:12px}
+  .oy-tdir{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+  .oy-tdb{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:10px 12px;border-radius:var(--r-md,12px);border:1.5px solid var(--line);background:var(--surface);color:var(--ink);text-align:left;cursor:pointer;min-height:56px}
+  .oy-tdb small{font-size:12px;color:var(--ink-3)}
+  .oy-tdb.on{border-color:var(--accent);background:var(--accent-wash);box-shadow:inset 0 0 0 1px var(--accent)}
+  .oy-tdb:disabled{opacity:.45;cursor:not-allowed}
+  .oy-tsem{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+  .oy-tsem .why{font-size:13px;margin-right:2px}
   .oy-addb{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;min-height:64px;padding:8px 4px;border-radius:var(--r-md,12px);border:1px dashed var(--line-2);background:var(--surface-2);color:var(--ink);font:inherit;font-size:12.5px;font-weight:var(--t-strong);text-align:center;line-height:1.15;cursor:pointer}
   .oy-addb svg{width:20px;height:20px}
   .oy-addb:hover{border-color:var(--accent-line);background:var(--accent-wash)}
@@ -1531,6 +1623,8 @@ function oyCss() {
   .oy-cfoto{display:block;width:96px;height:64px;margin:6px 0 2px;border:0;border-radius:8px;background-size:cover;background-position:center;background-color:var(--surface-2);cursor:pointer}
   .oy-itf{float:left;width:40px;height:40px;margin-right:10px;border-radius:8px;background-size:cover;background-position:center}
   .oy-rap .chip{min-height:36px}
+  .oy-dest .fld{margin-bottom:8px}
+  .oy-dest .oy-rap{margin:0 0 4px}
   .oy-pag .chips{display:flex;flex-wrap:wrap;gap:6px}
   .oy-pagv{display:flex;align-items:center;gap:10px;background:var(--surface-2);border-radius:var(--r-md,12px);padding:8px 12px}
   .oy-pagv span{color:var(--ink-3);font-size:13px}.oy-pagv b{margin-left:auto;font-variant-numeric:tabular-nums}

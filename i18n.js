@@ -214,7 +214,7 @@ const STR = {
   edTrf:       { pt: 'Tabela do transfer', en: 'Transfer price table' },
   edTrfWhy:    { pt: 'Como na sua tabela: quantas pessoas, o veículo, quantas malas cabem, o valor de dia, o noturno (21h às 5h59) e o sinal. Duas linhas com o mesmo número de pessoas viram as duas opções que o cliente escolhe.',
                  en: 'As in your table: people, vehicle, luggage, day price, night price (21:00–5:59) and deposit. Two rows with the same number of people become the two options the guest chooses from.' },
-  edTrfPax:    { pt: 'Pessoas', en: 'People' },
+  edTrfPax:    { pt: 'Até (pessoas)', en: 'Up to (people)' },
   edTrfVeic:   { pt: 'Veículo', en: 'Vehicle' },
   edTrfMalas:  { pt: 'Malas', en: 'Luggage' },
   edTrfSinal:  { pt: 'Sinal', en: 'Deposit' },

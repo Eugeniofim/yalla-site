@@ -127,7 +127,14 @@ function transferPax(pax) { return Math.max(2, Math.min(20, +pax || 1)); }
 function transferOpcoes(x, pax) {
   const ls = (x.transfer && Array.isArray(x.transfer.linhas)) ? x.transfer.linhas : [];
   const n = transferPax(pax);
-  return ls.filter(l => +l.pax === n);
+  const exatas = ls.filter(l => +l.pax === n);
+  if (exatas.length) return exatas;
+  /* 13/11/2026: a tabela da Milla é por carro (até 2, até 4, até 6 pessoas). Sem a linha exata, vale o menor
+     carro que cabe o grupo: 3 pessoas pegam a linha de 4. Antes saía "sob consulta". */
+  const cabem = ls.filter(l => +l.pax >= n);
+  if (!cabem.length) return [];
+  const menor = Math.min(...cabem.map(l => +l.pax));
+  return cabem.filter(l => +l.pax === menor);
 }
 
 function transferLinha(x, pax, opcao) {

@@ -1957,6 +1957,25 @@ function etapaDaReserva(b, hoje) {
   if (b.date >= hoje) return 'confirmado';
   return b.avaliacaoEm ? 'finalizado' : 'avaliar';
 }
+/* a data de chegada de um pedido: a chegada do orçamento; sem ela, o 1º dia com serviço; sem ele, as datas que vieram
+   da conversa; sem nada disso, a data da reserva (13/11/2026: a lista de orçamentos fica nessa ordem) */
+function crmChegada(linhas) {
+  const ds = [];
+  for (const r of linhas || []) {
+    const o = r && r.o;
+    if (o) { if (o.chegada && o.chegada.data) return o.chegada.data; (o.itens || []).forEach(i => { if (i.data) ds.push(i.data); }); (o.datas || []).forEach(x => { if (x) ds.push(x); }); }
+    if (r && r.dataServ) ds.push(r.dataServ);
+  }
+  return ds.filter(x => /^\d{4}-\d{2}-\d{2}$/.test(x)).sort()[0] || '';
+}
+/* as próximas chegadas primeiro (a mais perto no topo), depois quem está sem data, e no fim as que já passaram
+   (a mais recente primeiro); no mesmo dia, pelo nome */
+function crmOrdemChegada(a, b, hoje, n) {
+  const g = (d) => !d ? 1 : d >= hoje ? 0 : 2, ga = g(a.chega), gb = g(b.chega);
+  if (ga !== gb) return ga - gb;
+  const d = ga === 2 ? String(b.chega).localeCompare(String(a.chega)) : String(a.chega || '').localeCompare(String(b.chega || ''));
+  return d || n((a.r && a.r.nome) || a.nome).localeCompare(n((b.r && b.r.nome) || b.nome));
+}
 function crmLinhas(hoje) {
   hoje = hoje || isoToday();
   const out = [];
@@ -2407,6 +2426,7 @@ if (typeof STR !== 'undefined') {
     hubAvalSub: { pt: 'O que dizem os clientes', en: 'What our guests say' },
   admPlanilha: { pt: 'Planilha', en: 'Sheet' },
   admTransfer: { pt: 'Transfer', en: 'Transfers' },
+  admTransfers: { pt: 'Transfers do catálogo', en: 'Catalog transfers' },
     admTarefas:  { pt: 'Tarefas', en: 'Tasks' },
     admClients:  { pt: 'Clientes', en: 'Clients' },
     admCoupons:  { pt: 'Indicações e cupons', en: 'Referrals & coupons' },

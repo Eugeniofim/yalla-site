@@ -2209,14 +2209,14 @@ const ADM_MENU = [
   { id: 'clientes', nome: 'Clientes', subs: [['clients', 'Clientes']] },
   /* o atendimento automático (WhatsApp e Instagram): só no app de quem contratou */
   ...((typeof APP_CONFIG !== 'undefined' && APP_CONFIG.atendimento) ? [{ id: 'atend', nome: 'Conversas', subs: [['inbox', 'Atendimento']] }] : []),
-  { id: 'catalogo', nome: 'Catálogo', subs: [['tours', 'Passeios'], ['precos', 'Preços'], ['guias', 'Guias e motoristas'], ['parceiros', 'Fornecedores']] },
+  { id: 'catalogo', nome: 'Catálogo', subs: [['tours', 'Passeios'], ['transfers', 'Transfers'], ['precos', 'Preços'], ['guias', 'Guias e motoristas'], ['parceiros', 'Fornecedores']] },
   { id: 'dinheiro', nome: 'Dinheiro', subs: [['money', 'Contabilidade'], ['reports', 'Dashboard'], ['coupons', 'Indicações']] },
   { id: 'ajustes',  nome: 'Ajustes',  subs: [['settings', 'Ajustes'], ['look', 'Aparência'], ['voucher', 'Voucher']] },
 ];
 const admMenuDe = (tab) => ADM_MENU.find(g => g.subs.some(([id]) => id === tab)) || null;
 /* a lista de sempre (o assistente e as outras telas usam): [rota, chave do nome] */
 const ADM_NOMES = { today: 'admToday', agenda: 'admAgenda', tarefas: 'admTarefas', consulta: 'admConsulta', pipeline: 'admPipeline', planilha: 'admPlanilha', bookings: 'admBookings', transfer: 'admTransfer',
-  clients: 'admClients', inbox: 'admInbox', tours: 'admTours', precos: 'admPrecos', guias: 'admGuias', parceiros: 'admParceiros', money: 'admMoney', reports: 'admReports', coupons: 'admCoupons',
+  clients: 'admClients', inbox: 'admInbox', tours: 'admTours', transfers: 'admTransfers', precos: 'admPrecos', guias: 'admGuias', parceiros: 'admParceiros', money: 'admMoney', reports: 'admReports', coupons: 'admCoupons',
   settings: 'admSettings', look: 'temaTit', voucher: 'admVoucher' };
 const ADM_TABS = [...ADM_MENU.flatMap(g => g.subs.map(([id]) => [id, ADM_NOMES[id] || id])), ['tarefas', 'admTarefas']];
 /* a barrinha das partes de cada item (no topo da tela) */
@@ -2321,6 +2321,7 @@ function viewAdm(tab, arg) {
   else if (tab === 'clients' && arg) admFicha(arg);
   else if (tab === 'tours' && arg) admTourEdit(arg);
   else if (tab === 'tours')    admTours();
+  else if (tab === 'transfers') admTours('transfer');
   else if (tab === 'bookings') admBookings();
   else if (tab === 'money')    admMoney();
   else if (tab === 'agenda')   admAgenda();
@@ -2351,13 +2352,18 @@ const STATUS_PILL = { live: ['ok', 'live'], draft: ['n', 'draft'], seasonal: ['w
    catálogo"): com 49 passeios a lista virou rolagem. Busca por nome (sem acento), situação, onde e tipo;
    filtra na hora, sem redesenhar (o cursor fica na busca), e lembra o filtro ao duplicar/pausar. */
 const _tfN = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-function admTours() {
-  const tours = Tours.all(), F = admTours._f = admTours._f || { q: '', st: '', reg: '', tipo: '' };
+/* um transfer mora no mesmo cadastro dos passeios (vai para orçamento, reserva, voucher e kit do mesmo jeito),
+   mas tem a aba dele no Catálogo (13/11/2026, a Milla: "aba Transfer do lado de Passeios, para gerar o banco de transfer") */
+const ehTransferX = (x) => !!x && (x.type === 'transfer' || x.priceMode === 'transfer');
+function admTours(modo) {
+  const trf = modo === 'transfer', volta = () => admTours(modo);
+  const tours = Tours.all().filter(x => trf ? ehTransferX(x) : !ehTransferX(x)), F = trf ? (admTours._ft = admTours._ft || { q: '', st: '', reg: '', tipo: '' }) : (admTours._f = admTours._f || { q: '', st: '', reg: '', tipo: '' });
   const regs = [...new Set(tours.map(x => x.region).filter(Boolean))], tipos = [...new Set(tours.map(x => x.type).filter(Boolean))];
   const opt = (v, n, cur) => `<option value="${esc(v)}" ${cur === v ? 'selected' : ''}>${esc(n)}</option>`;
-  admShell('tours', `
-    <div class="pagehead"><h1 class="pageh">${t('admTours')}</h1>
-      <button class="cta sm" id="newTour">${t('newTour')}</button></div>
+  admShell(trf ? 'transfers' : 'tours', `
+    <div class="pagehead"><h1 class="pageh">${trf ? 'Transfers' : t('admTours')}</h1>
+      <button class="cta sm" id="newTour">${trf ? '+ Novo transfer' : t('newTour')}</button></div>
+    ${trf ? '<p class="why">Cada trajeto uma vez (ex.: Aeroporto DXB → hotel em Dubai), com o preço por carro conforme o número de pessoas. No orçamento, o botão <b>Transfer</b> puxa daqui, igual ao Passeio.</p>' : ''}
     ${tours.length > 5 ? `<div class="tfiltro" role="search">
       <label class="fld tf-q"><span class="sr">Buscar passeio</span><input id="tfQ" type="search" value="${esc(F.q)}" placeholder="Buscar: deserto, Burj, Abu Dhabi…" autocomplete="off" aria-label="Buscar passeio"></label>
       <label class="fld"><span class="sr">Situação</span><select id="tfSt" aria-label="Situação">${opt('', 'Todos', F.st)}${opt('live', 'No ar', F.st)}${opt('draft', 'Rascunho', F.st)}</select></label>
@@ -2370,7 +2376,7 @@ function admTours() {
       return `<div class="trow trow-ph" data-busca="${esc(_tfN([x.name.pt, x.name.en, regiaoLabel(x.region), tipoLabel(x.type), x.id].join(' ')))}" data-st="${esc(x.status || 'draft')}" data-reg="${esc(x.region || '')}" data-tipo="${esc(x.type || '')}">
         <span class="ph sm" style="background-image:url(${esc(x.photo)})"></span>
         <div class="tinfo"><b>${esc(x.name.pt)}</b>
-          <small>${esc(tipoLabel(x.type))} · ${ehSobConsulta(x) ? t('sobConsulta') : eur(x.price)} ${x.priceMode === 'session' ? t('perSession') : x.priceMode === 'hora' ? t('perHour') : t('perPerson')} · ${regiaoLabel(x.region)}</small></div>
+          <small>${esc(tipoLabel(x.type))} · ${ehTransferX(x) && x.priceMode === 'transfer' ? (ehSobConsulta(x) ? t('sobConsulta') : 'a partir de ' + eur(precoVitrine(x)) + ' por carro') : `${ehSobConsulta(x) ? t('sobConsulta') : eur(x.price)} ${x.priceMode === 'session' ? t('perSession') : x.priceMode === 'hora' ? t('perHour') : t('perPerson')}`} · ${regiaoLabel(x.region)}</small></div>
         <span class="pill ${cls}">${t(k)}</span>
         <div class="tacts">
           <button class="mini" data-edit="${x.id}">${t('edit')}</button>
@@ -2379,8 +2385,8 @@ function admTours() {
           <button class="mini danger" data-del="${x.id}">×</button>
         </div></div>`;
     }).join('')}</div>`
-    : `<div class="emptybox"><p>${t('emptyTours')}</p><button class="cta" id="newTour2">${t('firstTour')}</button></div>`}
-    <p class="why tf-nada" id="tfNada" hidden>Nenhum passeio com esse filtro. <button type="button" class="linkbtn" id="tfLimpa">Limpar o filtro</button></p>`);
+    : `<div class="emptybox"><p>${trf ? 'Nenhum transfer cadastrado ainda.' : t('emptyTours')}</p><button class="cta" id="newTour2">${trf ? 'Cadastrar o primeiro transfer' : t('firstTour')}</button></div>`}
+    <p class="why tf-nada" id="tfNada" hidden>Nenhum ${trf ? 'transfer' : 'passeio'} com esse filtro. <button type="button" class="linkbtn" id="tfLimpa">Limpar o filtro</button></p>`);
   const filtra = () => {
     const q = _tfN(F.q).split(/\s+/).filter(Boolean); let n = 0;
     $$('.tlist .trow').forEach(r => {
@@ -2388,30 +2394,30 @@ function admTours() {
         && (!F.reg || r.dataset.reg === F.reg) && (!F.tipo || r.dataset.tipo === F.tipo);
       r.style.display = ok ? '' : 'none'; if (ok) n++;
     });
-    const nn = $('#tfN'); if (nn) nn.textContent = n === tours.length ? `${n} passeios` : `${n} de ${tours.length}`;
+    const nn = $('#tfN'); if (nn) nn.textContent = n === tours.length ? `${n} ${trf ? 'transfers' : 'passeios'}` : `${n} de ${tours.length}`;
     const nada = $('#tfNada'); if (nada) nada.hidden = !!n || !tours.length;
   };
   const q = $('#tfQ'); if (q) q.oninput = () => { F.q = q.value; filtra(); };
   for (const [id, k] of [['#tfSt', 'st'], ['#tfReg', 'reg'], ['#tfTipo', 'tipo']]) { const e = $(id); if (e) e.onchange = () => { F[k] = e.value; filtra(); }; }
-  const lp = $('#tfLimpa'); if (lp) lp.onclick = () => { Object.assign(F, { q: '', st: '', reg: '', tipo: '' }); admTours(); };
+  const lp = $('#tfLimpa'); if (lp) lp.onclick = () => { Object.assign(F, { q: '', st: '', reg: '', tipo: '' }); volta(); };
   filtra();
-  $('#newTour')?.addEventListener('click', () => admTourEdit('new'));
-  $('#newTour2')?.addEventListener('click', () => admTourEdit('new'));
+  $('#newTour')?.addEventListener('click', () => admTourEdit('new', trf ? 'transfer' : ''));
+  $('#newTour2')?.addEventListener('click', () => admTourEdit('new', trf ? 'transfer' : ''));
   $$('[data-edit]').forEach(b => b.onclick = () => go('/adm/tours/' + b.dataset.edit));
   $$('[data-dup]').forEach(b => b.onclick = () => {
     const cp = Tours.duplicate(b.dataset.dup);
-    toast(t('duplicated', { n: cp.name.pt })); admTours();
+    toast(t('duplicated', { n: cp.name.pt })); volta();
   });
   $$('[data-togg]').forEach(b => b.onclick = () => {
     const x = Tours.get(b.dataset.togg);
     Tours.update(x.id, { status: x.status === 'draft' ? 'live' : 'draft' });
-    toast(x.status === 'draft' ? t('published') : t('unpublished')); admTours();
+    toast(x.status === 'draft' ? t('published') : t('unpublished')); volta();
   });
   $$('[data-del]').forEach(b => b.onclick = () => {
     const x = Tours.get(b.dataset.del);
     const n = Tours.futureBookings(x.id).length;
     const msg = t('delTour', { n: x.name.pt }) + (n ? '\n' + t('delTourN', { n }) : '');
-    if (confirm(msg)) { Tours.remove(x.id); admTours(); }
+    if (confirm(msg)) { Tours.remove(x.id); volta(); }
   });
 }
 
@@ -2475,19 +2481,24 @@ function lerTrfLinhas() {
     .sort((a, b) => a.pax - b.pax || a.dia - b.dia);
 }
 
-function admTourEdit(id) {
+function admTourEdit(id, novoTipo) {
   const isNew = id === 'new';
   const x = isNew
-    ? { type: 'walk', region: regioes()[0][0], name: { pt: '', en: '' }, desc: { pt: '', en: '' },
-        meeting: { pt: '', en: '' }, photo: 'capa.jpg', price: 45, priceMode: 'pp', min: 2, max: 12,
-        payPolicy: 'split', status: 'draft' }
+    ? (novoTipo === 'transfer'
+      ? { type: 'transfer', region: regioes()[0][0], name: { pt: '', en: '' }, desc: { pt: '', en: '' },
+          meeting: { pt: 'No hotel ou no desembarque do aeroporto, com o motorista', en: 'At your hotel or at the airport arrivals, with the driver' }, photo: 'capa.jpg', price: 0, priceMode: 'transfer', min: 1, max: 7,
+          transfer: { linhas: [] }, payPolicy: 'split', status: 'draft' }
+      : { type: 'walk', region: regioes()[0][0], name: { pt: '', en: '' }, desc: { pt: '', en: '' },
+          meeting: { pt: '', en: '' }, photo: 'capa.jpg', price: 45, priceMode: 'pp', min: 2, max: 12,
+          payPolicy: 'split', status: 'draft' })
     : Tours.get(id);
+  const lista = ehTransferX(x) ? '/adm/transfers' : '/adm/tours';
   if (!x) return go('/adm/tours');
 
   const selOpts = (opts, cur) => opts.map(([v, k]) => `<option value="${v}" ${cur === v ? 'selected' : ''}>${t(k)}</option>`).join('');
-  admShell('tours', `
-    <button class="linkbtn" id="bkT" aria-label="${t('admTours')}">← ${t('admTours')}</button>
-    <h1 class="pageh">${isNew ? t('newTour').replace('+ ', '') : esc(x.name.pt)}</h1>
+  admShell(ehTransferX(x) ? 'transfers' : 'tours', `
+    <button class="linkbtn" id="bkT" aria-label="${ehTransferX(x) ? 'Transfers' : t('admTours')}">← ${ehTransferX(x) ? 'Transfers' : t('admTours')}</button>
+    <h1 class="pageh">${isNew ? (ehTransferX(x) ? 'Novo transfer' : t('newTour').replace('+ ', '')) : esc(x.name.pt)}</h1>
     <div class="formgrid">
       <section class="card">
         <label class="fld">${t('tType')}<select id="fType">${tipoOpts(x.type)}</select></label>
@@ -2810,7 +2821,7 @@ function admTourEdit(id) {
       toast(t('tPhotoOk'));
     } catch (err) { toast(t('tPhotoBad')); }
   };
-  $('#bkT').onclick = () => go('/adm/tours');
+  $('#bkT').onclick = () => go(lista);
 
   /* a barra fixa reaproveita exatamente os mesmos botoes — sem segunda
      versao da logica de salvar, que e onde bugs se escondem */
@@ -3025,13 +3036,13 @@ function admTourEdit(id) {
     if (!validate(data)) return;
     if (!data.name.pt) return toast(LANG === 'pt' ? 'Dê um nome ao passeio.' : 'Give the tour a name.');
     if (isNew) { const nt = Tours.create(data); toast(t('published')); go('/adm/tours/' + nt.id); }
-    else { Tours.update(x.id, data); toast(t('published')); go('/adm/tours'); }
+    else { Tours.update(x.id, data); toast(t('published')); go(ehTransferX(data) ? '/adm/transfers' : '/adm/tours'); }
   };
   $('#saveDraft').onclick = () => {
     if (!$('#fNamePt').value.trim()) { $('#fNamePt').classList.add('invalid'); $('#fNamePt').focus(); return toast(t('vName')); }
     const data = collect('draft');
     if (isNew) { const nt = Tours.create(data); go('/adm/tours/' + nt.id); }
-    else { Tours.update(x.id, data); go('/adm/tours'); }
+    else { Tours.update(x.id, data); go(ehTransferX(data) ? '/adm/transfers' : '/adm/tours'); }
     toast(t('draft'));
   };
 

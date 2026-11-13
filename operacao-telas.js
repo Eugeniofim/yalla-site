@@ -1452,16 +1452,26 @@ function admConsulta(arg, modo) {
   const conta = Object.fromEntries(CRM_ETAPAS.map(([e]) => [e, new Set(todas.filter(r => r.etapa === e).map(r => r.pedido)).size]));
   const n = (v) => String(v || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   const q = n(S.q).trim();
-  let linhas = todas.filter(r => S.e === 'todos' || r.etapa === S.e)
-    .filter(r => !q || [r.nome, r.whats, r.servico, r.obs, r.cidade, r.veio, r.indicou, r.parceiro].some(v => n(v).includes(q)))
+  /* com a busca, procura em todas as etapas: o nome tem que aparecer, esteja onde estiver */
+  const acha = (r) => [r.nome, r.whats, r.servico, r.obs, r.cidade, r.veio, r.indicou, r.parceiro].some(v => n(v).includes(q));
+  let linhas = todas.filter(r => q || S.e === 'todos' || r.etapa === S.e)
+    .filter(r => !q || acha(r))
     .filter(r => !S.mes || String(r.dataServ || '').slice(0, 7) === S.mes);
-  if (S.e === 'finalizado' || S.e === 'perdido') linhas = linhas.reverse();
   /* os pedidos (cartoes): as linhas do mesmo pedido juntas */
   const pedidos = [];
   for (const r of linhas) { let p = pedidos.find(x => x.pedido === r.pedido); if (!p) { p = { pedido: r.pedido, linhas: [], r }; pedidos.push(p); } p.linhas.push(r); }
+  /* EM ORDEM DE CHEGADA (13/11/2026, a Milla: "não está por ordem de nome nem de data"): a viagem mais
+     próxima primeiro, sem data no fim e, no mesmo dia, pelo nome. Finalizado e perdido: o mais recente primeiro. */
+  pedidos.forEach(p => { p.chega = crmChegada(p.linhas); });
+  const inv = !q && (S.e === 'finalizado' || S.e === 'perdido');
+  pedidos.sort((a, b) => inv ? String(b.chega).localeCompare(String(a.chega)) || n(a.r.nome).localeCompare(n(b.r.nome)) : crmOrdemChegada(a, b, hoje, n));
   const rotSemOrc = Roteiros.all().filter(p => !Orc.all().some(o => o.pedidoId === p.id));
   const doMes = todas.filter(r => !S.mes || String(r.dataServ || '').slice(0, 7) === S.mes);
   const pn = crmPainel(doMes, hoje);
+  /* "precisa de você": a mesma ordem de chegada, e a busca vale aqui também */
+  pn.agora = pn.agora.filter(a => !q || n(a.nome).includes(q) || (a.o && n(a.o.cliente.whats).includes(q)))
+    .map(a => Object.assign(a, { chega: crmChegada([a.r || { o: a.o }]) }))
+    .sort((a, b) => crmOrdemChegada(a, b, hoje, n));
   /* 28/10/2026: ícones de traço no lugar dos emojis (skill de UI/UX) */
   const icT = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
   const ICO = { repescar: icT('<path d="M20 11a8 8 0 0 0-14.5-4.5L4 8M4 4v4h4M4 13a8 8 0 0 0 14.5 4.5L20 16M20 20v-4h-4"/>'), montar: icT('<path d="M4 20h4L19 9l-4-4L4 16v4Z"/><path d="M13.5 6.5l4 4"/>'),
@@ -1491,7 +1501,7 @@ function admConsulta(arg, modo) {
       <a class="crm-tile" href="#/adm/coupons"><small>Comissões a pagar</small><b>${eur(pn.comissoes.valor)}</b><span>${pn.comissoes.n ? pn.comissoes.n + (pn.comissoes.n === 1 ? ' parceiro' : ' parceiros') : 'tudo em dia'}</span></a>
     </div>
     <div class="crm-agora"><h3>Precisa de você ${pn.agora.length ? `<b>${pn.agora.length}</b>` : ''}</h3>
-      ${pn.agora.length ? `<ul>${pn.agora.slice(0, S.agoraTudo ? 99 : 5).map(a => `<li><span class="crm-ag-i" aria-hidden="true">${ICO[a.tipo]}</span><div><b>${esc(a.nome || 'Sem nome')}</b><small>${esc(a.txt)}</small></div><div class="tacts">${agoraAcao(a)}</div></li>`).join('')}</ul>
+      ${pn.agora.length ? `<ul>${pn.agora.slice(0, S.agoraTudo ? 99 : 5).map(a => `<li><span class="crm-ag-i" aria-hidden="true">${ICO[a.tipo]}</span><div><b>${esc(a.nome || 'Sem nome')}</b><small>${a.chega && a.chega >= hoje ? `<span class="crm-chega">chega ${esc(crmData(a.chega))}</span> · ` : ''}${esc(a.txt)}</small></div><div class="tacts">${agoraAcao(a)}</div></li>`).join('')}</ul>
         ${pn.agora.length > 5 ? `<button class="mini ghost" id="crmAgoraTudo">${S.agoraTudo ? 'mostrar menos' : `ver os ${pn.agora.length}`}</button>` : ''}` : '<p class="why">Nada esperando por você. 🎉</p>'}
     </div></section>`;
   const meses = [...new Set(todas.map(r => String(r.dataServ || '').slice(0, 7)).filter(Boolean))].sort();
@@ -1517,7 +1527,7 @@ function admConsulta(arg, modo) {
     const r = p.r, tot = r.totalPedido || p.linhas.reduce((s2, x) => s2 + (x.clientePaga || 0), 0);
     const rp = (r.repescagens || []).map(x => `${x.n}ª ${crmData(x.data)} · ${x.resultado}`).join(' | ');
     return `<article class="crm-card">
-      <div class="crm-top"><b class="crm-nome">${esc(r.nome || 'Sem nome')}</b>${crmEtapaPill(r.etapa, r.status)}
+      <div class="crm-top"><b class="crm-nome">${esc(r.nome || 'Sem nome')}</b>${p.chega ? `<span class="crm-chega ${p.chega < hoje ? 'foi' : ''}">${p.chega < hoje ? 'chegou' : 'chega'} ${esc(crmData(p.chega))}</span>` : '<span class="crm-chega sem">sem data</span>'}${crmEtapaPill(r.etapa, r.status)}
         ${r.veio ? `<span class="crm-veio">${esc(r.veio)}${r.indicou ? ': <b>' + esc(r.indicou) + '</b>' : ''}</span>` : ''}${r.parceiro ? `<span class="crm-veio">🤝 ${esc(r.parceiro)}</span>` : ''}</div>
       ${r.tipo === 'orcamento' && r.etapa === 'aberto' && typeof oyJaReservadoHtml === 'function' ? oyJaReservadoHtml(r.o) : ''}
       <ul class="crm-linhas">${p.linhas.map(x => { const cancelada = x.tipo === 'reserva' && x.b.status === 'cancelled';
@@ -1544,11 +1554,13 @@ function admConsulta(arg, modo) {
         <button class="mini" id="crmImp">importar a planilha</button>
         <button class="mini" id="crmBaixa">baixar planilha</button>
       </div></div>
+    <label class="crm-busca"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg>
+      <span class="sr">Procurar cliente</span><input id="crmQ" type="search" placeholder="Procurar pelo nome do cliente, WhatsApp ou passeio" value="${esc(S.q)}" autocomplete="off"></label>
+    ${q ? `<p class="why crm-achou">${pedidos.length ? `${pedidos.length} ${pedidos.length === 1 ? 'pedido' : 'pedidos'} com "${esc(S.q)}", em todas as etapas` : `Nada com "${esc(S.q)}".`} <button type="button" class="linkbtn" id="crmQLimpa">limpar</button></p>` : ''}
     ${painel}
     <div class="crm-etapas" role="tablist">${[...CRM_ETAPAS, ['todos', 'Todos']].map(([e, nome], k) =>
       `${k && k < CRM_ETAPAS.length - 1 ? '<span class="crm-seta" aria-hidden="true">→</span>' : ''}<button class="crm-etapa ${S.e === e ? 'on' : ''}" data-e="${e}" role="tab" aria-selected="${S.e === e}">${e === 'aberto' ? 'Em aberto' : nome}${e !== 'todos' ? ` <b>${conta[e]}</b>` : ''}</button>`).join('')}</div>
     <div class="crm-filtros">
-      <input id="crmQ" type="search" placeholder="🔎 nome, WhatsApp, serviço, hotel…" value="${esc(S.q)}">
       <select id="crmMes"><option value="">todos os meses</option>${meses.map(m => `<option value="${m}" ${S.mes === m ? 'selected' : ''}>${MESN[+m.slice(5, 7) - 1]} ${m.slice(0, 4)}</option>`).join('')}</select>
       ${P ? '' : `<div class="chips crm-vistas" style="margin:0"><button class="chip ${S.vista === 'cartoes' ? 'on' : ''}" data-vista="cartoes">🗂️ cartões</button><button class="chip ${S.vista === 'planilha' ? 'on' : ''}" data-vista="planilha">📋 planilha</button></div>`}
     </div>
@@ -1572,6 +1584,7 @@ function admConsulta(arg, modo) {
   $$('[data-e]').forEach(b => b.onclick = () => { S.e = b.dataset.e; re(); });
   $$('[data-vista]').forEach(b => b.onclick = () => { S.vista = b.dataset.vista; re(); });
   $('#crmMes').onchange = (e) => { S.mes = e.target.value; re(); };
+  $('#crmQLimpa')?.addEventListener('click', () => { S.q = ''; re(); });
   $('#crmQ').oninput = (e) => { S.q = e.target.value; clearTimeout(admConsulta._t); admConsulta._t = setTimeout(() => { re(); const i2 = $('#crmQ'); if (i2) { i2.focus(); i2.setSelectionRange(i2.value.length, i2.value.length); } }, 250); };
   $('#crmNovo').onclick = () => { const d = $('#crmNovoBox'); d.hidden = false; d.scrollIntoView({ block: 'start' }); $('#ccTxt').focus(); };
   $('#crmImp').onclick = () => { const d = $('#crmImpBox'); d.hidden = false; d.scrollIntoView({ block: 'start' }); };
