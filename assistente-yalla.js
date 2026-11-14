@@ -233,3 +233,343 @@ if (typeof guardaFoto === 'function' && typeof Mkt !== 'undefined') {
     return p;
   };
 })();
+
+/* =====================================================
+   7. O ASSISTENTE DELA DE VERDADE (13/11/2026)
+
+   A Milla: "Assistente é doido! Kkkk". O app chamava o cofre SEM dizer de quem era
+   e SEM o login dela: o cofre tratava como visitante da demonstração (modelo antigo,
+   resposta curta, 60 mensagens por dia por internet). O cofre nunca anotou um
+   centavo de gasto da Yalla, e as outras clientes têm meses inteiros.
+
+   Agora, como no app da Ingrid e no da Mari: vai o cliente ('yalla') e o login dela.
+   O cofre confere no banco que é a dona e escolhe o modelo (cofre: _comum/pro.js):
+   o dia a dia no Haiku 5.5 e o pedido pesado (foto, PDF, texto comprido) no
+   Sonnet 5.5. Prazo de 90 s, nova tentativa em erro passageiro, cache das
+   ferramentas e da conversa (a lista de ferramentas é a maior parte do pedido),
+   e a resposta cortada nunca roda ação pela metade.
+   ===================================================== */
+const YL_PRAZO_MS = 90000, YL_TENTA_MS = [0, 1500, 4000];
+function ylFetch(url, opts) {
+  const ac = new AbortController(), t = setTimeout(() => ac.abort(), YL_PRAZO_MS);
+  return fetch(url, { ...(opts || {}), signal: ac.signal }).finally(() => clearTimeout(t));
+}
+/* erro passageiro (rede, 429 sem ser o limite do dia, 500/502/503/529): tenta de novo até 3x */
+async function ylPede(vai) {
+  let r = null, corpo = null, falha = null;
+  for (let k = 0; k < YL_TENTA_MS.length; k++) {
+    if (YL_TENTA_MS[k]) await new Promise(ok => setTimeout(ok, YL_TENTA_MS[k]));
+    try { r = await vai(); falha = null; } catch (e) { falha = e; r = null; if (e && e.name === 'AbortError') break; continue; }   /* prazo estourou: não repete (pode já ter sido cobrada) */
+    corpo = await r.json().catch(() => null);
+    const limiteDoDia = r.status === 429 && corpo && corpo.error && corpo.error.type === 'limite';
+    if (r.ok || limiteDoDia || ![429, 500, 502, 503, 529].includes(r.status)) return { r, corpo };
+  }
+  if (falha) throw new Error(falha.name === 'AbortError' ? 'A resposta demorou demais (mais de 90 s). Tente de novo — se já tiver feito algo, está gravado.' : iaTraduzErro(0));
+  return { r, corpo };
+}
+/* o modelo pensa antes (blocos "thinking" assinados, presos ao prompt com que nasceram — e o nosso
+   muda a cada mensagem): nunca voltam para a API nem ficam no histórico (lição da Ingrid, 03/10) */
+const ylEhPensamento = (b) => b && (b.type === 'thinking' || b.type === 'redacted_thinking');
+function ylSemPensamento(ms) {
+  return (ms || []).map(m => {
+    if (m.role !== 'assistant' || !Array.isArray(m.content) || !m.content.some(ylEhPensamento)) return m;
+    const c = m.content.filter(b => !ylEhPensamento(b));
+    return { ...m, content: c.length ? c : [{ type: 'text', text: '…' }] };
+  });
+}
+/* cache: na última ferramenta (a lista não muda entre uma mensagem e outra) e no fim da conversa */
+function ylFerramentas() {
+  const l = IA_FERRAMENTAS.slice(), k = l.length - 1;
+  if (k >= 0) l[k] = { ...l[k], cache_control: { type: 'ephemeral' } };
+  return l;
+}
+function ylComCache(ms) {
+  if (!ms.length) return ms;
+  const out = ms.slice(), u = out[out.length - 1];
+  const blocos = typeof u.content === 'string' ? [{ type: 'text', text: u.content }] : (u.content || []).slice();
+  if (!blocos.length) return ms;
+  blocos[blocos.length - 1] = { ...blocos[blocos.length - 1], cache_control: { type: 'ephemeral' } };
+  out[out.length - 1] = { ...u, content: blocos };
+  return out;
+}
+/* recusa por filtro, resposta vazia ou cortada no meio (max_tokens): nunca balão vazio, nunca ação pela metade */
+function ylCortado(corpo) {
+  if (!corpo || !Array.isArray(corpo.content)) return corpo;
+  if (corpo.stop_reason === 'refusal') {
+    const txt = corpo.content.filter(b => b.type === 'text' && b.text.trim());
+    corpo.content = txt.length ? txt : [{ type: 'text', text: 'Não consegui responder esse pedido do jeito que veio. Pode dizer de outro jeito?' }];
+    corpo.stop_reason = 'end_turn'; return corpo;
+  }
+  corpo.content = corpo.content.filter(b => !ylEhPensamento(b));
+  if (!corpo.content.length) corpo.content = [{ type: 'text', text: 'Não consegui formular a resposta desta vez — pode repetir?' }];
+  if (corpo.stop_reason !== 'max_tokens') return corpo;
+  corpo.content = corpo.content.filter(b => b.type !== 'tool_use');
+  corpo.content.push({ type: 'text', text: '\n\n(A resposta ficou grande demais e foi cortada — me peça em partes menores.)' });
+  corpo.stop_reason = 'end_turn';
+  return corpo;
+}
+let ylAvisouSimples = false;
+if (typeof iaChamar === 'function') {
+  const _ylChamar = iaChamar;
+  iaChamar = async function (mensagens) {
+    if (iaModo() !== 'vivo') return _ylChamar(mensagens);
+    const cliente = (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.clienteCofre) || '';
+    /* login vencido: renova antes, senão o cofre não reconhece a dona e cai na demonstração */
+    if (typeof authVencida === 'function' && authVencida() && typeof authEnsure === 'function') { try { await authEnsure(); } catch (e) {} }
+    const tok = typeof isLoggedIn === 'function' && isLoggedIn() && typeof authToken === 'function' ? authToken() : null;
+    const corpoTxt = JSON.stringify({ max_tokens: 6000, ...(cliente ? { cliente } : {}), system: iaSistema(), tools: ylFerramentas(),
+      messages: ylComCache(ylSemPensamento(mensagensParaEnvio(mensagens))) });
+    if (corpoTxt.length > 25e6) throw new Error('Esses arquivos são grandes demais para o assistente. Mande menos fotos de uma vez, ou um PDF menor.');
+    const cab = { 'content-type': 'application/json', ...(cliente && tok ? { authorization: 'Bearer ' + tok } : {}) };
+    const { r, corpo } = await ylPede(() => ylFetch(COFRE + '/api/claude', { method: 'POST', headers: cab, body: corpoTxt }));
+    if (r.status === 429 && corpo && corpo.error && corpo.error.type === 'limite') { marcaEsgotado('claude'); throw Object.assign(new Error(ia('vivoAcabou')), { acabou: true }); }
+    if (!r.ok) throw new Error(iaTraduzErro(r.status, corpo));
+    /* o cofre não reconheceu a dona (login de outro aparelho, sessão velha): responde a demonstração. Avisa uma vez. */
+    if (cliente && corpo && /^claude-haiku-4/.test(String(corpo.model || '')) && !ylAvisouSimples) {
+      ylAvisouSimples = true;
+      toast('O assistente está no modo simples. Saia e entre de novo no painel para ele usar o modo completo.');
+    }
+    return ylCortado(corpo);
+  };
+}
+
+/* =====================================================
+   8. ELE APAGA E MUDA (13/11/2026)
+
+   A Milla pediu "apagar ORC-0037" e ouviu "o app não tem essa ferramenta" — com o
+   botão "apagar" bem ali na lista. Regra da casa: o assistente alcança tudo o que a
+   tela faz. Ganha: apagar_orcamento, apagar_pedido_roteiro (os cartões do "Monte seu
+   roteiro"), apagar_tarefa (tarefa ou anotação) e mudar_tarefa. Apagar SEMPRE mostra
+   o cartão, mesmo com "Perguntar antes de gravar" desligado.
+   ===================================================== */
+(function () {
+  if (typeof IA_FERRAMENTAS === 'undefined' || typeof iaPlano !== 'function' || typeof Orc === 'undefined') return;
+  const S = (d) => ({ type: 'string', ...(d ? { description: d } : {}) });
+  const O = (props, req) => ({ type: 'object', properties: props, required: req });
+  const NOVAS = [
+    { name: 'apagar_orcamento', description: 'APAGA um orçamento: o repetido, o de teste ou o que deu errado. O que já fechou (virou reserva) não se apaga — aí se cancelam as reservas. Mostra o cartão antes.', input_schema: O({ numero: S('número do orçamento (ex.: ORC-0037) ou nome do cliente') }, ['numero']) },
+    { name: 'apagar_pedido_roteiro', description: 'APAGA um pedido do "Monte seu roteiro" (os cartões que os clientes preenchem no site pedindo orçamento): de teste, repetido ou de quem desistiu. Mostra o cartão antes.', input_schema: O({ pedido: S('nome de quem pediu ou o pedido_id (de ver_orcamentos → pedidos_de_roteiro)') }, ['pedido']) },
+    { name: 'apagar_tarefa', description: 'APAGA uma tarefa ou uma anotação. Para só marcar como feita, use concluir_tarefa. Mostra o cartão antes.', input_schema: O({ tarefa: S('tarefa_id / anotacao_id, ou um pedaço do texto') }, ['tarefa']) },
+    { name: 'mudar_tarefa', description: 'Muda uma tarefa que já existe: texto, dia, hora, prioridade ou tipo (profissional/pessoal).', input_schema: O({ tarefa: S('tarefa_id ou um pedaço do texto'), texto: S(), dia: S('AAAA-MM-DD ("" tira a data)'), hora: S('HH:MM'), prioridade: { type: 'string', enum: ['alta', 'media', 'baixa'] }, tipo: { type: 'string', enum: ['profissional', 'pessoal'] } }, ['tarefa']) },
+  ];
+  for (const t of NOVAS) if (!IA_FERRAMENTAS.some(x => x.name === t.name)) IA_FERRAMENTAS.push(t);
+
+  const N = (v) => String(v || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+  const dia = (iso) => iso ? (typeof ingData === 'function' ? ingData(iso) : iso) : '';
+  function achaPedido(q) {
+    const l = Roteiros.all(), s = String(q || '').trim(), n = N(s);
+    const p0 = l.find(p => p.id === s); if (p0) return { p: p0 };
+    const m = n ? l.filter(p => N(p.nome).includes(n)) : [];
+    if (m.length === 1) return { p: m[0] };
+    if (!m.length) return E_('pedido não encontrado — veja pedidos_de_roteiro em ver_orcamentos');
+    return { erro: 'mais de um pedido com esse nome — pergunte qual', opcoes: m.map(p => ({ pedido_id: p.id, nome: p.nome, datas: [p.ini, p.fim].filter(Boolean).join(' a '), pedido_em: String(p.criado || '').slice(0, 10) })) };
+  }
+  function achaTarefa(q) {
+    const s = String(q || '').trim(), t0 = Tarefas.get(s); if (t0) return { t: t0 };
+    const n = N(s), l = n ? Tarefas.all().filter(t => N(t.texto).includes(n) || N(t.detalhe).includes(n)) : [];
+    const abertas = l.filter(t => !t.feita), usa = abertas.length ? abertas : l;
+    if (usa.length === 1) return { t: usa[0] };
+    if (!usa.length) return E_('não achei — use ver_tarefas ou ver_anotacoes');
+    return { erro: 'mais de uma parecida — pergunte qual', opcoes: usa.slice(0, 8).map(t => ({ id: t.id, tipo: t.tipo === 'nota' ? 'anotação' : 'tarefa', texto: t.texto, dia: t.prazo || undefined })) };
+  }
+  const PLANOS = {
+    apagar_orcamento(i) {
+      const r = ingAchaOrc(i.numero); if (!r.o) return r;
+      const o = r.o;
+      if (o.status === 'fechado') return E_(`o ${o.num} já fechou (virou reserva) — não dá para apagar; para desfazer, cancele as reservas`);
+      return { titulo: `Apagar o orçamento ${o.num}`, assumiu: [], linhas: [['Orçamento', `${o.num} · ${o.cliente.nome || 'sem nome'}`], ['Situação', o.status], ['Serviços', String((o.itens || []).length)], ['Atenção', 'não dá para desfazer']],
+        fazer: () => { Orc.remove(o.id); try { Tarefas.sincroniza(); } catch (e) {} return { ok: true, apagado: o.num }; } };
+    },
+    apagar_pedido_roteiro(i) {
+      const r = achaPedido(i.pedido); if (!r.p) return r;
+      const p = r.p, orc = Orc.all().find(o => o.pedidoId === p.id);
+      return { titulo: 'Apagar o pedido do Monte seu roteiro', assumiu: [], linhas: [['Pedido de', p.nome || 'sem nome'], ['Datas', [dia(p.ini), dia(p.fim)].filter(Boolean).join(' → ') || '—'],
+        ['Pessoas', `${+p.adultos || 0} adultos${+p.criancas ? ' + ' + p.criancas + ' crianças' : ''}`], ...(orc ? [['Orçamento', `o ${orc.num} continua (só o pedido sai)`]] : []), ['Atenção', 'não dá para desfazer']],
+        fazer: () => ({ ok: Roteiros.remove(p.id), apagado: p.nome }) };
+    },
+    apagar_tarefa(i) {
+      const r = achaTarefa(i.tarefa); if (!r.t) return r;
+      const t = r.t, nota = t.tipo === 'nota';
+      return { titulo: nota ? 'Apagar a anotação' : 'Apagar a tarefa', assumiu: [], linhas: [[nota ? 'Anotação' : 'Tarefa', t.texto], ...(t.prazo ? [['Dia', dia(t.prazo) + (t.hora ? ' ' + t.hora : '')]] : []),
+        ...(t.clienteNome ? [['Cliente', t.clienteNome]] : []), ['Atenção', 'não dá para desfazer']],
+        fazer: () => { Tarefas.remove(t.id); return { ok: true }; } };
+    },
+    mudar_tarefa(i) {
+      const r = achaTarefa(i.tarefa); if (!r.t) return r;
+      const t = r.t, d = {}, l = [['Tarefa', t.texto]];
+      if (i.texto != null && String(i.texto).trim()) { d.texto = String(i.texto).trim(); l.push(['Texto novo', d.texto]); }
+      if (i.dia != null) {
+        if (String(i.dia).trim() === '') { d.prazo = ''; d.hora = ''; l.push(['Dia', 'sem data']); }
+        else if (isoOk(i.dia)) { d.prazo = i.dia; l.push(['Dia', dia(i.dia)]); }
+        else return E_('dia no formato AAAA-MM-DD');
+      }
+      if (i.hora != null && String(i.hora).trim() !== '') { if (!/^\d{1,2}:\d{2}$/.test(i.hora)) return E_('hora no formato HH:MM'); d.hora = i.hora.padStart(5, '0'); l.push(['Hora', d.hora]); }
+      if (i.prioridade) { d.prio = i.prioridade; l.push(['Prioridade', i.prioridade]); }
+      if (i.tipo) { d.cat = i.tipo === 'pessoal' ? 'pessoal' : 'profissional'; l.push(['Tipo', d.cat]); }
+      if (!Object.keys(d).length) return E_('diga o que muda: texto, dia, hora, prioridade ou tipo');
+      return { titulo: 'Mudar a tarefa', assumiu: [], linhas: l, fazer: () => { Tarefas.salva(t.id, d); return { ok: true, tarefa_id: t.id }; } };
+    },
+  };
+  const _plano = iaPlano;
+  iaPlano = function (nome, i) { return PLANOS[nome] ? PLANOS[nome](i || {}) : _plano(nome, i); };
+  /* as anotações vêm com o id (para apagar a certa) */
+  if (typeof iaLeitura === 'function') {
+    const _ler = iaLeitura;
+    iaLeitura = function (nome, i) {
+      if (nome !== 'ver_anotacoes') return _ler(nome, i);
+      const l = Tarefas.notas((i || {}).busca).map(n => ({ anotacao_id: n.id, texto: n.texto, detalhe: n.detalhe, cliente: n.clienteNome, dia: String(n.criada || '').slice(0, 10), fixa: n.fixa }));
+      return l.length ? l : 'nenhuma anotação';
+    };
+  }
+  /* apagar sempre pergunta, mesmo com "Perguntar antes de gravar" desligado */
+  const SEMPRE = new Set(['apagar_orcamento', 'apagar_pedido_roteiro', 'apagar_tarefa']);
+  if (typeof iaRodaFerramenta === 'function') {
+    const _roda = iaRodaFerramenta;
+    iaRodaFerramenta = async function (nome, input) {
+      if (!SEMPRE.has(nome) || iaPerguntaAntes()) return _roda(nome, input);
+      try {
+        const plano = iaPlano(nome, input || {}); if (plano.erro) return plano;
+        if (!(await iaPedeConfirmacao(plano))) return { cancelado: true, aviso: 'cancelou; não apague nada e não insista' };
+        const r = await plano.fazer(); iaRedesenhaTela(); return r;
+      } catch (e) { return E_(String(e && e.message || e)); }
+    };
+  }
+  if (typeof iaSistema === 'function') {
+    const _sis = iaSistema;
+    iaSistema = function () {
+      const b = _sis();
+      b.push({ type: 'text', text: `## APAGAR E MUDAR (você consegue)
+- Orçamento repetido, de teste ou errado: apagar_orcamento ("apaga o ORC-0037"). O que já fechou não se apaga.
+- Pedido do "Monte seu roteiro" (os cartões que os clientes preenchem no site): apagar_pedido_roteiro.
+- Tarefa ou anotação: apagar_tarefa; mudar dia, hora, texto ou prioridade: mudar_tarefa.
+- Antes de dizer que não consegue, confira a sua lista de ferramentas. Se mesmo assim não der, diga em qual tela ela faz e abra a tela com abrir_aba.` });
+      return b;
+    };
+  }
+})();
+
+/* =====================================================
+   9. SEGURAR PARA FALAR (13/11/2026, igual ao do Dhalsin na B12)
+
+   O Eugênio: "grava a voz segura o botão pra falar e quando solta o botão vai".
+   Antes era um toque: o navegador encerrava na PRIMEIRA pausa e mandava a frase
+   pela metade. Agora: segurou, ouve (pausa não corta nada); soltou, manda o que
+   juntou. Arrastar o dedo para fora do botão antes de soltar cancela. No teclado,
+   segurar Espaço ou Enter no botão faz o mesmo.
+   ===================================================== */
+(function () {
+  if (typeof iaDesenha !== 'function' || typeof ingTemMic !== 'function' || !ING_FALA) return;
+  let segurando = false, comecou = 0, fora = false, ultimo = '';
+  const gav = () => iaEl && iaEl.g;
+  const campo = () => gav() && gav().querySelector('#iaTxt');
+  const faixa = (s) => { const t = gav() && gav().querySelector('#iaOuvTxt'); if (t) t.textContent = s; };
+  const OUVINDO = 'Ouvindo… fale à vontade. Solte o botão para enviar.';
+  function mostra(meio) {
+    const t = campo(); if (!t) return;
+    const tudo = [ingOuvAntes, ingOuvJunto, meio].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+    t.value = tudo; t.style.height = ''; t.style.height = Math.min(140, t.scrollHeight) + 'px';
+    if (!fora) faixa(tudo && tudo !== ingOuvAntes ? '“' + tudo.slice(-70) + '”' : OUVINDO);
+  }
+  function abre() {
+    const r = new ING_FALA();
+    r.lang = 'pt-BR'; r.interimResults = true; r.continuous = true; r.maxAlternatives = 1;
+    r.onresult = (e) => {
+      let fim = '', meio = '';
+      for (let k = e.resultIndex; k < e.results.length; k++) { const t = e.results[k][0].transcript; if (e.results[k].isFinal) fim += t; else meio += t; }
+      if (fim) ingOuvJunto = (ingOuvJunto + ' ' + fim).trim();
+      ultimo = meio; mostra(meio);
+    };
+    r.onerror = (e) => {
+      const q = e && e.error;
+      if (q === 'aborted' || q === 'no-speech') return;    /* soltou sem falar, ou pausa: não é erro */
+      segurando = false; ingOuvCanc = true;                 /* o onend vem depois e não manda nada */
+      if (q === 'not-allowed' || q === 'service-not-allowed') toast('Falta liberar o microfone: toque no cadeado ao lado do endereço e permita.');
+      else if (q === 'network') toast('Sem internet para transcrever a voz.');
+      else toast('Deu problema no microfone: ' + (q || '?'));
+    };
+    r.onend = () => {
+      if (ingOuvindo !== r) return;
+      /* o navegador parou sozinho com o dedo ainda no botão: continua ouvindo, sem perder o que já veio */
+      if (segurando && !ingOuvCanc) {
+        ingOuvJunto = [ingOuvJunto, ultimo].filter(Boolean).join(' ').trim(); ultimo = '';
+        try { abre(); return; } catch (e) {}
+      }
+      termina();
+    };
+    r.start(); ingOuvindo = r;
+  }
+  function termina() {
+    const canc = ingOuvCanc, t = campo();
+    ingOuvindo = null; segurando = false; fora = false; ingRelogio(false); ingOuvPinta();
+    const ouv = gav() && gav().querySelector('#iaOuv'); if (ouv) ouv.classList.remove('cancela');
+    if (!t) return;
+    if (canc) { t.value = ingOuvAntes; return; }
+    const novo = [ingOuvJunto, ultimo].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+    if (!novo) { t.value = ingOuvAntes; toast(Date.now() - comecou < 700 ? 'Segure o botão enquanto fala e solte no fim.' : 'Não ouvi nada. Segure o botão e fale mais perto.'); return; }
+    t.value = [ingOuvAntes, novo].filter(Boolean).join(' ');
+    if (ingVozCfg().enviar !== false) gav().querySelector('#iaForm')?.requestSubmit(); else t.focus();
+  }
+  function comecar(ev) {
+    if (segurando || (ev && ev.button > 0)) return;
+    if (ev && ev.cancelable) ev.preventDefault();
+    if (!ingTemMic()) { toast(ING_FALA ? 'O microfone só funciona no link do app (https).' : 'Este navegador não ouve. No iPhone use o Safari; no computador, o Chrome.'); return; }
+    const t = campo(); if (!t) return;
+    if (ingOuvindo) { try { ingOuvindo.abort(); } catch (e) {} ingOuvindo = null; }
+    ingPararFala();
+    segurando = true; fora = false; comecou = Date.now(); ingOuvCanc = false; ingOuvAntes = t.value.trim(); ingOuvJunto = ''; ultimo = '';
+    if (ev && ev.pointerId != null) { try { ev.currentTarget.setPointerCapture(ev.pointerId); } catch (e) {} }
+    try { abre(); } catch (e) { segurando = false; ingOuvindo = null; toast('Não consegui abrir o microfone.'); return; }
+    mostra(''); ingRelogio(true); ingOuvPinta();
+    try { navigator.vibrate && navigator.vibrate(12); } catch (e) {}
+  }
+  function soltar(ev) {
+    if (!segurando) return;
+    segurando = false;
+    if (ev && ev.pointerId != null) { try { ev.currentTarget.releasePointerCapture(ev.pointerId); } catch (e) {} }
+    if (fora) { ingOuvCanc = true; toast('Cancelado. O que você falou não foi enviado.'); }
+    if (!ingOuvindo) return termina();
+    try { ingOuvindo.stop(); } catch (e) { termina(); }
+  }
+  function mexe(ev) {
+    if (!segurando) return;
+    const r = ev.currentTarget.getBoundingClientRect(), m = 48;
+    const f = ev.clientX < r.left - m || ev.clientX > r.right + m || ev.clientY < r.top - m || ev.clientY > r.bottom + m;
+    if (f === fora) return;
+    fora = f; faixa(f ? 'Solte agora para CANCELAR' : OUVINDO);
+    const ouv = gav() && gav().querySelector('#iaOuv'); if (ouv) ouv.classList.toggle('cancela', f);
+  }
+  /* o botão diz o que fazer: "Segure e fale" / "Solte para enviar" */
+  const _pinta = ingOuvPinta;
+  ingOuvPinta = function () {
+    _pinta();
+    const mic = gav() && gav().querySelector('#iaMic'); if (!mic) return;
+    const mt = mic.querySelector('.mic-t'); if (mt) mt.textContent = ingOuvindo ? 'Solte' : 'Segure';
+    mic.setAttribute('aria-label', ingOuvindo ? 'Ouvindo. Solte para enviar' : 'Segure para falar');
+    mic.title = ingOuvindo ? 'Ouvindo. Solte para enviar; arraste para fora para cancelar' : 'Segure enquanto fala e solte para enviar';
+  };
+  const _des = iaDesenha;
+  iaDesenha = function () {
+    _des();
+    const g = gav(), mic = g && g.querySelector('#iaMic');
+    if (!mic || mic.dataset.segura) return;
+    mic.dataset.segura = '1';
+    mic.onclick = (e) => e.preventDefault();
+    mic.addEventListener('pointerdown', comecar);
+    mic.addEventListener('pointerup', soltar);
+    mic.addEventListener('pointercancel', soltar);
+    mic.addEventListener('pointermove', mexe);
+    mic.addEventListener('contextmenu', (e) => e.preventDefault());
+    mic.addEventListener('keydown', (e) => { if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) comecar(e); else if (e.key === ' ' || e.key === 'Enter') e.preventDefault(); });
+    mic.addEventListener('keyup', (e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); soltar(); } });
+    const pal = g.querySelector('.ingPalcoT'); if (pal && ingTemMic()) pal.innerHTML = 'Segure o <b>microfone</b> enquanto fala e solte para enviar';
+    ingOuvPinta();
+  };
+  /* o dedo ainda no botão e o celular troca de app (ligação, notificação): solta */
+  window.addEventListener('blur', () => soltar());
+  const st = document.createElement('style');
+  st.textContent = `#iaMic{touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+#iaOuv #iaOuvManda,#iaOuv #iaOuvDesc{display:none}
+.iaOuv.cancela{background:var(--surface-2);border-color:var(--line-2)}
+.iaOuv.cancela #iaOuvTxt{color:var(--danger);font-weight:700}`;
+  document.head.appendChild(st);
+})();

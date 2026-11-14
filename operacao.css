@@ -89,6 +89,10 @@ a.clink:hover{text-decoration-color:var(--accent)}
 .orc-row:last-child{border-bottom:0}
 .orc-row .tinfo{flex:1;min-width:0}
 .orc-row .tinfo small{display:block;color:var(--ink-3)}
+/* pedido do "Monte seu roteiro" com dois botões (13/11/2026): no celular os botões descem para baixo do nome */
+.orc-row:has(> .tacts){flex-wrap:wrap}
+.orc-row > .tacts{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.orc-row:has(> .tacts) .tinfo{flex:1 1 220px}
 a.orc-row:hover .tinfo b{text-decoration:underline}
 .orc-item{padding:12px;border-radius:var(--r);background:var(--surface-2);margin-bottom:10px}
 .orc-item.sug{background:var(--highlight-wash)}

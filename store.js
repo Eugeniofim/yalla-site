@@ -977,6 +977,15 @@ const Roteiros = {
     p.respondido = !!respondido;
     save();
   },
+  /* 13/11/2026, a Milla: "precisa ter a opção de apagar daqui" (pedido de teste, repetido, de quem desistiu).
+     'pedidos' é coleção da sincronia privada: some da nuvem e dos outros aparelhos dela também.
+     O orçamento que já saiu do pedido continua (só perde o vínculo). */
+  remove(id) {
+    const antes = (DB.pedidos || []).length;
+    DB.pedidos = (DB.pedidos || []).filter(x => x.id !== id);
+    if (DB.pedidos.length !== antes) save();
+    return DB.pedidos.length !== antes;
+  },
 };
 
 /* ---------- clientes (derivados das reservas) ---------- */

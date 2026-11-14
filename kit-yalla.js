@@ -167,7 +167,7 @@ function kitServico(b, hotel) {
     resumo: kitPt(x.tagline),
     paradas: (x.stops || []).map(p => ({ n: kitPt(p.n), d: kitPt(p.d) })).filter(p => p.n).slice(0, 12),
     inclui: kitLista(x.includes), naoInclui: kitLista(x.notIncludes), levar: kitLevar(b, x, trf),
-    pago: 0, restante: 0, cancel: kitPt(x.cancel),
+    pago: 0, restante: 0, total: Math.max(0, +b.total || 0), cancel: kitPt(x.cancel),
   };
   const moeda = b.moeda || x.moeda || ''; if (moeda) s.moeda = moeda;
   kitPagamento(b, x, s);
@@ -205,8 +205,19 @@ async function kitDados(chave) {
   if (String(aj.base || '').trim()) d.base = String(aj.base).trim();
   const blocos = kitBlocos(bs); if (blocos.length) d.blocos = blocos;
   const ms = [...new Set(sv.map(s => s.moeda || ''))]; if (ms.length === 1 && ms[0]) d.moeda = ms[0];
+  /* o total da viagem (uma moeda só); no "SÓ O TOTAL" (13/11/2026, pedido da Yalla: "mostrar só o valor total") o link do
+     cliente nem leva o valor de cada serviço — sai do kit, do PDF e do e-mail */
+  if (ms.length === 1) {
+    const soma = (k) => Math.round(sv.reduce((a, s) => a + (+s[k] || 0), 0) * 100) / 100;
+    d.totais = { total: soma('total'), pago: soma('pago'), falta: soma('restante'), moeda: ms[0] || '' };
+    if (kitSoTotal(chave)) { d.soTotal = true; sv.forEach(s => { for (const k of ['total', 'pago', 'restante', 'pagarUrl', 'pagarValor', 'vence', 'diaValor', 'noDia']) delete s[k]; }); }
+  }
   return d;
 }
+/* cada serviço com o seu valor (padrão) ou só o total: a escolha deste kit; sem escolha, a última que ela fez */
+function kitSoTotal(chave) { const a = kitAjuste(chave); return typeof a.soTotal === 'boolean' ? a.soTotal : !!(DB.settings && DB.settings.kitSoTotal); }
+/* RESERVA POR CLIENTE: a reserva da viagem vai num e-mail só (Ajustes → Avisos) */
+const kitPorCliente = () => !!(DB.settings && DB.settings.reservaPorCliente === true);
 /* o do link comprido: sem as descrições das paradas (link menor) */
 function kitEnxuto(d) {
   const o = JSON.parse(JSON.stringify(d));
@@ -260,6 +271,40 @@ const Kit = {
     const url = await this.link(chave);
     try { if (typeof itEnfileirar === 'function') { itEnfileirar(); await itEnviarFila(); } } catch (e) {}
     return url;
+  },
+  /* A RESERVA DA VIAGEM NUM E-MAIL SÓ (13/11/2026): o kit sobe e o servidor (função avisos, com o login dela)
+     monta o e-mail com o que está no kit publicado — nada do corpo do pedido vira conteúdo */
+  async mandarEmail(chave, para) {
+    if (!kitPodeNuvem()) throw new Error('Para mandar o e-mail, entre no painel com internet');
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) throw new Error('Sem internet agora: o e-mail não saiu');
+    await this.publicarJa(chave);
+    const t = kitTokens()[chave];
+    if (!t || !t.token || !t.publicado) throw new Error('O kit não subiu: confira a internet e tente de novo');
+    if (typeof authVencida === 'function' && authVencida() && typeof authEnsure === 'function') { try { await authEnsure(); } catch (e) {} }
+    const sala = (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.sala) || '';
+    let r, j = {};
+    try {
+      r = await fetch(SUPA_URL + '/functions/v1/avisos', { method: 'POST', headers: { apikey: SUPA_KEY, Authorization: 'Bearer ' + authToken(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sala, evento: 'viagem', kit: t.token, para }) });
+      j = await r.json().catch(() => ({}));
+    } catch (e) { throw new Error('A conexão falhou: o e-mail não saiu'); }
+    if (!r.ok || !j.ok) throw new Error(r.status === 401 ? 'O login venceu: saia e entre de novo no painel' : (j.erro ? 'O e-mail não saiu: ' + j.erro : 'O e-mail não saiu (' + r.status + ')'));
+    t.email = { em: new Date().toISOString(), para }; save();
+    return j;
+  },
+  _junto: {},
+  emailJunto(chave, para, marcadas) {
+    const J = this._junto[chave] = this._junto[chave] || { ids: [] };
+    if (para) J.para = para; (marcadas || []).forEach(id => J.ids.push(id));
+    clearTimeout(J.t);
+    J.t = setTimeout(() => { delete this._junto[chave];
+      if (!J.para) return;
+      this.mandarEmail(chave, J.para).then(() => toast('✉️ Reserva da viagem mandada para ' + J.para))
+        .catch((e) => { toast('A reserva por e-mail não saiu: ' + e.message);
+          /* não saiu: as reservas voltam a "não avisado" (o botão aparece de novo) */
+          for (const id of J.ids) { const b = Bookings.get(id); if (b && b.clienteConfirmado && b.clienteConfirmado.viagem) { delete b.clienteConfirmado; try { localStorage.setItem(DB_KEY, JSON.stringify(DB)); } catch (x) {} if (typeof cloudUpdateBooking === 'function') cloudUpdateBooking(b); } }
+          if (typeof route === 'function') route(); });
+    }, 1200);
   },
   /* republica os kits já mandados quando a reserva muda (hora, guia, pagamento) */
   _fila: new Set(), _t: null,
@@ -387,7 +432,15 @@ function kitDocHtml(d) {
       <div class="kt-acsTopo kt-tela">${d.whats ? `<a class="kt-cta" href="${esc(waLink('Olá! Sobre a minha viagem…', d.whats))}" target="_blank" rel="noopener">${typeof ICONE_WA !== 'undefined' ? ICONE_WA : ''}WhatsApp</a>` : ''}<button type="button" class="kt-bt" data-kt-ics>Pôr tudo na minha agenda</button></div>
     </header>
     ${sv.length > 1 ? `<nav class="kt-lista kt-bl" aria-label="Os serviços da viagem">${sv.map((s, k) => `<a href="#kt-sv-${k}" data-kt-ir="${k}"><span class="kt-ld">${esc(String(s.data).slice(8, 10))}/${esc(String(s.data).slice(5, 7))}</span><b>${esc(s.nome)}</b><span>${esc(s.hora || '')}</span></a>`).join('')}</nav>` : ''}
-    ${sv.length > 1 && comValores && (pagoT || faltaT) ? `<div class="kt-pg kt-tot kt-bl"><div><small>Total pago</small><b>${esc(kitValor(pagoT, mT))}</b></div><div class="${faltaT > 0 ? 'resta' : ''}"><small>Falta</small><b>${esc(kitValor(faltaT, mT))}</b></div></div>` : ''}
+    ${(() => {
+      /* o total da viagem: sempre no "só o total"; no "cada serviço", quando há mais de um */
+      const tt = d.soTotal && d.totais ? d.totais : sv.length > 1 && comValores ? { total: sv.reduce((a, x) => a + (+x.total || 0), 0), pago: pagoT, falta: faltaT, moeda: mT } : null;
+      if (!tt || !(+tt.total > 0 || +tt.pago > 0 || +tt.falta > 0)) return '';
+      const v = (n) => esc(kitValor(n, tt.moeda || mT));
+      const cel = [+tt.total > 0 ? `<div><small>Total da viagem</small><b>${v(tt.total)}</b></div>` : '', +tt.pago > 0 ? `<div><small>Pago</small><b>${v(tt.pago)}</b></div>` : '',
+        +tt.falta > 0 ? `<div class="resta"><small>Falta pagar</small><b>${v(tt.falta)}</b></div>` : '<div><small>Situação</small><b>Tudo pago ✓</b></div>'].filter(Boolean);
+      return `<div class="kt-pg kt-tot kt-bl${cel.length === 3 ? ' tres' : ''}">${cel.join('')}</div>`;
+    })()}
     ${sv.map(servico).join('')}
     ${lista(d.blocos).length ? `<section class="kt-box kt-info kt-bl"><h3 class="kt-infoT">Informações importantes</h3>${d.blocos.map(b => `<div class="kt-blk kt-bl">${b.titulo ? `<h4>${esc(b.titulo)}</h4>` : ''}${kitFmt(b.texto)}</div>`).join('')}</section>` : ''}
     ${d.roteiro ? `<section class="kt-box kt-bl"><h3>O seu roteiro personalizado</h3><a class="kt-cta" href="${esc(d.roteiro)}" target="_blank" rel="noopener">Abrir o roteiro</a></section>` : ''}
@@ -442,8 +495,13 @@ async function admKit(chave) {
   const hotelAuto = kitHotel(bs) || String((c && c.viagem && c.viagem.hotel) || '').trim();
   app.innerHTML = `<div class="ktTela">
     <div class="doc-barra ktBarra"><a class="mini" href="${esc(voltar)}">← voltar</a>
-      <span class="ktAcs"><button class="mini" id="ktCopia">Copiar link</button><button class="mini" id="ktZap">Mandar no WhatsApp</button><button class="cta sm" id="ktPdf">Gerar PDF</button></span></div>
+      <span class="ktAcs"><button class="mini" id="ktCopia">Copiar link</button><button class="mini" id="ktZap">Mandar no WhatsApp</button><button class="mini" id="ktMail">Mandar por e-mail</button><button class="cta sm" id="ktPdf">Gerar PDF</button></span></div>
     <p class="ktEstado" id="ktEstado">${kitEstadoTxt(chave)}</p>
+    ${(() => { const so = kitSoTotal(chave), e = kitAjuste(chave).email;
+      return `<section class="card ktEd ktVal"><h3>Valores na reserva</h3>
+      <label class="optin"><input type="radio" name="ktVal" value="cada" ${so ? '' : 'checked'}><span><b>Cada serviço com o seu valor</b><small>e o total da viagem no topo</small></span></label>
+      <label class="optin"><input type="radio" name="ktVal" value="total" ${so ? 'checked' : ''}><span><b>Só o total da viagem</b><small>o cliente não vê o valor de cada passeio (no link, no PDF e no e-mail)</small></span></label>
+      ${e && e.em ? `<p class="why">✉️ Reserva mandada por e-mail para ${esc(e.para || '')} em ${esc(new Date(e.em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }))}.</p>` : ''}</section>`; })()}
     <section class="card ktEd ktOnde"><h3>Onde o cliente fica</h3>
       <p class="why">Sai no título do kit e em "Sua base em…". Em branco, o app descobre pelo hotel e pelo ponto de encontro: agora está <b>${esc(d.base || cidAuto)}</b>.</p>
       <div class="frow"><label class="fld">Cidade<input id="ktBase" list="ktBaseL" maxlength="40" autocomplete="off" value="${esc(aj.base || '')}" placeholder="${esc(cidAuto)}"></label>
@@ -465,6 +523,25 @@ async function admKit(chave) {
   $('#ktCopia').onclick = async (e) => { try { const url = await pega(e.target); try { await navigator.clipboard.writeText(url); toast('Link copiado'); } catch (x) { prompt('Copie o link:', url); } } catch (x) { toast(x.message); } };
   $('#ktZap').onclick = async (e) => { try { const url = await pega(e.target); const msg = await Kit.mensagem(chave, url);
     waParaQuem({ titulo: 'Mandar o kit no WhatsApp', msg, cliente: { nome: d.nome, whats: fone } }); } catch (x) { toast(x.message); } };
+  document.querySelectorAll('[name="ktVal"]').forEach(r => r.onchange = () => {
+    const so = r.value === 'total', T = kitTokens(); (T[chave] = T[chave] || {}).soTotal = so;
+    DB.settings.kitSoTotal = so; save(); Kit.agendar(chave);
+    toast(so ? 'Agora vai só o total da viagem' : 'Agora vai o valor de cada serviço'); admKit(chave);
+  });
+  $('#ktMail').onclick = () => {
+    const mail = (bs.map(b => String(b.email || '').trim()).find(x => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x))) || (c && c.email) || '';
+    const n = d.servicos.length, so = kitSoTotal(chave);
+    const j = opJanela('Mandar a reserva por e-mail', `<p class="why">Vai <b>um e-mail só</b> com ${n > 1 ? `os ${n} serviços` : 'o serviço'} da viagem, ${so ? 'só o total' : 'o valor de cada serviço e o total'} e o botão "Abrir a minha viagem" (vouchers e tudo). E-mail enviado não volta.</p>
+      <label class="fld">Para<input id="ktMailPara" type="email" autocomplete="off" value="${esc(mail)}" placeholder="cliente@email.com"></label>
+      <div class="btnrow"><button type="button" class="cta sm" id="ktMailOk">Mandar o e-mail</button></div>`);
+    const inp = j.querySelector('#ktMailPara'); if (!mail) inp.focus();
+    j.querySelector('#ktMailOk').onclick = async (e) => {
+      const para = inp.value.trim(); if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(para)) { toast('Confira o e-mail'); inp.focus(); return; }
+      e.target.disabled = true; e.target.textContent = 'Mandando…';
+      try { await Kit.mandarEmail(chave, para); j.close(); toast('✉️ Reserva da viagem mandada para ' + para); admKit(chave); }
+      catch (x) { e.target.disabled = false; e.target.textContent = 'Mandar o e-mail'; toast(x.message); }
+    };
+  };
   $('#ktDicasOk').onclick = () => { DB.settings.kitDicas = $('#ktDicasTx').value.split('\n').map(x => x.trim()).filter(Boolean).slice(0, 14); save(); Kit.agendar(chave); toast('Dicas salvas'); admKit(chave); };
   $('#ktDicasPadrao').onclick = () => { delete DB.settings.kitDicas; save(); Kit.agendar(chave); toast('Dicas padrão de volta'); admKit(chave); };
   $('#ktOndeOk').onclick = () => {
@@ -535,6 +612,14 @@ if (typeof Bookings !== 'undefined' && typeof Bookings.confirmarCliente === 'fun
   Bookings.confirmarCliente = function (id) {
     const b = Bookings.get(id); if (!b || b.clienteConfirmado) return null;
     if (!kitPodeNuvem()) return _conf(id);
+    if (kitPorCliente()) {
+      const chave = kitChaveDe(b);
+      b.clienteConfirmado = { em: new Date().toISOString(), viagem: chave };
+      try { localStorage.setItem(DB_KEY, JSON.stringify(DB)); } catch (e) {}
+      if (typeof cloudUpdateBooking === 'function') cloudUpdateBooking(b);
+      Kit.emailJunto(chave, String(b.email || '').trim(), [b.id]);
+      return b;
+    }
     b.clienteConfirmado = { em: new Date().toISOString(), publicandoKit: true };   /* a tela já mostra "avisado" */
     Promise.race([Kit.publicarJa(kitChaveDe(b)), new Promise(r => setTimeout(r, 5000))]).catch(() => {})
       .finally(() => { delete b.clienteConfirmado; _conf(id); });
@@ -550,12 +635,18 @@ function kitAjustes(s) {
   if (!s) return s;
   if (+s.kitVersao !== 1) s.kitVersao = 1;
   if (!(typeof APP_CONFIG !== 'undefined' && APP_CONFIG.avisosEmail === false) && !s.avisoClientesV1) { s.avisarClientes = true; s.avisoClientesV1 = true; }
+  /* reserva por cliente (13/11/2026): liga UMA vez; o servidor lê nos Ajustes públicos */
+  if (!s.reservaPorClienteV1) { s.reservaPorCliente = true; s.reservaPorClienteV1 = true; }
   return s;
 }
 if (typeof DB !== 'undefined' && DB && DB.settings) {
-  const antes = JSON.stringify([DB.settings.kitVersao, DB.settings.avisarClientes, DB.settings.avisoClientesV1]);
+  const antes = JSON.stringify([DB.settings.kitVersao, DB.settings.avisarClientes, DB.settings.avisoClientesV1, DB.settings.reservaPorCliente]);
   kitAjustes(DB.settings);
-  if (JSON.stringify([DB.settings.kitVersao, DB.settings.avisarClientes, DB.settings.avisoClientesV1]) !== antes) try { localStorage.setItem(DB_KEY, JSON.stringify(DB)); } catch (e) {}
+  if (JSON.stringify([DB.settings.kitVersao, DB.settings.avisarClientes, DB.settings.avisoClientesV1, DB.settings.reservaPorCliente]) !== antes) {
+    try { localStorage.setItem(DB_KEY, JSON.stringify(DB)); } catch (e) {}
+    /* a dona logada: os Ajustes sobem já (o servidor precisa saber antes da próxima reserva lançada no painel) */
+    if (typeof isLoggedIn === 'function' && isLoggedIn() && typeof save === 'function') setTimeout(() => { try { save(); } catch (e) {} }, 4000);
+  }
 }
 /* a nuvem traz os Ajustes de volta a cada leitura (cloud.js chama fillSettings): o kit continua valendo */
 if (typeof fillSettings === 'function') { const _fill = fillSettings; fillSettings = function (s) { return kitAjustes(_fill(s)); }; }
@@ -660,6 +751,9 @@ function kitCss() {
   .kt-levar li::before{content:"";position:absolute;left:6px;top:11px;width:7px;height:7px;border-radius:50%;background:var(--kt-a)}
   .kt-levar li.kt-marcado{font-weight:700}
   .kt-pg{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0 8px}
+  .kt-pg.tres{grid-template-columns:repeat(3,1fr)}
+  @media (max-width:420px){.kt-pg.tres{grid-template-columns:1fr 1fr}.kt-pg.tres > div:first-child{grid-column:1/-1}}
+  .ktVal .optin{margin:6px 0}
   .kt-pg > div{border-radius:12px;padding:10px 12px;background:#E3EDE6}
   .kt-pg > div.resta{background:#F7EFD6}
   .kt-pg b{display:block;font:700 19px/1.2 var(--f-display,system-ui);color:var(--kt-n)}

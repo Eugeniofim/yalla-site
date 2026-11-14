@@ -3119,6 +3119,7 @@ function pedidosHtml() {
       <div class="tacts">
         ${p.whats ? `<a class="mini cta-ish" target="_blank" rel="noopener" href="${waLink(t('waHi', { name: p.nome.split(' ')[0], tour: '', when: '' }), p.whats.replace(/\D/g, ''))}">${t('pdAbrir')}</a>` : ''}
         <button class="mini" data-pdm="${esc(p.id)}" data-v="${p.respondido ? '0' : '1'}">${p.respondido ? t('pdDesmarca') : t('pdMarca')}</button>
+        <button class="mini ghost danger" data-pdrm="${esc(p.id)}" aria-label="Apagar o pedido de ${esc(p.nome)}">apagar</button>
       </div>
     </div>`).join('') : `<p class="why">${t('pdVazio')}</p>`}
   </details>`;
@@ -3201,6 +3202,11 @@ function admBookings() {
     : `<div class="emptybox"><p>${t('emptyBookings')}</p></div>`}`);
   $$('[data-pdm]').forEach(b => b.onclick = () => {
     Roteiros.marca(b.dataset.pdm, b.dataset.v === '1'); admBookings();
+  });
+  $$('[data-pdrm]').forEach(b => b.onclick = () => {
+    const p = (DB.pedidos || []).find(x => x.id === b.dataset.pdrm); if (!p) return;
+    if (!confirm(`Apagar o pedido de ${p.nome || 'sem nome'}? Não dá para desfazer.`)) return;
+    Roteiros.remove(p.id); toast('Pedido apagado'); admBookings();
   });
   /* ---- lancamento manual ---- */
   const nrRecalcula = () => {
@@ -3607,6 +3613,8 @@ function admSettings() {
       <label class="optin"><input type="checkbox" id="avCli" ${DB.settings.avisarClientes ? 'checked' : ''}>
         <span><b>${t('admCli')}</b><small>${t('admCliHelp')}</small></span></label>
       <small class="why">${t('admCliNota')}</small>
+      <label class="optin"><input type="checkbox" id="avPorCli" ${DB.settings.reservaPorCliente ? 'checked' : ''}>
+        <span><b>Uma reserva por cliente</b><small>A reserva da viagem vai num e-mail só, com todos os serviços, quando você manda (no kit da viagem, no "Fechou" do orçamento ou ao registrar o pagamento). O que você lança no painel não manda e-mail sozinho, nem para você nem para o cliente. As reservas feitas no site continuam avisando os dois.</small></span></label>
       ${cartaoEmail('recibo')}
       ${cartaoEmail('conf')}
       <div class="btnrow"><button class="cta sm" id="avSave">${t('saveBtn')}</button></div>
@@ -3795,6 +3803,7 @@ function admSettings() {
     DB.settings.admEmail = v;
     DB.settings.avisarClientes = $('#avCli').checked;
     DB.settings.avisoClientesEscolhido = true;   /* 27/10: a escolha dela vale no servidor (e-mail ao cliente) */
+    if ($('#avPorCli')) { DB.settings.reservaPorCliente = $('#avPorCli').checked; DB.settings.reservaPorClienteV1 = true; }
     const pega = (id) => $('#' + id).value.trim();
     DB.settings.emailReciboIntro = { pt: pega('reciboIntroPt'), en: pega('reciboIntroEn') };
     DB.settings.emailReciboPS    = { pt: pega('reciboPsPt'),    en: pega('reciboPsEn') };

@@ -84,6 +84,14 @@ function rtDocHtml(d) {
     bloco(`Sua base em ${base}`, hotel || enc ? `<p>${hotel ? esc(hotel) : ''}${hotel && enc ? '<br>' : ''}${enc ? 'Ponto de encontro para os passeios: ' + esc(enc) + '.' : ''}</p>` : '')
     + bloco('Chegada e partida', trf.length ? `<p>${trf.map(linhaTrf).join('<br>')}</p>` : '')
     + bloco('Sua programação', porDia.length ? `<p>${porDia.map(g => `${esc(rtDiaCurto(g.d))} • ${g.l.map(s => esc(s.nome) + (rtFaixa(s) ? ', ' + esc(rtFaixa(s).replace(/^(\d)/, 'das $1')) : '')).join('; ')}.`).join('<br>')}</p>` : '')
+    + (() => {
+      /* o total da viagem (13/11/2026): sempre no "só o total" (os serviços vêm sem valor); no "cada serviço", com mais de um */
+      const tt = d.totais && (d.soTotal || sv.length > 1) ? d.totais : null;
+      if (!tt || !(+tt.total > 0 || +tt.pago > 0 || +tt.falta > 0)) return '';
+      const v = (x) => esc(typeof kitValor === 'function' ? kitValor(x, tt.moeda || '') : eur(x));
+      const l = [+tt.total > 0 ? `Total da viagem <b>${v(tt.total)}</b>.` : '', +tt.pago > 0 ? `Pago <b>${v(tt.pago)}</b>.` : '', +tt.falta > 0 ? `Falta pagar <b>${v(tt.falta)}</b>.` : 'Tudo pago ✓'].filter(Boolean);
+      return `<div class="rt-bl kt-bl rt-tot"><h3>Investimento da viagem</h3><p>${l.join(' ')}</p></div>`;
+    })()
     + bloco('Horário local', '<p>Todos os horários seguem o horário dos Emirados Árabes Unidos.</p>')
     + (sv.length > 1 ? `<nav class="kt-lista rt-lista kt-tela" aria-label="Ir direto para">${sv.map(s => { const k = (d.servicos || []).indexOf(s);
         return `<a href="#kt-sv-${k}" data-kt-ir="${k}"><span>${esc(rtDiaCurto(s.data))}${s.hora ? ' · ' + esc(s.hora) : ''}</span><b>${esc(s.nome)}</b></a>`; }).join('')}</nav>` : '')

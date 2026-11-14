@@ -831,7 +831,9 @@ function admFicha(arg) {
         <div class="frow"><label class="fld">Partida<input id="fvPart" value="${esc(v.partida || '')}"></label><label class="fld">Bagagem<input id="fvBag" value="${esc(v.bagagem || '')}" placeholder="2x23kg + 2x10kg"></label></div>
         <button class="cta sm" id="fvSalva">Salvar</button></div>
 
-      <h3 style="margin-top:16px">Serviços ${prox.length ? '· próximos' : ''}</h3>
+      ${(() => { const alvo = prox.find(b => (b.status || 'confirmed') === 'confirmed'), n = prox.filter(b => (b.status || 'confirmed') === 'confirmed').length;
+        const bt = alvo && typeof kitChaveDe === 'function' ? `<button type="button" class="mini strong" data-kit="${esc(kitChaveDe(alvo))}" title="Uma reserva com todos os serviços: link, PDF, WhatsApp e e-mail">Reserva da viagem · ${n} ${n > 1 ? 'serviços' : 'serviço'}</button>` : '';
+        return `<div class="rp-cab" style="margin-top:16px"><h3>Serviços ${prox.length ? '· próximos' : ''}</h3>${bt}</div>`; })()}
       ${prox.length ? `<div class="fc-tab-wrap"><table class="tbl fc-tab"><thead><tr><th>Data</th><th>Hora</th><th>Serviço · quem vai · ingressos e links</th><th class="right">Total</th><th class="right">Sinal/pago</th><th class="right">${_restoNoDia() ? 'Pagar no dia' : 'Falta pagar'}</th><th>Guia</th><th></th></tr></thead>
         <tbody>${prox.map(linhaServ).join('')}</tbody>
         <tfoot><tr><td colspan="3"><b>Total da viagem</b></td><td class="mono right"><b>${eur(somaTot)}</b></td><td class="mono right"><b>${eur(somaPago)}</b></td><td class="mono right"><b>${eur(somaDia)}</b></td><td colspan="2"></td></tr></tfoot></table></div>` : '<p class="why">Nenhum serviço marcado.</p>'}
@@ -1575,7 +1577,7 @@ function admConsulta(arg, modo) {
       <label class="fld">Arquivo .csv<input type="file" id="crmArq" accept=".csv,text/csv"></label><div id="crmImpPrev"></div></section>
     ${rotSemOrc.length ? `<section class="card"><h3>🗺️ Monte seu roteiro · ${rotSemOrc.length}</h3>
       ${rotSemOrc.map(p => `<div class="orc-row"><div class="tinfo"><b>${esc(p.nome)}</b><small>${[p.ini && opCurta(p.ini), p.fim && opCurta(p.fim)].filter(Boolean).join(' → ')} · ${p.adultos} adultos${p.criancas ? ' + ' + p.criancas + ' crianças' : ''} · ${(p.onde || []).join(', ')}${p.modo === 'consultoria' ? ' · <b>consultoria</b>' : ''}</small></div>
-        <button class="mini strong" data-rot="${esc(p.id)}">Montar orçamento</button></div>`).join('')}</section>` : ''}
+        <div class="tacts"><button class="mini strong" data-rot="${esc(p.id)}">Montar orçamento</button><button class="mini ghost danger" data-rotrm="${esc(p.id)}" aria-label="Apagar o pedido de ${esc(p.nome)}">apagar</button></div></div>`).join('')}</section>` : ''}
     ${S.vista === 'planilha' ? planilha : (cartoes || '<p class="empty">Nada nesta etapa.</p>')}`);
 
   const re = () => admConsulta(undefined, modo);
@@ -1602,6 +1604,12 @@ function admConsulta(arg, modo) {
   /* "fechou ✓" abre o Fechou na hora (03/11/2026: antes levava ao orçamento, onde o Fechou ficava escondido) */
   $$('[data-fecha]').forEach(b => b.onclick = () => { const o = Orc.get(b.dataset.fecha); if (o && typeof oyFechar === 'function') oyFechar(o); else go('/adm/consulta/' + b.dataset.fecha); });
   $$('[data-jpag]').forEach(b => b.onclick = () => { const bk = Bookings.get(b.dataset.jpag); if (bk) ATALHO.pagto(bk); });
+  /* apagar o pedido do "Monte seu roteiro" (13/11/2026, a Milla: "precisa ter a opção de apagar daqui") */
+  $$('[data-rotrm]').forEach(b => b.onclick = () => {
+    const p = (DB.pedidos || []).find(x => x.id === b.dataset.rotrm); if (!p) return;
+    if (!confirm(`Apagar o pedido de ${p.nome || 'sem nome'}? Não dá para desfazer.`)) return;
+    Roteiros.remove(p.id); toast('Pedido apagado'); admConsulta(undefined, modo);
+  });
   /* apagar um orçamento que deu errado (28/10/2026, "como a Milla apaga algo que deu errado?") */
   $$('[data-orcrm]').forEach(b => b.onclick = () => {
     const o = Orc.get(b.dataset.orcrm); if (!o) return;
@@ -3255,6 +3263,7 @@ function atBusca(d, soDevendo, escolhe) {
    Vem marcado, mas ela vê para quem vai e pode desmarcar — e-mail que saiu não volta. */
 function podeAvisarPago(b) { return !!(b && DB.settings.avisarClientes && b.email && b.status !== 'cancelled' && !b.clienteConfirmado); }
 function avisoPagoHtml(email) {
+  if (typeof kitPorCliente === 'function' && kitPorCliente()) return `<label class="optin at-avisa"><input type="checkbox" id="atAvisa" checked><span><b>Mandar a reserva da viagem por e-mail</b><small>um e-mail só, com todos os serviços do cliente · para ${esc(email)} · e-mail enviado não volta</small></span></label>`;
   return `<label class="optin at-avisa"><input type="checkbox" id="atAvisa" checked><span><b>Mandar o voucher pago por e-mail</b><small>para ${esc(email)} · e-mail enviado não volta</small></span></label>`;
 }
 /* PARA QUEM VAI (13/11/2026, pedido: "ao clicar no WhatsApp, dar a opção de enviar para os dois números da Milla"):
@@ -3342,7 +3351,7 @@ const ATALHO = {
         }
         Tarefas.sincroniza();
         const avisou = !!(av && !av.hidden && d.querySelector('#atAvisa').checked && Bookings.due(b) <= 0 && podeAvisarPago(b) && Bookings.confirmarCliente(b.id));
-        d.close(); toast(`💵 ${valorReserva(b, p.amount)} registrado · ${Contas.nome(conta)}${Bookings.due(b) ? ' · ainda falta ' + valorReserva(b, Bookings.due(b)) : ' · pago ✓'}${avisou ? ' · voucher pago indo por e-mail' : ''}`);
+        d.close(); toast(`💵 ${valorReserva(b, p.amount)} registrado · ${Contas.nome(conta)}${Bookings.due(b) ? ' · ainda falta ' + valorReserva(b, Bookings.due(b)) : ' · pago ✓'}${avisou ? (typeof kitPorCliente === 'function' && kitPorCliente() ? ' · reserva da viagem indo por e-mail' : ' · voucher pago indo por e-mail') : ''}`);
         route();
       };
     };
