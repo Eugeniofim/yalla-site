@@ -220,6 +220,7 @@ Orc.fecha = function (id, opts) {
     Object.assign(b, { orcTitulo: i.desc || '', orcTexto: i.texto || '', orcIncluso: i.incluso || '', orcFoto: i.foto || '', orcObs: OY_OBS_INTERNA.test(i.obs || '') ? '' : (i.obs || '') });
     const par = oyParceiroDe(o); if (par && !b.parceiroId) b.parceiroId = par.id;
     if (i.horaFim) b.horaFim = i.horaFim;
+    b.orcItemId = i.id;   /* de qual serviço do orçamento veio (18/11/2026: mudar o orçamento fechado muda a reserva) */
     /* serviço sem horário no orçamento: a reserva guarda 09:00 por dentro (a agenda precisa de uma
        hora), mas o roteiro que vai para o cliente NÃO mostra horário nenhum (28/10/2026) */
     if (!i.hora) b.semHora = true;
@@ -1016,7 +1017,7 @@ function oyTela(id) {
   <div class="oy">
     <div class="oy-top">
       <a class="linkbtn" href="#/adm/consulta">← Orçamentos</a>
-      <div class="oy-tit"><h1 class="pageh">${esc(o.num)}</h1><span class="pill">${esc(st)}</span><small class="oy-salvo" id="oySalvo" aria-live="polite">${o.salvoEm ? 'salvo às ' + esc(o.salvoEm) : 'salva sozinho'}</small></div>
+      <div class="oy-tit"><h1 class="pageh">${esc(o.num)}</h1><span class="pill">${esc(st)}</span>${['novo', 'rascunho'].includes(o.status) ? `<button type="button" class="mini" id="oyEnviou" data-oid="${esc(o.id)}" title="Já mandou a proposta por outro caminho? Marque aqui">marcar como enviado</button>` : ''}<small class="oy-salvo" id="oySalvo" aria-live="polite">${o.salvoEm ? 'salvo às ' + esc(o.salvoEm) : 'salva sozinho'}</small></div>
     </div>
 
     <section class="card oy-card">
@@ -1067,6 +1068,7 @@ function oyTela(id) {
     ${fechado ? (() => { const bs = (o.bookingIds || []).map(bid => Bookings.get(bid)).filter(Boolean);
       return `<section class="card oy-card oy-fechou"><div class="oy-hrow"><h2 class="oy-h">Fechou${o.fechadoEm ? ' em ' + esc(opCurta(o.fechadoEm)) : ''}</h2><span class="oy-sub">${bs.length} ${bs.length === 1 ? 'reserva' : 'reservas'}</span></div>
         ${bs.length && typeof Kit !== 'undefined' ? `<button type="button" class="cta oy-kitb" id="oyKit" data-kitb="${esc(Kit.daReserva(bs[0]))}">Roteiro da viagem</button><p class="why">O que o cliente recebe depois da compra: o roteiro dia a dia com os horários, os encontros e o pagamento, em link ou PDF.</p>` : ''}
+        <p class="why oy-fechou-dica">Mudou dia ou horário? Mude aqui nos serviços, ou na reserva (Ver as reservas → Detalhes). A reserva, a agenda e o roteiro do cliente acompanham.${bs.some(b => b.semHora) ? ` <b>${bs.filter(b => b.semHora).length === 1 ? '1 serviço está' : bs.filter(b => b.semHora).length + ' serviços estão'} sem horário.</b>` : ''}</p>
         <details class="oy-res"><summary>Ver as reservas</summary>${bs.map(b => opCardServico(b, { comData: true })).join('')}</details></section>`; })()
       : o.status === 'enviado' || oyJaReservadas(o).length ? `<section class="card oy-card oy-fechou"><div class="oy-hrow"><h2 class="oy-h">O cliente fechou?</h2></div>
         <p class="why">${oyJaReservadas(o).length ? 'A cliente já reservou pelo site: o Fechou liga essa reserva ao orçamento (não cria outra), marca o que ela pagou e abre o roteiro da viagem.' : 'Cada serviço vira reserva e abre o roteiro da viagem, pronto para mandar no WhatsApp, por link ou PDF.'}</p>
@@ -1512,7 +1514,9 @@ function oyFechar(o) {
   /* reserva por cliente (13/11/2026): UM e-mail com a viagem inteira, pago ou não (antes: um recibo por serviço) */
   const porCli = typeof kitPorCliente === 'function' && kitPorCliente() && typeof Kit !== 'undefined' && Kit.emailJunto;
   const emailCli = DB.settings.avisarClientes && (porCli || falta > 0) ? String(o.cliente.email || (ja.find(b => b.email) || {}).email || '').trim() : '';
+  const semH = viram.filter(i => !i.hora);
   const d = opJanela('Fechou?', `${viram.length ? `<p class="why">${viram.length === 1 ? 'O serviço vira uma reserva' : `Os ${viram.length} serviços viram reservas`}, com o cliente e o dia. Aparece no Hoje, na agenda e na ficha.</p>` : ''}
+    ${semH.length ? `<p class="alert warn">Sem horário: ${esc(semH.map(i => i.desc).join(', '))}. A reserva fica "sem hora" até você pôr (no serviço do orçamento ou na reserva → Detalhes).</p>` : ''}
     ${ja.length ? `<p class="oy-ja-nota">✓ Já reservado pelo site: ${ja.map(b => `<b>${esc(b.code)}</b> (${esc(nomeDoServico(b))}, ${esc(opCurta(b.date))})`).join(', ')}. Não vou criar de novo: entra neste orçamento.</p>` : ''}
     <fieldset class="oy-pagou"><legend>Quanto o cliente já pagou?</legend>
       <label class="optin"><input type="radio" name="oyFPg" value="nada" checked><span><b>Ainda não pagou</b></span></label>
@@ -2025,3 +2029,111 @@ opDocOrc = (id) => go('/adm/proposta/' + id);
 if (typeof pubRotaDe === 'function' && pubRotaDe()) route();
 /* 03/11/2026: a lista de Orçamentos e as Reservas também (o "já reservou pelo site" e o aviso de dobro moram aqui) */
 else if (/^#\/adm\/(consulta|proposta|bookings)(\/|$)/.test(location.hash)) route();
+
+
+/* =====================================================
+   DEPOIS DE FECHADO (18/11/2026)
+
+   A Milla: "depois que fechou/pagou: onde achar e como editar o orçamento/cronograma?"
+   e, com o print do Sonara Camp da Juliana às 09:00: "o horário veio errado (nem era o que tava
+   no orçamento). Então preciso modificar".
+   Era assim: o Fechou copia cada serviço numa reserva, e dali em diante os dois viviam separados.
+   Mudar a hora no orçamento não mudava a reserva — e o roteiro do cliente sai das reservas.
+   Agora os dois andam juntos, nos dois sentidos, e só o que ela MUDOU vai:
+   - mudou dia, horário, horário de fim, título, texto, incluso ou foto de um serviço do orçamento
+     fechado → a reserva dele muda junto (e sobe para a nuvem);
+   - mudou dia ou horário da reserva (Detalhes, Planilha, assistente) → o serviço do orçamento muda junto.
+   E a marca "sem horário" sai quando alguém põe a hora (antes ficava, e o roteiro do cliente escondia
+   o 16:00 que ela tinha posto).
+   ===================================================== */
+const oyReservasDe = (o) => (o && o.bookingIds || []).map(id => Bookings.get(id)).filter(Boolean);
+/* a reserva que nasceu deste serviço: pela marca do Fechou; nas antigas, pelo título (e pelo dia, se repetir) */
+function oyReservaDoServico(o, i, bs, titulo) {
+  bs = bs || oyReservasDe(o);
+  const b = bs.find(x => x.orcItemId === i.id); if (b) return b;
+  const t = titulo || i.desc, l = bs.filter(x => !x.orcItemId && x.orcTitulo && x.orcTitulo === t);
+  if (l.length === 1) return l[0];
+  const l2 = l.filter(x => x.date === i.data);
+  return l2.length === 1 ? l2[0] : null;
+}
+const oyRetrato = (o) => Object.fromEntries((o && o.itens || []).map(i => [i.id, { data: i.data || '', hora: i.hora || '', horaFim: i.horaFim || '', desc: i.desc || '' }]));
+let oySincroniza = false;
+function oyLevaParaReservas(o, antes) {
+  if (!o || o.status !== 'fechado' || oySincroniza || !antes) return [];
+  const bs = oyReservasDe(o), mudadas = [];
+  for (const i of o.itens || []) {
+    const a = antes[i.id]; if (!a) continue;
+    const b = oyReservaDoServico(o, i, bs, a.desc); if (!b || b.status === 'cancelled') continue;
+    let m = false;
+    if (i.data && i.data !== a.data && i.data !== b.date) { b.date = i.data; m = true; }
+    if (i.hora && i.hora !== a.hora && (i.hora !== b.time || b.semHora)) { b.time = i.hora; delete b.semHora; m = true; }
+    if ((i.horaFim || '') !== a.horaFim) { if (i.horaFim) b.horaFim = i.horaFim; else delete b.horaFim; m = true; }
+    for (const [k, v] of [['orcTitulo', i.desc], ['orcTexto', i.texto], ['orcIncluso', i.incluso], ['orcFoto', i.foto]]) if (v && b[k] !== v) { b[k] = v; m = true; }
+    if (m) { b.orcItemId = i.id; mudadas.push(b); }
+  }
+  if (mudadas.length) {
+    oySincroniza = true;
+    try { for (const b of mudadas) _opSaveBooking(b); } finally { oySincroniza = false; }
+    toast(mudadas.length === 1 ? 'A reserva e o roteiro do cliente acompanharam' : `As ${mudadas.length} reservas e o roteiro do cliente acompanharam`);
+  }
+  return mudadas;
+}
+/* pelo editor: tudo o que grava passa pelo oyLe (ele lê a tela por cima do próprio orçamento) — o retrato de antes
+   é tirado antes dele ler, e o que mudou vai para as reservas */
+if (typeof oyLe === 'function') {
+  const _oyLeF = oyLe;
+  oyLe = function (o) {
+    const antes = o && o.status === 'fechado' ? oyRetrato(o) : null;
+    const r = _oyLeF.apply(this, arguments);
+    if (antes) oyLevaParaReservas(o, antes);
+    return r;
+  };
+}
+/* por fora do editor (assistente): chega um orçamento novo para gravar por cima do guardado */
+{
+  const _orcSalvaF = Orc.salva;
+  Orc.salva = function (o) {
+    const x = o && Orc.get(o.id), antes = x && x !== o && x.status === 'fechado' ? oyRetrato(x) : null;
+    const r = _orcSalvaF.apply(this, arguments);
+    if (antes && r) oyLevaParaReservas(r, antes);
+    return r;
+  };
+}
+/* o caminho de volta: a reserva mudou (Detalhes, Planilha, assistente) → o serviço do orçamento fechado acompanha,
+   e a marca "sem horário" sai quando a hora deixou de ser o 09:00 de dentro */
+function oyReservaMudou(b) {
+  if (!b) return;
+  if (b.semHora && b.time && b.time !== '09:00') delete b.semHora;
+  if (oySincroniza || !b.orcamentoId) return;
+  const o = Orc.get(b.orcamentoId); if (!o || o.status !== 'fechado') return;
+  const i = (o.itens || []).find(x => x.id === b.orcItemId) || (o.itens || []).find(x => oyReservaDoServico(o, x) === b);
+  if (!i) return;
+  let m = false;
+  if (b.date && i.data !== b.date) { i.data = b.date; m = true; }
+  if (!b.semHora && b.time && i.hora !== b.time) { i.hora = b.time; m = true; }
+  if (m) { b.orcItemId = i.id; oySincroniza = true; try { _opSave(); } finally { oySincroniza = false; } }
+}
+if (typeof cloudUpdateBooking === 'function') {
+  const _cubF = cloudUpdateBooking;
+  cloudUpdateBooking = function (b) { try { oyReservaMudou(b); } catch (e) {} return _cubF.apply(this, arguments); };
+}
+/* conserto de uma vez: reserva com hora posta mas ainda marcada "sem horário" (o Sonara da Juliana às 16:00
+   saía SEM horário no roteiro). Roda quando a dona abre o painel; só mexe nessas. */
+let oyConsertouSemHora = false;
+function oyConsertaSemHora() {
+  if (oyConsertouSemHora || !(typeof isLoggedIn === 'function' && isLoggedIn())) return;
+  const l = (DB.bookings || []).filter(b => b.semHora && b.time && b.time !== '09:00');
+  if (!(DB.bookings || []).length) return;
+  oyConsertouSemHora = true;
+  for (const b of l) { delete b.semHora; _opSaveBooking(b); }
+}
+if (typeof admShell === 'function') {
+  const _admShellF = admShell;
+  admShell = function () { try { oyConsertaSemHora(); } catch (e) {} return _admShellF.apply(this, arguments); };
+}
+/* o "marcar como enviado" do editor (pelo clique na página: não depende de como a tela é desenhada) */
+if (typeof document !== 'undefined') document.addEventListener('click', (e) => {
+  const b = e.target && e.target.closest && e.target.closest('#oyEnviou'); if (!b) return;
+  const o = Orc.get(b.dataset.oid); if (!o) return;
+  oyMarcaEnviado(o); if (typeof oyTela === 'function') oyTela(o.id);
+});

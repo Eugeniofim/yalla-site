@@ -118,7 +118,7 @@ function opCardServico(b, o) {
   const cliWa = b.whats ? `<a class="mini" target="_blank" rel="noopener" href="${waLink(t('waHi', { name: opPrimeiro(b.name), tour: opNomeServ(b), when: fmtDate(b.date) + ' ' + b.time }), opNum(b.whats))}">WhatsApp</a>` : '';
 
   return `<article class="svc ${b.status === 'cancelled' ? 'cancel' : ''}" id="svc-${esc(b.id)}">
-    <div class="svc-hora"><b>${esc(b.time)}</b>${o.comData ? `<small>${opCurta(b.date)}</small>` : `<small>${turnoNome(turnoDaHora(b.time))}</small>`}</div>
+    <div class="svc-hora"><b${b.semHora ? ' class="svc-semh" title="O orçamento veio sem horário. Defina em Detalhes."' : ''}>${esc(opHora(b))}</b>${o.comData ? `<small>${opCurta(b.date)}</small>` : `<small>${b.semHora ? 'defina' : turnoNome(turnoDaHora(b.time))}</small>`}</div>
     <div class="svc-corpo">
       <div class="svc-top">${ico} <b>${esc(opNomeServ(b))}</b> <small>· ${b.pax} ${b.pax > 1 ? 'pessoas' : 'pessoa'}${b.veiculo ? ' · ' + esc(b.veiculo) : ''} · <span class="mono">${esc(b.code)}</span></small></div>
       <div class="svc-cli"><a href="${opFicha(b)}">${esc(b.name)}</a> ${cliWa}${b.compradorVai === false ? ' <small class="why">(comprou, não vai)</small>' : ''}</div>
@@ -160,6 +160,10 @@ function opFormPagamento(b) {
 function opFormDetalhes(b) {
   const opts = (tipo) => Equipe.all(tipo).map(p => `<option value="${esc(p.id)}" ${b.prestadorId === p.id ? 'selected' : ''}>${esc(p.nome)}</option>`).join('');
   return `<div class="svc-form" id="dt-${esc(b.id)}" hidden>
+    <div class="frow" style="align-items:flex-start">
+      <label class="fld">Dia<input type="date" id="dtdia-${esc(b.id)}" value="${esc(b.date || '')}"></label>
+      <label class="fld">Horário<input type="time" id="dthora-${esc(b.id)}" value="${b.semHora ? '' : esc(b.time || '')}">${b.semHora ? '<small class="why">o orçamento veio sem horário</small>' : ''}</label>
+    </div>
     <div class="frow">
       <label class="fld">Voo<input id="dtv-${esc(b.id)}" value="${esc(b.voo || '')}" placeholder="EK 262 · chega 14:40"></label>
       <label class="fld">Buscar em / encontro<input id="dto-${esc(b.id)}" value="${esc(b.origem || '')}" placeholder="DXB Terminal 3"></label>
@@ -237,6 +241,13 @@ function opLigaCards(redesenha) {
   });
   $$('[data-dtok]').forEach(btn => btn.onclick = () => {
     const id = btn.dataset.dtok;
+    /* dia e horário (18/11/2026, a Milla: "o horário veio errado… preciso modificar"): o roteiro do cliente
+       e o orçamento fechado acompanham (orcamento-yalla.js, "depois de fechado") */
+    const bk = Bookings.get(id), dia = ($('#dtdia-' + id) || {}).value || '', hora = ($('#dthora-' + id) || {}).value || '';
+    if (bk) {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dia) && dia !== bk.date) bk.date = dia;
+      if (/^\d{2}:\d{2}$/.test(hora) && (hora !== bk.time || bk.semHora)) { bk.time = hora; delete bk.semHora; }
+    }
     Op.detalhes(id, { voo: $('#dtv-' + id).value, origem: $('#dto-' + id).value, destino: $('#dtd-' + id).value,
       prestadorId: $('#dtp-' + id).value, custo: $('#dtc-' + id).value, restoPara: $('#dtr-' + id).value, obsOp: $('#dtn-' + id).value });
     if ($('#dtpt-' + id)) escolhePonto(id, $('#dtpt-' + id).value);
@@ -356,7 +367,7 @@ function hjPainel(hoje) {
   B.push(bloco(HJ.sino, 'Amanhã — lembrete de véspera', am.length || '',
     (am.length ? am.map(b => it(HJ.sino, `${esc(b.name)} · ${esc(opNomeServ(b))}`, `${esc(b.time || '')} · ${b.pax} ${+b.pax === 1 ? 'pessoa' : 'pessoas'}`,
       wa(b.whats, hjLembrete(b), 'Mandar lembrete') + lnk(hjFicha(b), 'Ficha'))).join('') : '<p class="empty">Nenhum serviço amanhã.</p>')
-    + (prox.length ? `<p class="rotMini">Próximos dias</p>${prox.slice(0, 4).map(b => it(HJ.agenda, `${opCurta(b.date)} · ${esc(opPrimeiro(b.name))}`, `${esc(opNomeServ(b))}${b.time ? ' · ' + esc(b.time) : ''}`, lnk('#/adm/today/' + b.date, 'Ver o dia'))).join('')}` : '')
+    + (prox.length ? `<p class="rotMini">Próximos dias</p>${prox.slice(0, 4).map(b => it(HJ.agenda, `${opCurta(b.date)} · ${esc(opPrimeiro(b.name))}`, `${esc(opNomeServ(b))}${b.time ? ' · ' + esc(opHora(b)) : ''}`, lnk('#/adm/today/' + b.date, 'Ver o dia'))).join('')}` : '')
     + '<p class="why">A mensagem vem pronta: serviço, dia e hora, encontro, voo, quem faz e o saldo, se houver.</p>'));
 
   /* 7. compras e parceiros (ingressos, transfer, hotel) — próximos 14 dias */
@@ -488,7 +499,7 @@ function admHoje(arg) {
   $('#hjBusca').oninput = (e) => {
     const r = Op.busca(e.target.value).slice(0, 8);
     res.innerHTML = r.length ? `<div class="op-resbusca">${r.map(b => `<button class="op-achado" data-ir="${esc(b.id)}">
-        <b>${esc(b.name)}</b><small>${fmtDate(b.date)} ${esc(b.time)} · ${esc(opNomeServ(b))}${b.voo ? ' · ✈ ' + esc(b.voo) : ''} · ${esc(b.code)}</small></button>`).join('')}</div>`
+        <b>${esc(b.name)}</b><small>${fmtDate(b.date)} ${esc(opHora(b))} · ${esc(opNomeServ(b))}${b.voo ? ' · ✈ ' + esc(b.voo) : ''} · ${esc(b.code)}</small></button>`).join('')}</div>`
       : (e.target.value.trim().length >= 2 ? '<p class="why">Nada encontrado.</p>' : '');
     $$('[data-ir]', res).forEach(btn => btn.onclick = () => {
       const b = Bookings.get(btn.dataset.ir);
@@ -622,7 +633,7 @@ function admGuias(arg) {
 
     <section class="card">
       <h3>Serviços sem guia ou motorista · próximos 14 dias</h3>
-      ${semP.length ? semP.map(b => `<div class="deprow"><b class="mono">${opCurta(b.date)} ${esc(b.time)}</b>
+      ${semP.length ? semP.map(b => `<div class="deprow"><b class="mono">${opCurta(b.date)} ${esc(opHora(b))}</b>
         <span>${esc(opNomeServ(b))} · ${esc(b.name)} · ${b.pax}p</span>
         <a class="mini strong" href="#/adm/guias/servico:${esc(b.id)}">achar ${opPapel(b)}</a></div>`).join('') : '<p class="why">Tudo escalado. 👏</p>'}
     </section>
@@ -772,7 +783,7 @@ function admFicha(arg) {
     const nd = Op.noDia(b), pres = b.prestadorId ? Equipe.get(b.prestadorId) : null, pago = Bookings.paid(b);
     const part = participantesDe(b);
     return `<tr class="fc-serv ${b.status === 'cancelled' ? 'cancel' : ''}">
-      <td class="mono">${fmtDate(b.date)}</td><td class="mono">${esc(b.time)}</td>
+      <td class="mono">${fmtDate(b.date)}</td><td class="mono">${esc(opHora(b))}</td>
       <td><b>${esc(nomeDoServico(b))}</b>${b.voo ? `<br><small>✈ ${esc(b.voo)}</small>` : ''}${b.origem || b.destino ? `<br><small>📍 ${esc([b.origem, b.destino].filter(Boolean).join(' → '))}</small>` : ''}
         <div class="fc-quem">👥 ${part.length ? part.map(p => `${p.clienteId ? `<a href="${fichaHref({ id: p.clienteId })}">` : '<span>'}${esc(opPrimeiro(p.nome))}${idadeDe(p.nasc) != null ? ` <small>(${idadeDe(p.nasc)})</small>` : ''}${p.clienteId ? '</a>' : '</span>'}`).join(', ') : '<span class="why">ninguém cadastrado</span>'}
           ${part.length < b.pax ? `<span class="pill warn">faltam ${b.pax - part.length} nome(s)</span>` : ''}</div>
@@ -1516,7 +1527,7 @@ function admConsulta(arg, modo) {
     if (r.tipo === 'orcamento' && r.etapa === 'aberto' && tudoReservado) return `<button class="mini strong" data-fecha="${esc(o.id)}">fechou ✓</button><a class="mini" href="#/adm/consulta/${esc(o.id)}">abrir</a><button class="mini ghost danger" data-orcrm="${esc(o.id)}" aria-label="Apagar o orçamento ${esc(o.num)}">apagar</button>`;
     if (r.tipo === 'orcamento' && r.etapa === 'aberto') return `<a class="mini strong" href="#/adm/consulta/${esc(o.id)}">${o.status === 'enviado' ? 'abrir' : 'montar e mandar'}</a>
       ${o.cliente.whats && o.status === 'enviado' ? `<a class="mini" target="_blank" rel="noopener" data-repesca="${esc(o.id)}" href="${waLink(`Oi ${opPrimeiro(o.cliente.nome)}! Tudo bem? Conseguiu ver o orçamento que te mandei (${o.num})? Se quiser, ajusto alguma coisa. ${guiaNome()}`, opNum(o.cliente.whats))}">💬 repescar</a>` : ''}
-      <button class="mini" data-fecha="${esc(o.id)}">fechou ✓</button><button class="mini ghost" data-perde="${esc(o.id)}">perdido</button><button class="mini ghost danger" data-orcrm="${esc(o.id)}" aria-label="Apagar o orçamento ${esc(o.num)}">apagar</button>`;
+      ${o.status !== 'enviado' ? `<button class="mini" data-enviou="${esc(o.id)}" title="Já mandou a proposta por outro caminho (link copiado, outro WhatsApp)? Marque aqui">enviado ✓</button>` : ''}<button class="mini" data-fecha="${esc(o.id)}">fechou ✓</button><button class="mini ghost" data-perde="${esc(o.id)}">perdido</button><button class="mini ghost danger" data-orcrm="${esc(o.id)}" aria-label="Apagar o orçamento ${esc(o.num)}">apagar</button>`;
     if (r.tipo === 'orcamento' && r.etapa === 'perdido') return `<span class="why">${esc(o.motivoPerda || '')}</span><button class="mini ghost" data-reabre="${esc(o.id)}">reabrir</button><button class="mini ghost danger" data-orcrm="${esc(o.id)}" aria-label="Apagar o orçamento ${esc(o.num)}">apagar</button>`;
     const ficha = `<a class="mini" href="#/adm/clients/${encodeURIComponent('c:' + (b.clienteId || ''))}">ficha</a>`;
     const devendo = p.linhas.map(x => x.tipo === 'reserva' ? x.b : null).find(x => x && x.status !== 'cancelled' && Bookings.due(x) > 0);
@@ -1604,6 +1615,13 @@ function admConsulta(arg, modo) {
   /* "fechou ✓" abre o Fechou na hora (03/11/2026: antes levava ao orçamento, onde o Fechou ficava escondido) */
   $$('[data-fecha]').forEach(b => b.onclick = () => { const o = Orc.get(b.dataset.fecha); if (o && typeof oyFechar === 'function') oyFechar(o); else go('/adm/consulta/' + b.dataset.fecha); });
   $$('[data-jpag]').forEach(b => b.onclick = () => { const bk = Bookings.get(b.dataset.jpag); if (bk) ATALHO.pagto(bk); });
+  /* "enviado ✓" (18/11/2026, a Milla: "Orçamento: como marcar enviado?") — o PDF e o WhatsApp para o cliente já
+     marcam sozinhos; este é para quando ela mandou por outro caminho */
+  $$('[data-enviou]').forEach(b => b.onclick = () => {
+    const o = Orc.get(b.dataset.enviou); if (!o) return;
+    if (typeof oyMarcaEnviado === 'function') oyMarcaEnviado(o); else { o.status = 'enviado'; Orc.salva(o); toast('Marcado como enviado'); }
+    admConsulta(undefined, modo);
+  });
   /* apagar o pedido do "Monte seu roteiro" (13/11/2026, a Milla: "precisa ter a opção de apagar daqui") */
   $$('[data-rotrm]').forEach(b => b.onclick = () => {
     const p = (DB.pedidos || []).find(x => x.id === b.dataset.rotrm); if (!p) return;

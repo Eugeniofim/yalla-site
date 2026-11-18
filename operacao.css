@@ -93,6 +93,8 @@ a.clink:hover{text-decoration-color:var(--accent)}
 .orc-row:has(> .tacts){flex-wrap:wrap}
 .orc-row > .tacts{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .orc-row:has(> .tacts) .tinfo{flex:1 1 220px}
+/* serviço sem horário (18/11/2026): não parece um horário de verdade */
+.svc-hora b.svc-semh{font-size:13px;color:var(--warn,#9a6b00);font-weight:700}
 a.orc-row:hover .tinfo b{text-decoration:underline}
 .orc-item{padding:12px;border-radius:var(--r);background:var(--surface-2);margin-bottom:10px}
 .orc-item.sug{background:var(--highlight-wash)}

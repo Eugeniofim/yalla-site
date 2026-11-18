@@ -62,6 +62,9 @@ function _opSaveBooking(b) {
   _opSave();
   if (b && typeof cloudUpdateBooking === 'function') cloudUpdateBooking(b);
 }
+/* serviço que veio do orçamento SEM horário: a reserva guarda 09:00 por dentro (a agenda precisa de uma hora),
+   mas no painel aparece "sem hora" — o 09:00 parecia um horário de verdade (18/11/2026, Sonara da Juliana) */
+function opHora(b) { return b && b.semHora ? 'sem hora' : (b ? b.time : ''); }
 const Equipe = {
   /* na ordem de preferencia dela: "eu pego sempre as melhores primeiro" */
   all(tipo) {
@@ -2130,7 +2133,7 @@ function crmEdita(ref, campo, valor, hoje) {
     case 'veio': { const c = b.clienteId && Cadastro.get(b.clienteId); if (c) Cadastro.salva(c.id, { veioPor: _veioDigitado(v) }); else b.veioPor = _veioDigitado(v); break; }
     case 'indicou': b.indicou = v; break;
     case 'dataServ': { const d = _dataDigitada(v, hoje); if (!d) return { erro: 'data em dd/mm' }; b.date = d; break; }
-    case 'hora': { const h = _horaDigitada(v); if (h) b.time = h; break; }
+    case 'hora': { const h = _horaDigitada(v); if (h) { b.time = h; delete b.semHora; } break; }
     case 'pax': b.pax = Math.max(1, parseInt(v, 10) || 1); break;
     case 'servico': b.servicoTxt = v; break;
     case 'obs': b.obsOp = v; break;
