@@ -217,7 +217,7 @@ Orc.fecha = function (id, opts) {
   bs.forEach((b, n) => {
     /* o roteiro depois da compra (kit) mostra o que ela escreveu no orçamento */
     const i = usados[n]; if (!i) return;
-    Object.assign(b, { orcTitulo: i.desc || '', orcTexto: i.texto || '', orcIncluso: i.incluso || '', orcFoto: i.foto || '', orcObs: OY_OBS_INTERNA.test(i.obs || '') ? '' : (i.obs || '') });
+    Object.assign(b, { orcTitulo: i.desc || '', orcTexto: i.texto || '', orcIncluso: i.incluso || '', orcNaoIncluso: i.naoIncluso || '', orcFoto: i.foto || '', orcObs: OY_OBS_INTERNA.test(i.obs || '') ? '' : (i.obs || '') });
     const par = oyParceiroDe(o); if (par && !b.parceiroId) b.parceiroId = par.id;
     if (i.horaFim) b.horaFim = i.horaFim;
     b.orcItemId = i.id;   /* de qual serviço do orçamento veio (18/11/2026: mudar o orçamento fechado muda a reserva) */
@@ -499,14 +499,28 @@ if (typeof kitServico === 'function') {
   const _oyKitServ = kitServico;
   kitServico = function (b, hotel) {
     const sv = _oyKitServ(b, hotel);
-    if (b.orcTitulo) sv.nome = b.orcTitulo;
-    if (b.orcTexto) sv.resumo = b.orcTexto;
-    if (b.orcFoto) sv.foto = b.orcFoto;
     if (b.horaFim) sv.horaFim = b.horaFim;
     if (b.semHora) sv.hora = '';
-    if (b.orcObs) sv.obs = b.orcObs;
-    const inc = String(b.orcIncluso || '').split(/\n|,\s*(?=[A-ZÀ-Ú])/).map(t => t.trim()).filter(Boolean);
-    if (inc.length) sv.inclui = inc;
+    if (!(b.origin === 'orcamento' || b.orcTitulo)) return sv;   /* reservado pelo site: os textos do passeio valem */
+    /* VEIO DO ORÇAMENTO (18/11/2026, a Milla: "tinha que incluir apenas as informações do orçamento"): o kit mostra
+       o que ESTÁ no orçamento (lido na hora, do serviço de onde a reserva nasceu; sem ele, a cópia do Fechou) e
+       nada do catálogo — nem o incluso/não incluso, nem as paradas, as dicas do dia ou a política do passeio do site,
+       que podem contradizer o que foi vendido (o Megayacht VIP com álcool saía com "álcool e VIP à parte"). */
+    const o = b.orcamentoId && Orc.get(b.orcamentoId);
+    const i = o && typeof oyReservaDoServico === 'function' ? ((o.itens || []).find(x => x.id === b.orcItemId) || (o.itens || []).find(x => oyReservaDoServico(o, x) === b) || null) : null;
+    const v = (k, bk) => String((i ? i[k] : b[bk]) || '').trim();
+    const lista = (t) => String(t || '').split(/\n|,\s*(?=[A-ZÀ-Ú])/).map(t => t.trim()).filter(Boolean);
+    const tit = v('desc', 'orcTitulo'); if (tit) sv.nome = tit;
+    sv.resumo = v('texto', 'orcTexto');
+    const foto = v('foto', 'orcFoto'); if (foto) sv.foto = foto;
+    sv.inclui = lista(v('incluso', 'orcIncluso'));
+    sv.naoInclui = lista(v('naoIncluso', 'orcNaoIncluso'));
+    const obs = i ? (OY_OBS_INTERNA.test(i.obs || '') ? '' : String(i.obs || '').trim()) : String(b.orcObs || '').trim();
+    if (obs) sv.obs = obs; else delete sv.obs;
+    sv.paradas = [];
+    if (sv.tipo !== 'transfer') sv.levar = [];   /* no transfer ficam as instruções do motorista (é logística, não o serviço) */
+    sv.cancel = '';
+    if (sv.horaFim) sv.duracao = '';
     return sv;
   };
 }
@@ -2056,7 +2070,8 @@ function oyReservaDoServico(o, i, bs, titulo) {
   const l2 = l.filter(x => x.date === i.data);
   return l2.length === 1 ? l2[0] : null;
 }
-const oyRetrato = (o) => Object.fromEntries((o && o.itens || []).map(i => [i.id, { data: i.data || '', hora: i.hora || '', horaFim: i.horaFim || '', desc: i.desc || '' }]));
+const oyRetrato = (o) => Object.fromEntries((o && o.itens || []).map(i => [i.id, { data: i.data || '', hora: i.hora || '', horaFim: i.horaFim || '', desc: i.desc || '',
+  texto: i.texto || '', incluso: i.incluso || '', naoIncluso: i.naoIncluso || '', foto: i.foto || '' }]));
 let oySincroniza = false;
 function oyLevaParaReservas(o, antes) {
   if (!o || o.status !== 'fechado' || oySincroniza || !antes) return [];
@@ -2068,7 +2083,11 @@ function oyLevaParaReservas(o, antes) {
     if (i.data && i.data !== a.data && i.data !== b.date) { b.date = i.data; m = true; }
     if (i.hora && i.hora !== a.hora && (i.hora !== b.time || b.semHora)) { b.time = i.hora; delete b.semHora; m = true; }
     if ((i.horaFim || '') !== a.horaFim) { if (i.horaFim) b.horaFim = i.horaFim; else delete b.horaFim; m = true; }
-    for (const [k, v] of [['orcTitulo', i.desc], ['orcTexto', i.texto], ['orcIncluso', i.incluso], ['orcFoto', i.foto]]) if (v && b[k] !== v) { b[k] = v; m = true; }
+    /* os textos que o roteiro mostra: o que ela mudou (inclusive apagou) vai; o que faltava na reserva, completa */
+    for (const [k, ik] of [['orcTitulo', 'desc'], ['orcTexto', 'texto'], ['orcIncluso', 'incluso'], ['orcNaoIncluso', 'naoIncluso'], ['orcFoto', 'foto']]) {
+      const v = String(i[ik] || ''), mudou = v !== (a[ik] || '');
+      if ((mudou || v) && (b[k] || '') !== v && !(ik === 'desc' && !v)) { b[k] = v; m = true; }
+    }
     if (m) { b.orcItemId = i.id; mudadas.push(b); }
   }
   if (mudadas.length) {
@@ -2127,9 +2146,18 @@ function oyConsertaSemHora() {
   oyConsertouSemHora = true;
   for (const b of l) { delete b.semHora; _opSaveBooking(b); }
 }
+/* uma vez por versão da regra: os kits que os clientes já têm são refeitos (só o que está no orçamento) */
+const OY_KIT_REGRA = 'so-orcamento-2026-11-18';
+function oyRepublicaKits() {
+  if (!(typeof isLoggedIn === 'function' && isLoggedIn()) || typeof Kit === 'undefined' || !Kit.agendar) return;
+  const s = DB.settings || {}; if (s.kitRegra === OY_KIT_REGRA) return;
+  const ks = Object.keys((DB.privado && DB.privado.kits) || {}); if (!ks.length || !(DB.bookings || []).length) return;
+  s.kitRegra = OY_KIT_REGRA; save();
+  for (const k of ks) Kit.agendar(k);
+}
 if (typeof admShell === 'function') {
   const _admShellF = admShell;
-  admShell = function () { try { oyConsertaSemHora(); } catch (e) {} return _admShellF.apply(this, arguments); };
+  admShell = function () { try { oyConsertaSemHora(); } catch (e) {} try { oyRepublicaKits(); } catch (e) {} return _admShellF.apply(this, arguments); };
 }
 /* o "marcar como enviado" do editor (pelo clique na página: não depende de como a tela é desenhada) */
 if (typeof document !== 'undefined') document.addEventListener('click', (e) => {

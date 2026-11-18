@@ -95,6 +95,9 @@ a.clink:hover{text-decoration-color:var(--accent)}
 .orc-row:has(> .tacts) .tinfo{flex:1 1 220px}
 /* serviço sem horário (18/11/2026): não parece um horário de verdade */
 .svc-hora b.svc-semh{font-size:13px;color:var(--warn,#9a6b00);font-weight:700}
+/* o horário do cartão é um botão: tocar abre a edição no campo do horário (18/11/2026) */
+button.svc-hora{background:none;border:0;padding:0;margin:0;text-align:left;color:inherit;font:inherit;cursor:pointer;align-self:flex-start}
+button.svc-hora:hover b,button.svc-hora:focus-visible b{text-decoration:underline;text-underline-offset:4px}
 a.orc-row:hover .tinfo b{text-decoration:underline}
 .orc-item{padding:12px;border-radius:var(--r);background:var(--surface-2);margin-bottom:10px}
 .orc-item.sug{background:var(--highlight-wash)}

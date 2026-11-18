@@ -118,7 +118,7 @@ function opCardServico(b, o) {
   const cliWa = b.whats ? `<a class="mini" target="_blank" rel="noopener" href="${waLink(t('waHi', { name: opPrimeiro(b.name), tour: opNomeServ(b), when: fmtDate(b.date) + ' ' + b.time }), opNum(b.whats))}">WhatsApp</a>` : '';
 
   return `<article class="svc ${b.status === 'cancelled' ? 'cancel' : ''}" id="svc-${esc(b.id)}">
-    <div class="svc-hora"><b${b.semHora ? ' class="svc-semh" title="O orçamento veio sem horário. Defina em Detalhes."' : ''}>${esc(opHora(b))}</b>${o.comData ? `<small>${opCurta(b.date)}</small>` : `<small>${b.semHora ? 'defina' : turnoNome(turnoDaHora(b.time))}</small>`}</div>
+    <button type="button" class="svc-hora" data-abre="dt-${esc(b.id)}" data-foco="dthora-${esc(b.id)}" title="Mudar dia ou horário" aria-label="Mudar dia ou horário (${esc(opHora(b))})"><b${b.semHora ? ' class="svc-semh"' : ''}>${esc(opHora(b))}</b>${o.comData ? `<small>${opCurta(b.date)}</small>` : `<small>${b.semHora ? 'defina' : turnoNome(turnoDaHora(b.time))}</small>`}</button>
     <div class="svc-corpo">
       <div class="svc-top">${ico} <b>${esc(opNomeServ(b))}</b> <small>· ${b.pax} ${b.pax > 1 ? 'pessoas' : 'pessoa'}${b.veiculo ? ' · ' + esc(b.veiculo) : ''} · <span class="mono">${esc(b.code)}</span></small></div>
       <div class="svc-cli"><a href="${opFicha(b)}">${esc(b.name)}</a> ${cliWa}${b.compradorVai === false ? ' <small class="why">(comprou, não vai)</small>' : ''}</div>
@@ -132,7 +132,7 @@ function opCardServico(b, o) {
         <a class="mini" href="${opFicha(b)}">Ficha</a>
         <a class="mini" href="#/adm/voucher/${esc(b.id)}">Voucher</a>
         ${b.status !== 'cancelled' && Bookings.due(b) > 0 ? `<button class="mini strong" data-abre="pg-${esc(b.id)}">Registrar pagamento</button>` : ''}
-        <button class="mini" data-abre="dt-${esc(b.id)}">Detalhes</button>
+        <button class="mini" data-abre="dt-${esc(b.id)}" title="Dia, horário, voo, quem faz, quem vai, ingressos e links">Editar</button>
       </div>
       ${opFormPagamento(b)}
       ${opFormDetalhes(b)}
@@ -224,8 +224,12 @@ function opLigaCards(redesenha) {
   $$('[data-lkadd]').forEach(bt => bt.onclick = () => { const id = bt.dataset.lkadd; const r = Op.linkAdd(id, $('#lkN-' + id).value, $('#lkU-' + id).value); if (r && r.erro) return toast(r.erro); toast('Link guardado'); redesenha(); });
   $$('[data-lkrm]').forEach(bt => bt.onclick = () => { const [id, lid] = bt.dataset.lkrm.split('|'); Op.linkRemove(id, lid); redesenha(); });
   $$('[data-abre]').forEach(btn => btn.onclick = () => {
-    const el = document.getElementById(btn.dataset.abre);
-    if (el) { el.hidden = !el.hidden; if (!el.hidden) { const i = el.querySelector('input,select'); if (i) i.focus(); } }
+    const el = document.getElementById(btn.dataset.abre); if (!el) return;
+    /* tocar no horário (18/11/2026, a Milla: "se eu quisesse mudar o horário, por exemplo") abre a edição já no
+       campo do horário, e não fecha se já estiver aberta */
+    const foco = btn.dataset.foco && document.getElementById(btn.dataset.foco);
+    el.hidden = foco ? false : !el.hidden;
+    if (!el.hidden) { const i = foco || el.querySelector('input,select'); if (i) { i.focus(); try { i.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {} } }
   });
   $$('[data-pgok]').forEach(btn => btn.onclick = () => {
     const id = btn.dataset.pgok;
