@@ -33,6 +33,9 @@ var APP_CONFIG = {
      Milla colar chave nenhuma. Na entrega, troca pela chave dela. */
   cofre: 'https://uopfqlogjzuqpabptxkb.supabase.co/functions/v1/cofre',
   clienteCofre: 'yalla',
+  /* 23/11/2026, o Eugênio: "no app da milla desligar minha IA do assistente". false = o assistente NUNCA usa a
+     IA da Ti Artes (o cofre); a gaveta avisa que está desligado. Para religar: true (ou apagar a linha) e publicar. */
+  iaEstudio: false,
   /* o assistente vem no pacote dela (orçamento de 01/10/2026): sem selo de "extra" */
   assistenteIncluido: true,
   /* ela contratou o atendimento automático: a aba Atendimento aparece no menu */

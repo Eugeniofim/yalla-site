@@ -54,7 +54,8 @@ const marcaEsgotado = (tipo) => { try { sessionStorage.setItem(COFRE_FIM + tipo,
 const iaModo = () => iaChave() ? 'chave' : (cofreEstado.claude && !cofreEsgotado('claude')) ? 'vivo' : 'demo';
 const iaDemo = () => iaModo() === 'demo';
 if (COFRE) fetch(COFRE + '/api/estado', { cache: 'no-store' }).then(r => r.json()).then(e => {
-  cofreEstado = { claude: !!e.claude, imagem: !!e.imagem, instagram: !!e.instagram, whatsapp: !!e.whatsapp };
+  /* iaEstudio false (config.js): a IA da Ti Artes desligada neste app — nunca o modo 'vivo' (23/11/2026) */
+  cofreEstado = { claude: !!e.claude && !(typeof APP_CONFIG !== 'undefined' && APP_CONFIG.iaEstudio === false), imagem: !!e.imagem, instagram: !!e.instagram, whatsapp: !!e.whatsapp };
   if (typeof iaAtualizaFab === 'function') iaAtualizaFab();
   if (iaEl && iaEl.g.classList.contains('aberta') && !iaOcupado) iaDesenha();
   if ((location.hash.startsWith('#/adm/marketing') || location.hash.startsWith('#/adm/inbox')) && typeof route === 'function' && !(typeof isBusyEditing === 'function' && isBusyEditing())) route();

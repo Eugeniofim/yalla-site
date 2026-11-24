@@ -573,3 +573,41 @@ if (typeof iaChamar === 'function') {
 .iaOuv.cancela #iaOuvTxt{color:var(--danger);font-weight:700}`;
   document.head.appendChild(st);
 })();
+
+/* =====================================================
+   10. A IA DA TI ARTES DESLIGADA (23/11/2026)
+   O Eugênio: "no app da milla desligar minha IA do assistente". Com APP_CONFIG.iaEstudio === false o
+   assistente nunca chama o cofre (assistente.js não liga o modo 'vivo'). Sem a IA, o motor cairia na
+   DEMONSTRAÇÃO, que roda pedidos prontos e grava criativo, post e anúncio de exemplo nos dados reais
+   dela — então a gaveta só avisa que está desligado, e nenhum pedido pronto roda. Com a chave dela
+   (modo 'chave'), tudo segue normal.
+   ===================================================== */
+const ylIaDesligada = () => typeof APP_CONFIG !== 'undefined' && APP_CONFIG.iaEstudio === false && typeof iaModo === 'function' && iaModo() === 'demo';
+const YL_IA_OFF = 'O assistente com IA está desligado neste app. Para voltar a usar, fale com a Ti Artes.';
+if (typeof iaDesenha === 'function') {
+  const _ylDesenhaOff = iaDesenha;
+  iaDesenha = function () {
+    if (!ylIaDesligada() || (typeof iaMostrandoChave !== 'undefined' && iaMostrandoChave)) return _ylDesenhaOff.apply(this, arguments);
+    const corpo = iaEl && iaEl.g && iaEl.g.querySelector('#iaCorpo'); if (!corpo) return;
+    corpo.innerHTML = `<div id="iaMsgs"><div class="iaDemo ylIaOff"><b>Assistente desligado</b>${esc(YL_IA_OFF)}</div></div>`;
+  };
+}
+if (typeof iaRodaCenario === 'function') {
+  const _ylCenarioOff = iaRodaCenario;
+  iaRodaCenario = function () {
+    if (!ylIaDesligada()) return _ylCenarioOff.apply(this, arguments);
+    if (typeof iaAbre === 'function') iaAbre();
+    iaDesenha();
+    return Promise.resolve();
+  };
+}
+if (typeof iaMostraSugestoes === 'function') {
+  const _ylSugOff = iaMostraSugestoes;
+  iaMostraSugestoes = function () { if (ylIaDesligada()) return; return _ylSugOff.apply(this, arguments); };
+}
+/* o selo do título: o motor redesenha o título a cada 1,5 s pela função ORIGINAL (setInterval guardou a referência),
+   então embrulhar não pega — com a IA desligada, o selo "Demonstração" (só existe sem IA) passa a dizer "desligado" */
+if (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.iaEstudio === false && typeof IA_TXT !== 'undefined' && IA_TXT.demoTit) {
+  IA_TXT.demoTit = { pt: 'desligado', en: 'off', es: 'apagado', fr: 'désactivé', it: 'spento', de: 'aus' };
+}
+

@@ -1533,7 +1533,11 @@ function admConsulta(arg, modo) {
       ${o.cliente.whats && o.status === 'enviado' ? `<a class="mini" target="_blank" rel="noopener" data-repesca="${esc(o.id)}" href="${waLink(`Oi ${opPrimeiro(o.cliente.nome)}! Tudo bem? Conseguiu ver o orçamento que te mandei (${o.num})? Se quiser, ajusto alguma coisa. ${guiaNome()}`, opNum(o.cliente.whats))}">💬 repescar</a>` : ''}
       ${o.status !== 'enviado' ? `<button class="mini" data-enviou="${esc(o.id)}" title="Já mandou a proposta por outro caminho (link copiado, outro WhatsApp)? Marque aqui">enviado ✓</button>` : ''}<button class="mini" data-fecha="${esc(o.id)}">fechou ✓</button><button class="mini ghost" data-perde="${esc(o.id)}">perdido</button><button class="mini ghost danger" data-orcrm="${esc(o.id)}" aria-label="Apagar o orçamento ${esc(o.num)}">apagar</button>`;
     if (r.tipo === 'orcamento' && r.etapa === 'perdido') return `<span class="why">${esc(o.motivoPerda || '')}</span><button class="mini ghost" data-reabre="${esc(o.id)}">reabrir</button><button class="mini ghost danger" data-orcrm="${esc(o.id)}" aria-label="Apagar o orçamento ${esc(o.num)}">apagar</button>`;
-    const ficha = `<a class="mini" href="#/adm/clients/${encodeURIComponent('c:' + (b.clienteId || ''))}">ficha</a>`;
+    /* veio de um orçamento: "orçamento" abre ele de novo (19/11/2026, a Milla: "o orçamento some depois que eu
+       coloco que fechou/pagou") */
+    const oDo = p.linhas.map(x => x.b && x.b.orcamentoId && Orc.get(x.b.orcamentoId)).find(Boolean);
+    const ficha = `<a class="mini" href="#/adm/clients/${encodeURIComponent('c:' + (b.clienteId || ''))}">ficha</a>`
+      + (oDo ? `<a class="mini" href="#/adm/consulta/${esc(oDo.id)}" title="Abrir e editar o orçamento ${esc(oDo.num)}">orçamento</a>` : '');
     const devendo = p.linhas.map(x => x.tipo === 'reserva' ? x.b : null).find(x => x && x.status !== 'cancelled' && Bookings.due(x) > 0);
     if (r.etapa === 'confirmado') return `${devendo ? `<button class="mini strong" data-jpag="${esc(devendo.id)}">registrar pagamento</button>` : ''}${ficha}<a class="mini" href="#/adm/voucher/${esc(b.id)}">voucher</a>`;
     if (r.etapa === 'avaliar') return `${ficha}${b.whats ? `<a class="mini strong" target="_blank" rel="noopener" data-avalia="${esc(p.linhas.map(x => x.id).join(','))}" href="${waLink(msgAvaliacao(b), opNum(b.whats))}">pedir avaliação</a>` : ''}
@@ -1554,6 +1558,19 @@ function admConsulta(arg, modo) {
         <div class="tacts">${acoes(p)}${r.whats ? `<a class="mini ghost" target="_blank" rel="noopener" href="${waLink('', opNum(r.whats))}">WhatsApp</a>` : ''}</div></div>
     </article>`;
   }).join('');
+  /* ORÇAMENTOS FECHADOS (19/11/2026, a Milla: "o orçamento some depois que eu coloco que fechou/pagou"): o fechado
+     sai do "Em aberto" e vira reserva em Confirmado; o que fechou sem reserva ligada não aparecia em lugar nenhum.
+     Aqui ela acha todos, abre, edita e manda o roteiro de novo. */
+  const resDoOrc = (o) => [...new Set([...(o.bookingIds || []).map(id => Bookings.get(id)), ...DB.bookings.filter(b => b.orcamentoId === o.id)])]
+    .filter(b => b && b.status !== 'cancelled').sort((a, b) => ((a.date || '') + (a.time || '')).localeCompare((b.date || '') + (b.time || '')));
+  const fechados = P ? [] : Orc.all().filter(o => o.status === 'fechado' && (!q || [o.cliente.nome, o.cliente.whats, o.num].some(v => n(v).includes(q))))
+    .sort((a, b) => String(b.fechadoEm || '').localeCompare(String(a.fechadoEm || '')) || String(b.criado || '').localeCompare(String(a.criado || '')));
+  const fechadosHtml = fechados.length ? `<details class="card crm-fech" id="crmFech" ${S.fech || q ? 'open' : ''}>
+    <summary><b>✓ Orçamentos fechados · ${fechados.length}</b><small>${fechados.slice(0, 2).map(o => esc(o.cliente.nome || o.num)).join(', ')}${fechados.length > 2 ? '…' : ''} · toque para ver, editar ou mandar o roteiro</small></summary>
+    ${fechados.map(o => { const ds = (o.itens || []).map(i => i.data).filter(Boolean).sort(), tem = resDoOrc(o).length && typeof Kit !== 'undefined';
+      return `<div class="orc-row"><div class="tinfo"><b>${esc(o.cliente.nome || 'Sem nome')}</b><small>${esc(o.num)}${o.fechadoEm ? ' · fechou ' + opCurta(o.fechadoEm) : ''}${ds.length ? ' · viagem ' + opCurta(ds[0]) + (ds[ds.length - 1] !== ds[0] ? ' → ' + opCurta(ds[ds.length - 1]) : '') : ''} · ${eur(Orc.total(o))}</small></div>
+        <div class="tacts"><a class="mini strong" href="#/adm/consulta/${esc(o.id)}">abrir e editar</a>${tem ? `<button type="button" class="mini" data-fchkit="${esc(o.id)}">roteiro</button>` : ''}<a class="mini" href="#/adm/proposta/${esc(o.id)}">proposta</a></div></div>`; }).join('')}
+  </details>` : '';
   const colChips = `<div class="crm-cols"><span class="why">Colunas:</span>${CRM_GRUPOS.map(([g, nome]) => `<button class="chip ${S.cols.includes(g) ? '' : 'on'}" data-col="${g}" aria-pressed="${!S.cols.includes(g)}">${S.cols.includes(g) ? '' : '✓ '}${nome}</button>`).join('')}</div>`;
   admConsulta._linhas = linhas;
   const semPlanilha = !DB.bookings.some(b => b.origin === 'planilha') && !Orc.all().some(o => o.chavePlanilha);
@@ -1593,6 +1610,7 @@ function admConsulta(arg, modo) {
     ${rotSemOrc.length ? `<section class="card"><h3>🗺️ Monte seu roteiro · ${rotSemOrc.length}</h3>
       ${rotSemOrc.map(p => `<div class="orc-row"><div class="tinfo"><b>${esc(p.nome)}</b><small>${[p.ini && opCurta(p.ini), p.fim && opCurta(p.fim)].filter(Boolean).join(' → ')} · ${p.adultos} adultos${p.criancas ? ' + ' + p.criancas + ' crianças' : ''} · ${(p.onde || []).join(', ')}${p.modo === 'consultoria' ? ' · <b>consultoria</b>' : ''}</small></div>
         <div class="tacts"><button class="mini strong" data-rot="${esc(p.id)}">Montar orçamento</button><button class="mini ghost danger" data-rotrm="${esc(p.id)}" aria-label="Apagar o pedido de ${esc(p.nome)}">apagar</button></div></div>`).join('')}</section>` : ''}
+    ${fechadosHtml}
     ${S.vista === 'planilha' ? planilha : (cartoes || '<p class="empty">Nada nesta etapa.</p>')}`);
 
   const re = () => admConsulta(undefined, modo);
@@ -1626,6 +1644,8 @@ function admConsulta(arg, modo) {
     if (typeof oyMarcaEnviado === 'function') oyMarcaEnviado(o); else { o.status = 'enviado'; Orc.salva(o); toast('Marcado como enviado'); }
     admConsulta(undefined, modo);
   });
+  const fch = $('#crmFech'); if (fch) fch.addEventListener('toggle', () => { if (!q) S.fech = fch.open; });
+  $$('[data-fchkit]').forEach(b => b.onclick = () => { const o = Orc.get(b.dataset.fchkit), bk = o && resDoOrc(o)[0]; if (bk) Kit.abrir(Kit.daReserva(bk)); });
   /* apagar o pedido do "Monte seu roteiro" (13/11/2026, a Milla: "precisa ter a opção de apagar daqui") */
   $$('[data-rotrm]').forEach(b => b.onclick = () => {
     const p = (DB.pedidos || []).find(x => x.id === b.dataset.rotrm); if (!p) return;

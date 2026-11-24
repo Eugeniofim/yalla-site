@@ -580,7 +580,7 @@ if (typeof admFicha === 'function') {
       const html = oyFichaHtml(c); if (!html) return r;
       const top = document.querySelector('#stage .fc-top'); if (!top) return r;
       top.insertAdjacentHTML('afterend', html);
-      document.querySelectorAll('[data-fckit]').forEach(b => b.onclick = () => { const x = Orc.get(b.dataset.fckit), bk = x && Bookings.get(x.bookingIds[0]); if (bk) Kit.abrir(Kit.daReserva(bk)); });
+      document.querySelectorAll('[data-fckit]').forEach(b => b.onclick = () => { const x = Orc.get(b.dataset.fckit), bk = x && ((x.bookingIds || []).map(id => Bookings.get(id)).find(Boolean) || DB.bookings.find(r => r.orcamentoId === x.id)); if (bk) Kit.abrir(Kit.daReserva(bk)); else toast('Este orçamento não tem reserva para o roteiro'); });
       if (!document.getElementById('fcViagemCss')) { const st = document.createElement('style'); st.id = 'fcViagemCss';
         st.textContent = `.fc-vg{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:6px 0 10px}
           .fc-vg>div{background:var(--surface-2);border-radius:12px;padding:10px 12px}.fc-vg small{display:block;color:var(--ink-3);font-size:12px}.fc-vg b{display:block}.fc-vg span{font-size:12.5px;color:var(--ink-2)}
@@ -1569,8 +1569,8 @@ function oyFechar(o) {
     d.close();
     const pagoTxt = (valor > 0 ? ` · ${oyM(valor, m)} registrado` : '') + (avisadas ? (porCli ? ' · reserva da viagem indo por e-mail' : ' · voucher pago indo por e-mail') : '');
     /* fechou → já abre o ROTEIRO DA VIAGEM (com os vouchers), pronto para mandar (WhatsApp, link ou PDF) */
-    if (todas.length && typeof Kit !== 'undefined') { toast(`${bs.length ? bs.length + (bs.length === 1 ? ' reserva criada' : ' reservas criadas') : 'Orçamento fechado'}${pagoTxt} 🎉 · agora é só mandar o roteiro`); Kit.abrir(Kit.daReserva(todas[0])); }
-    else { toast(`${bs.length} ${bs.length === 1 ? 'reserva criada' : 'reservas criadas'}${pagoTxt} 🎉`); if ($('#oyNome')) { oyTela(o.id); scrollTo(0, 0); } else route(); }
+    if (todas.length && typeof Kit !== 'undefined') { toast(`${bs.length ? bs.length + (bs.length === 1 ? ' reserva criada' : ' reservas criadas') : 'Orçamento fechado'}${pagoTxt} 🎉 · agora é só mandar o roteiro. O orçamento fica em Orçamentos › Fechados`); Kit.abrir(Kit.daReserva(todas[0])); }
+    else { toast(`${bs.length ? bs.length + (bs.length === 1 ? ' reserva criada' : ' reservas criadas') : 'Orçamento fechado'}${pagoTxt} 🎉 · ele fica em Orçamentos › Fechados`); if ($('#oyNome')) { oyTela(o.id); scrollTo(0, 0); } else route(); }
   };
 }
 

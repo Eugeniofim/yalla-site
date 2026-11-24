@@ -331,6 +331,14 @@ a.orc-row:hover .tinfo b{text-decoration:underline}
 .crm-pe{display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--line);padding-top:8px;font-size:var(--fs-3)}
 .crm-pe .tacts{display:flex;flex-wrap:wrap;gap:6px}
 .crm-rp{color:var(--highlight-text)}
+/* Orçamentos fechados (19/11/2026): fechado, uma linha; aberto, a lista */
+.crm-fech{padding:12px 16px;margin-bottom:12px}
+.crm-fech summary{cursor:pointer;display:flex;flex-direction:column;gap:2px;list-style:none;min-height:44px;justify-content:center}
+.crm-fech summary::-webkit-details-marker{display:none}
+.crm-fech summary b::after{content:' ▸';color:var(--ink-3)}
+.crm-fech[open] summary b::after{content:' ▾'}
+.crm-fech summary small{color:var(--ink-3);font-size:var(--fs-2)}
+.crm-fech[open] summary{margin-bottom:8px}
 /* a planilha: nome fixo a esquerda, cabecalho fixo em cima, grupos de colunas, meses, totais */
 .crm-plan-wrap{overflow:auto;max-height:75vh;background:var(--surface);border-radius:var(--r-lg);box-shadow:var(--sh-1);border:1px solid var(--line)}
 .crm-plan{border-collapse:separate;border-spacing:0;font-size:var(--fs-2);width:max-content;min-width:100%}
