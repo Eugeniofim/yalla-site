@@ -611,3 +611,95 @@ if (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.iaEstudio === false && typeo
   IA_TXT.demoTit = { pt: 'desligado', en: 'off', es: 'apagado', fr: 'désactivé', it: 'spento', de: 'aus' };
 }
 
+/* =====================================================
+   11. ATUALIZAR O ATENDIMENTO (25/11/2026)
+   O Eugênio: "ponha um botão no app dela dentro do CONVERSAS - atualiza o atendimento".
+   O robô do Instagram (@dubaitourbymilla) responde com o catálogo que mora no cofre. Este cartão, em
+   Conversas (nas duas abas), pede ao cofre que refaça os passeios do robô com os passeios PUBLICADOS
+   aqui no app. Só a dona logada (o cofre confere o login no banco da sala). O treino (as respostas
+   da aba Ensinar) não muda. Ver guia-cofre/supabase/functions/_comum/atendimento-atualiza.js.
+   ===================================================== */
+const YL_ATEND_ULT = 'yalla_atend_ultimo';
+const ylAtendLe = () => { try { return JSON.parse(localStorage.getItem(YL_ATEND_ULT) || 'null'); } catch (e) { return null; } };
+let ylAtendMsg = '', ylAtendOcupado = false;
+function ylAtendResumo(u) {
+  if (!u || !u.quando) return 'Ainda não atualizado por aqui.';
+  const d = new Date(u.quando);
+  const quando = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ' às ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  return `Última atualização: ${quando} · ${u.passeios} ${u.passeios === 1 ? 'passeio' : 'passeios'} no robô`;
+}
+function ylAtendCartao() {
+  if (!COFRE || CLIENTE_COFRE !== 'yalla' || !(typeof isLoggedIn === 'function' && isLoggedIn())) return '';
+  return `<section class="card ylAtend" id="ylAtend" aria-live="polite">
+    <div class="ylAtendTxt"><b>Robô do Instagram</b>
+      <p>Ele responde com os passeios <b>publicados</b> aqui no app. Mudou um preço, criou ou tirou um passeio? Toque em <b>Atualizar o atendimento</b> para o robô aprender.</p>
+      <small id="ylAtendMsg">${ylAtendMsg || esc(ylAtendResumo(ylAtendLe()))}</small></div>
+    <button type="button" class="ibBt" id="ylAtendBt" ${ylAtendOcupado ? 'disabled' : ''}>${ylAtendOcupado ? 'Atualizando…' : 'Atualizar o atendimento'}</button></section>`;
+}
+function ylAtendPoe() {
+  const abas = document.querySelector('.ibAbas'); if (!abas) return;
+  const velho = document.getElementById('ylAtend'); if (velho) velho.remove();
+  const h = ylAtendCartao(); if (!h) return;
+  abas.insertAdjacentHTML('afterend', h);
+  const bt = document.getElementById('ylAtendBt'); if (bt) bt.onclick = ylAtendAtualiza;
+}
+async function ylAtendAtualiza() {
+  if (ylAtendOcupado) return;
+  ylAtendOcupado = true; ylAtendMsg = ''; ylAtendPoe();
+  let r = null, corpo = null;
+  try {
+    if (typeof authVencida === 'function' && authVencida() && typeof authEnsure === 'function') { try { await authEnsure(); } catch (e) {} }
+    const tok = typeof authToken === 'function' ? authToken() : '';
+    r = await fetch(COFRE + '/api/atendimento-atualiza', { method: 'POST', cache: 'no-store',
+      headers: { 'content-type': 'application/json', ...(tok ? { authorization: 'Bearer ' + tok } : {}) }, body: JSON.stringify({ cliente: CLIENTE_COFRE }) });
+    corpo = await r.json().catch(() => null);
+  } catch (e) { r = null; }
+  ylAtendOcupado = false;
+  if (r && r.ok && corpo && corpo.ok) {
+    const u = { quando: corpo.quando || new Date().toISOString(), passeios: corpo.passeios };
+    try { localStorage.setItem(YL_ATEND_ULT, JSON.stringify(u)); } catch (e) {}
+    const fora = (corpo.fora || []).map(f => f.nome || f.id).filter(Boolean);
+    ylAtendMsg = `<span class="ylAtendOk">✓ Atualizado: o robô já responde com ${corpo.passeios} ${corpo.passeios === 1 ? 'passeio' : 'passeios'}.</span>`
+      + (fora.length ? ` Ficou de fora, porque ainda está com o texto de exemplo: ${esc(fora.join(', '))}.` : '');
+    if (typeof toast === 'function') toast('Atendimento atualizado');
+  } else {
+    const motivo = !r ? 'Sem conexão agora. Tente de novo em instantes.'
+      : r.status === 401 ? 'Entre de novo no app com a sua conta e tente outra vez.'
+      : (corpo && corpo.msg) ? corpo.msg
+      : r.status === 404 ? 'O botão ainda não está ligado no servidor. Fale com a Ti Artes.'
+      : 'Não deu certo agora. Tente de novo em instantes.';
+    ylAtendMsg = `<span class="ylAtendErro">${esc(motivo)}</span>`;
+  }
+  ylAtendPoe();
+}
+for (const nome of ['admAtendimento', 'admEnsinar']) {
+  const f = globalThis[nome];
+  if (typeof f !== 'function') continue;
+  globalThis[nome] = function () { const r = f.apply(this, arguments); try { ylAtendPoe(); } catch (e) {} return r; };
+}
+/* trava no "Aplicar no Instagram" (aba Ensinar): ele TROCA o treino que está no ar pelo deste aparelho. O treino do
+   robô foi refeito no cofre em 25/11 (13 respostas); o deste aparelho é o de setembro. Agora avisa e pede para
+   confirmar, com as contas das duas versões. */
+if (typeof ensAplicar === 'function') {
+  const _ylAplicar = ensAplicar;
+  ensAplicar = async function (codigo) {
+    try {
+      const j = await fetch(urlEnsino(), { cache: 'no-store' }).then(r => r.json());
+      const noAr = j && j.ensino && Array.isArray(j.ensino.faq) ? j.ensino.faq.length : 0;
+      const aqui = (ensino().faq || []).filter(f => String(f.p || '').trim() && String(f.r || '').trim()).length;
+      if (noAr && !confirm(`Isto TROCA o treino que está no ar no robô (${noAr} respostas) pelo treino deste aparelho (${aqui} respostas).\n\nSe quiser partir do que está no ar, cancele e toque antes em "Trazer o treino que está no ar".\n\nTrocar mesmo?`)) return;
+    } catch (e) {}
+    return _ylAplicar.apply(this, arguments);
+  };
+}
+(function () {
+  if (typeof document === 'undefined' || document.getElementById('ylAtendCss')) return;
+  const st = document.createElement('style'); st.id = 'ylAtendCss';
+  st.textContent = `.ylAtend{display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin:12px 0}
+.ylAtendTxt{flex:1 1 260px;min-width:0}.ylAtendTxt p{margin:4px 0 6px;color:var(--ink-2,inherit);font-size:var(--fs-3,14px)}
+.ylAtendTxt small{color:var(--ink-3,#6b6b6b);font-size:var(--fs-2,13px)}
+.ylAtendOk{color:var(--ok,#2f7d4f);font-weight:600}.ylAtendErro{color:var(--danger,#b3261e);font-weight:600}
+#ylAtendBt{min-height:44px;white-space:nowrap}#ylAtendBt[disabled]{opacity:.6;cursor:progress}`;
+  document.head.appendChild(st);
+})();
+
