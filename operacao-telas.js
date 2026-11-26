@@ -1518,7 +1518,7 @@ function admConsulta(arg, modo) {
       <a class="crm-tile" href="#/adm/coupons"><small>Comissões a pagar</small><b>${eur(pn.comissoes.valor)}</b><span>${pn.comissoes.n ? pn.comissoes.n + (pn.comissoes.n === 1 ? ' parceiro' : ' parceiros') : 'tudo em dia'}</span></a>
     </div>
     <div class="crm-agora"><h3>Precisa de você ${pn.agora.length ? `<b>${pn.agora.length}</b>` : ''}</h3>
-      ${pn.agora.length ? `<ul>${pn.agora.slice(0, S.agoraTudo ? 99 : 5).map(a => `<li><span class="crm-ag-i" aria-hidden="true">${ICO[a.tipo]}</span><div><b>${esc(a.nome || 'Sem nome')}</b><small>${a.chega && a.chega >= hoje ? `<span class="crm-chega">chega ${esc(crmData(a.chega))}</span> · ` : ''}${esc(a.txt)}</small></div><div class="tacts">${agoraAcao(a)}</div></li>`).join('')}</ul>
+      ${pn.agora.length ? `<ul>${pn.agora.slice(0, S.agoraTudo ? 99 : 5).map(a => { const yr = a.o && typeof yrNoPainel === 'function' ? yrNoPainel(a.o) : null; return `<li><span class="crm-ag-i" aria-hidden="true">${ICO[a.tipo]}</span><div><b>${esc(a.nome || 'Sem nome')}</b>${yr ? yr.selo : ''}<small>${a.chega && a.chega >= hoje ? `<span class="crm-chega">chega ${esc(crmData(a.chega))}</span> · ` : ''}${esc(a.txt)}</small></div><div class="tacts">${agoraAcao(a)}${yr ? yr.botao : ''}</div></li>`; }).join('')}</ul>
         ${pn.agora.length > 5 ? `<button class="mini ghost" id="crmAgoraTudo">${S.agoraTudo ? 'mostrar menos' : `ver os ${pn.agora.length}`}</button>` : ''}` : '<p class="why">Nada esperando por você. 🎉</p>'}
     </div></section>`;
   const meses = [...new Set(todas.map(r => String(r.dataServ || '').slice(0, 7)).filter(Boolean))].sort();

@@ -172,6 +172,20 @@ const yrFio = (h) => !h || h.carregando ? '<p class="ibSis">Carregando a convers
 const yrRecadoHtml = (r) => `<div class="yrRec"><b>Pedido anotado pelo robô</b>${r.assunto ? `<p>${esc(r.assunto)}</p>` : ''}
   <dl>${[['Quando', r.quando_quer || (r.dia ? (typeof opCurta === 'function' ? opCurta(r.dia) : r.dia) : '')], ['WhatsApp', r.contato], ['E-mail', r.email], ['Resumo', r.resumo]].filter(x => x[1]).map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}</dl></div>`;
 
+/* ---------- "Precisa de você" (26/11/2026) ----------
+   O Eugênio: o pedido que o robô anotou aparecia igual aos outros, sem dizer de onde veio nem como responder.
+   Agora a linha leva o selo do canal e o botão que abre a conversa da pessoa no direct (ou no WhatsApp). Só
+   para o pedido que veio do robô (recadoId/igId); o resto do painel não muda. Sem o @ da pessoa, só o selo. */
+function yrNoPainel(o) {
+  if (!o || !(o.recadoId || o.igId)) return null;
+  const c = (o.clienteId && Cadastro.get(o.clienteId)) || (o.igId && Cadastro.all().find(x => x.igId === o.igId)) || null;
+  const canal = (c && c.igCanal) === 'whatsapp' ? 'whatsapp' : 'instagram';
+  const url = yrResponder({ de: o.igId || (c && c.igId) || '', canal, usuario: (c && (c.igUsuario || yrUsuario(c.insta))) || '' });
+  return { canal, url,
+    selo: `<small class="yrTag yrCanal">${canal === 'whatsapp' ? 'WhatsApp' : 'Instagram'}</small>`,
+    botao: url ? `<a class="mini" href="${esc(url)}" target="_blank" rel="noopener">responder no ${canal === 'whatsapp' ? 'WhatsApp' : 'direct'}</a>` : '' };
+}
+
 /* ---------- Conversas: a caixa de verdade ---------- */
 function yrTela(arg) {
   if (arg) yrAberta = decodeURIComponent(arg);
@@ -261,6 +275,7 @@ if (typeof admShell === 'function') {
 .yrAvisoCard{margin:12px 0}.yrAvisoCard p{margin:4px 0 0;color:var(--ink-2,#555);font-size:14px}
 .yrBarra{display:flex;justify-content:flex-end;margin:8px 0}
 .yrTag{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--accent,#8a6d1f);background:var(--surface-2,#f3efe6);padding:2px 7px;border-radius:999px}
+.crm-agora li small.yrCanal{display:inline-block;margin-left:8px;vertical-align:2px;font-size:10.5px;color:var(--accent,#8a6d1f)}
 .yrAcoes{display:flex;flex-wrap:wrap;gap:6px;padding:10px 16px}.yrAcoes .mini{min-height:36px;display:inline-flex;align-items:center}
 .yrRec{margin:0 16px 10px;padding:10px 12px;border:1px solid var(--line,#e5dfd2);border-radius:12px;background:var(--surface,#fff);font-size:14px}
 .yrRec p{margin:4px 0}.yrRec dl{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;margin:6px 0 0}.yrRec dt{color:var(--ink-3,#777);font-size:12.5px}.yrRec dd{margin:0}
