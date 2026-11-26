@@ -642,6 +642,7 @@ function ylAtendPoe() {
   const h = ylAtendCartao(); if (!h) return;
   abas.insertAdjacentHTML('afterend', h);
   const bt = document.getElementById('ylAtendBt'); if (bt) bt.onclick = ylAtendAtualiza;
+  if (typeof ylIaPoe === 'function') ylIaPoe();   /* 12. créditos de IA, logo abaixo */
 }
 async function ylAtendAtualiza() {
   if (ylAtendOcupado) return;
@@ -703,3 +704,135 @@ if (typeof ensAplicar === 'function') {
   document.head.appendChild(st);
 })();
 
+/* =====================================================
+   12. CRÉDITOS DE IA DOS ROBÔS (26/11/2026)
+   O Eugênio: "créditos de IA, ela põe a chave dela" e "gere um botão pra ela pôr crédito pros robôs dela".
+   O robô do Instagram usa a IA da Anthropic (Claude). Com a chave da Yalla guardada no cofre, ele gasta o crédito
+   da conta DELA; sem chave, usa a da Ti Artes. Este cartão fica em Conversas, logo abaixo do "Atualizar o atendimento":
+     - "Pôr crédito ↗" abre a página de pagamento da conta dela na Anthropic (o crédito se põe LÁ, com o cartão dela);
+     - sem chave: os 4 passos (conta, crédito, chave, colar aqui) e o campo; o cofre TESTA antes de guardar;
+     - com chave: quantas respostas o robô deu no mês e quanto foi na conta dela; testar; trocar a chave;
+     - a conta recusou (crédito acabou, cartão recusado): aviso vermelho. O robô não para: responde pela reserva
+       da Ti Artes até ela pôr crédito (guia-cofre/_comum/ia-propria.js).
+   O cofre confere que é a dona (rota atendimento-caixa, ação 'ia'); a chave nunca volta ao navegador. Tirar a
+   chave (voltar para a IA da Ti Artes) não tem botão aqui: é com a Ti Artes.
+   ===================================================== */
+const YL_IA_LINK = { conta: 'https://platform.claude.com/', pagar: 'https://platform.claude.com/settings/billing', chaves: 'https://platform.claude.com/settings/keys' };
+let ylIa = null, ylIaEm = 0, ylIaErro = '', ylIaCarregando = false, ylIaOcupado = false, ylIaTrocando = false, ylIaMsg = '', ylIaRascunho = '';
+const ylIaUsd = (v) => 'US$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: v > 0 && v < 0.1 ? 3 : 2 });
+async function ylIaPede(op, extra) {
+  if (typeof authVencida === 'function' && authVencida() && typeof authEnsure === 'function') { try { await authEnsure(); } catch (e) {} }
+  const tok = typeof authToken === 'function' ? authToken() : '';
+  try {
+    const r = await fetch(COFRE + '/api/atendimento-caixa', { method: 'POST', cache: 'no-store',
+      headers: { 'content-type': 'application/json', ...(tok ? { authorization: 'Bearer ' + tok } : {}) },
+      body: JSON.stringify({ cliente: CLIENTE_COFRE, acao: 'ia', op, ...(extra || {}) }) });
+    return { r, j: await r.json().catch(() => null) };
+  } catch (e) { return { r: null, j: null }; }
+}
+/* resposta que não é dos créditos (servidor ainda sem a ação 'ia'): não pode virar "sem chave" */
+const ylIaValida = (j) => !!(j && typeof j.tem_chave === 'boolean');
+function ylIaErroTxt(r, j) {
+  return !r ? 'Sem conexão agora. Tente de novo em instantes.'
+    : r.status === 401 ? 'Entre de novo no app com a sua conta e tente outra vez.'
+    : (r.status === 404 || (j && j.erro === 'acao') || (r.ok && !ylIaValida(j))) ? 'Os créditos de IA ainda não estão ligados no servidor. Fale com a Ti Artes.'
+    : (j && j.msg) ? j.msg
+    : 'Não deu certo agora. Tente de novo em instantes.';
+}
+async function ylIaCarrega() {
+  if (ylIaCarregando) return;
+  ylIaCarregando = true;
+  const { r, j } = await ylIaPede('ver');
+  ylIaCarregando = false; ylIaEm = Date.now();
+  if (r && r.ok && ylIaValida(j)) { ylIa = j; ylIaErro = ''; } else ylIaErro = ylIaErroTxt(r, j);
+  ylIaPoe();
+}
+function ylIaCartao() {
+  if (!COFRE || CLIENTE_COFRE !== 'yalla' || !(typeof isLoggedIn === 'function' && isLoggedIn())) return '';
+  const s = ylIa, pagar = `<a class="ibBt ylIaPagar" href="${YL_IA_LINK.pagar}" target="_blank" rel="noopener">Pôr crédito ↗</a>`;
+  let tag = '', corpo;
+  if (!s) {
+    corpo = ylIaErro ? `<p class="ylAtendErro">${esc(ylIaErro)}</p><button type="button" class="linkbtn" data-ylia="de-novo">tentar de novo</button>` : '<p>Conferindo…</p>';
+  } else if (!s.tem_chave || ylIaTrocando) {
+    tag = s.tem_chave ? '<span class="ylIaTag">trocando a chave</span>' : '<span class="ylIaTag">usando a conta da Ti Artes</span>';
+    corpo = `<p>O robô do Instagram usa a IA da Anthropic (Claude). Para ele usar a conta da Yalla, você põe o crédito lá, com o seu cartão, e cola a chave aqui. Leva uns 5 minutos.</p>
+      <ol class="ylIaPassos">
+        <li><b>Crie a conta</b> na Anthropic. <a href="${YL_IA_LINK.conta}" target="_blank" rel="noopener">Abrir ↗</a></li>
+        <li><b>Ponha crédito</b>: US$ 10 é um bom começo. Ligue a <b>recarga automática</b> e ele não acaba. <a href="${YL_IA_LINK.pagar}" target="_blank" rel="noopener">Pagamento ↗</a></li>
+        <li><b>Crie uma chave</b> (Create key) e copie. <a href="${YL_IA_LINK.chaves}" target="_blank" rel="noopener">Chaves ↗</a></li>
+        <li><b>Cole aqui</b>. O app testa a chave antes de guardar.</li></ol>
+      <div class="ylIaForm"><input id="ylIaChave" type="password" autocomplete="off" spellcheck="false" placeholder="sk-ant-api…" aria-label="Chave da Anthropic">
+        <button type="button" class="ibBt" data-ylia="salvar" ${ylIaOcupado ? 'disabled' : ''}>${ylIaOcupado ? 'Testando…' : 'Ligar'}</button>
+        ${ylIaTrocando ? '<button type="button" class="linkbtn" data-ylia="cancela">cancelar</button>' : ''}</div>`;
+  } else {
+    const m = s.mes || {}, f = s.falha, n = m.respostas || 0;
+    tag = f ? '<span class="ylIaTag fim">a conta recusou</span>' : `<span class="ylIaTag ok">ligado · chave …${esc(s.final || '')}</span>`;
+    corpo = (f ? `<p class="ylIaAlarme">A sua conta recusou: <b>${esc(f.texto || '')}</b>. O robô não parou: está respondendo pela reserva da Ti Artes, e o que ela usar entra na mensalidade, pelo custo. Ponha crédito e toque em <b>Já pus, testar</b>.</p>` : '')
+      + `<p>Os robôs usam a conta da Yalla na Anthropic. Este mês o robô deu <b>${n} ${n === 1 ? 'resposta' : 'respostas'}</b>${m.usd_propria ? `, ≈ ${ylIaUsd(m.usd_propria)} na sua conta` : ''}${m.usd_reserva ? ` (${ylIaUsd(m.usd_reserva)} pela reserva)` : ''}.</p>
+      <div class="ylIaAcoes">${pagar}<button type="button" class="mini" data-ylia="testar" ${ylIaOcupado ? 'disabled' : ''}>${ylIaOcupado ? 'testando…' : f ? 'Já pus, testar' : 'testar a conta'}</button><button type="button" class="linkbtn" data-ylia="trocar">trocar a chave</button></div>
+      <small>O saldo exato fica na sua conta, em Pagamento. Os valores aqui são estimativa do que o robô mediu.</small>`;
+  }
+  return `<section class="card ylIa" id="ylIa" aria-live="polite"><div class="ylIaTopo"><b>Créditos de IA</b>${tag}</div>${corpo}${ylIaMsg ? `<p class="ylIaMsg">${ylIaMsg}</p>` : ''}</section>`;
+}
+function ylIaPoe() {
+  const velho = document.getElementById('ylIa'); if (velho) velho.remove();
+  const ref = document.getElementById('ylAtend'); if (!ref) return;
+  const h = ylIaCartao(); if (!h) return;
+  ref.insertAdjacentHTML('afterend', h);
+  document.querySelectorAll('[data-ylia]').forEach(b => b.onclick = () => ylIaAcao(b.dataset.ylia));
+  const inp = document.getElementById('ylIaChave');
+  if (inp) { inp.value = ylIaRascunho; inp.oninput = () => { ylIaRascunho = inp.value; }; inp.onkeydown = (e) => { if (e.key === 'Enter') ylIaAcao('salvar'); }; }
+  /* lê do cofre na 1ª vez e de novo se o que tem é de mais de 2 min (ela pode ter posto crédito noutra aba) */
+  if (!ylIaErro && !ylIaCarregando && !ylIaOcupado && (!ylIa || Date.now() - ylIaEm > 120000)) ylIaCarrega();
+}
+async function ylIaAcao(a) {
+  if (a === 'de-novo') { ylIaErro = ''; ylIaMsg = ''; return ylIaPoe(); }
+  if (a === 'trocar') { ylIaTrocando = true; ylIaMsg = ''; ylIaRascunho = ''; return ylIaPoe(); }
+  if (a === 'cancela') { ylIaTrocando = false; ylIaMsg = ''; ylIaRascunho = ''; return ylIaPoe(); }
+  if (ylIaOcupado) return;
+  if (a === 'salvar') {
+    const chave = String(ylIaRascunho || '').trim();
+    if (!chave) { ylIaMsg = '<span class="ylAtendErro">Cole a chave no campo (ela começa com sk-ant-api).</span>'; return ylIaPoe(); }
+    ylIaOcupado = true; ylIaMsg = ''; ylIaPoe();
+    const { r, j } = await ylIaPede('salvar', { chave });
+    ylIaOcupado = false;
+    if (r && r.ok && ylIaValida(j) && j.salvou) {
+      ylIa = j; ylIaEm = Date.now(); ylIaTrocando = false; ylIaRascunho = '';
+      ylIaMsg = '<span class="ylAtendOk">✓ Pronto: o robô já usa o crédito da conta da Yalla.</span>';
+      if (typeof toast === 'function') toast('Créditos de IA ligados');
+    } else ylIaMsg = `<span class="ylAtendErro">${esc(ylIaErroTxt(r, j))}</span>`;
+    return ylIaPoe();
+  }
+  if (a === 'testar') {
+    ylIaOcupado = true; ylIaMsg = ''; ylIaPoe();
+    const { r, j } = await ylIaPede('testar');
+    ylIaOcupado = false;
+    if (r && r.ok && ylIaValida(j)) {
+      ylIa = j; ylIaEm = Date.now();
+      ylIaMsg = j.teste && j.teste.ok ? '<span class="ylAtendOk">✓ A sua conta respondeu: o robô está usando o seu crédito.</span>'
+        : `<span class="ylAtendErro">A conta não respondeu: ${esc((j.teste && j.teste.texto) || 'sem motivo')}.</span>`;
+    } else ylIaMsg = `<span class="ylAtendErro">${esc(ylIaErroTxt(r, j))}</span>`;
+    return ylIaPoe();
+  }
+}
+(function () {
+  if (typeof document === 'undefined' || document.getElementById('ylIaCss')) return;
+  const st = document.createElement('style'); st.id = 'ylIaCss';
+  st.textContent = `.ylIa{margin:12px 0}.ylIa p{margin:6px 0;font-size:var(--fs-3,14px);color:var(--ink-2,inherit)}
+.ylIa small{display:block;color:var(--ink-3,#6b6b6b);font-size:var(--fs-2,13px);margin-top:6px}
+.ylIaTopo{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.ylIaTag{font-size:12px;font-weight:600;padding:2px 10px;border-radius:999px;background:var(--accent-wash,#f3ecda);color:var(--accent,#8a6d1e);border:1px solid var(--accent-line,#dccb9e)}
+.ylIaTag.ok{background:var(--ok-wash,#e3ede6);color:var(--ok,#2e6b4f);border-color:transparent}
+.ylIaTag.fim{background:var(--danger-wash,#f2e0e1);color:var(--danger,#a3053f);border-color:transparent}
+.ylIaPassos{margin:6px 0 10px;padding-left:20px;font-size:var(--fs-3,14px)}.ylIaPassos li{margin:5px 0}
+.ylIaPassos a{white-space:nowrap;color:var(--accent,#8a6d1e);font-weight:600;text-decoration:underline;text-underline-offset:3px}
+.ylIaForm{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.ylIaForm input{flex:1 1 220px;min-width:0;min-height:44px;padding:8px 12px;border-radius:10px;border:1px solid var(--line,#d9d2c3);background:var(--card,#fff);color:inherit;font:inherit}
+.ylIaForm .ibBt{min-height:44px}
+.ylIaAcoes{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0 2px}
+.ylIaPagar{display:inline-flex;align-items:center;min-height:44px;text-decoration:none;color:var(--accent-ink,#fff)}
+.ylIaAlarme{background:var(--danger-wash,#f2e0e1);color:var(--danger,#a3053f)!important;padding:10px 12px;border-radius:10px}
+.ylIaMsg{font-weight:600}
+.ylIa button[disabled]{opacity:.6;cursor:progress}`;
+  document.head.appendChild(st);
+})();
