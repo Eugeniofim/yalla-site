@@ -165,9 +165,19 @@ const yrQuandoTxt = (q) => {
 const yrCor = (de) => { let h = 0; for (const ch of String(de)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h % 6; };
 const yrAvatar = (p) => `<span class="ibAv" style="--av:${(typeof ibCores !== 'undefined' ? ibCores : ['#8a6d1f'])[yrCor(p.de) % (typeof ibCores !== 'undefined' ? ibCores.length : 1)]}">${esc((yrNome(p).replace(/^@/, '')[0] || '?').toUpperCase())}<i class="ibAvCanal ${p.canal === 'whatsapp' ? 'wa' : 'ig'}"></i></span>`;
 const yrResponder = (p) => p.canal === 'whatsapp' ? (yrDigitos(p.de).length >= 8 ? 'https://wa.me/' + yrDigitos(p.de) : '') : (p.usuario ? 'https://ig.me/m/' + encodeURIComponent(p.usuario) : '');
+/* A FOTO NA CONVERSA (26/11/2026). O Eugênio: "ela precisa ver a imagem que alguém mandar ali" — aparecia "[mídia]".
+   O cofre manda o endereço da foto (abre sem login), do vídeo, do áudio e do post compartilhado; tocar abre grande. */
+const YR_SO_MIDIA = /^\[(\d+ fotos|foto|vídeo|áudio|publicação compartilhada|mídia)\]$/;
+const yrMidia = (m) => [
+  ...(m.fotos || []).map(f => `<a class="yrFoto" href="${esc(f.grande || f.url)}" target="_blank" rel="noopener"><img src="${esc(f.url)}" alt="Foto ${m.deQuem === 'nos' ? 'enviada pela Yalla' : 'enviada pelo cliente'}" loading="lazy" referrerpolicy="no-referrer"></a>`),
+  ...(m.videos || []).map(v => `<video class="yrVid" src="${esc(v.url)}"${v.capa ? ` poster="${esc(v.capa)}"` : ''} controls preload="none" playsinline></video>`),
+  ...(m.audios || []).map(x => `<audio class="yrAud" src="${esc(x.url)}" controls preload="none"></audio>`),
+  ...(m.links || []).map(l => `<a class="yrLinkPost" href="${esc(l)}" target="_blank" rel="noopener">ver a publicação ↗</a>`),
+].join('');
+const yrMsgHtml = (m) => { const md = yrMidia(m); return md + (md && YR_SO_MIDIA.test(m.texto || '') ? '' : esc(m.texto)); };
 const yrFio = (h) => !h || h.carregando ? '<p class="ibSis">Carregando a conversa…</p>'
   : h.erro ? `<p class="ibSis">${esc(h.erro)}</p>`
-  : h.mensagens.length ? h.mensagens.map(m => `<div class="ibMsg ${m.deQuem === 'nos' ? 'minha' : 'dele'}">${esc(m.texto)}</div><p class="ibSis ${m.deQuem === 'nos' ? 'dir' : ''}">${m.deQuem === 'nos' ? 'Yalla · ' : ''}${esc(yrQuandoTxt(m.quando))}</p>`).join('')
+  : h.mensagens.length ? h.mensagens.map(m => `<div class="ibMsg ${m.deQuem === 'nos' ? 'minha' : 'dele'}">${yrMsgHtml(m)}</div><p class="ibSis ${m.deQuem === 'nos' ? 'dir' : ''}">${m.deQuem === 'nos' ? 'Yalla · ' : ''}${esc(yrQuandoTxt(m.quando))}</p>`).join('')
   : '<p class="ibSis">Sem mensagens para mostrar.</p>';
 const yrRecadoHtml = (r) => `<div class="yrRec"><b>Pedido anotado pelo robô</b>${r.assunto ? `<p>${esc(r.assunto)}</p>` : ''}
   <dl>${[['Quando', r.quando_quer || (r.dia ? (typeof opCurta === 'function' ? opCurta(r.dia) : r.dia) : '')], ['WhatsApp', r.contato], ['E-mail', r.email], ['Resumo', r.resumo]].filter(x => x[1]).map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}</dl></div>`;
@@ -275,6 +285,9 @@ if (typeof admShell === 'function') {
 .yrAvisoCard{margin:12px 0}.yrAvisoCard p{margin:4px 0 0;color:var(--ink-2,#555);font-size:14px}
 .yrBarra{display:flex;justify-content:flex-end;margin:8px 0}
 .yrTag{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--accent,#8a6d1f);background:var(--surface-2,#f3efe6);padding:2px 7px;border-radius:999px}
+.ibMsg .yrFoto{display:block;margin:-4px -8px 6px;border-radius:14px;overflow:hidden;max-width:260px}.ibMsg .yrFoto img{display:block;width:100%;height:auto;max-height:340px;object-fit:cover;background:var(--surface-2,#f3efe6)}
+.ibMsg .yrVid{display:block;width:100%;max-width:260px;max-height:340px;border-radius:12px;margin-bottom:6px;background:#000}.ibMsg .yrAud{display:block;max-width:240px;margin-bottom:4px}
+.ibMsg .yrLinkPost{display:inline-block;margin:2px 0 4px;font-weight:600;color:inherit;text-decoration:underline}
 .crm-agora li small.yrCanal{display:inline-block;margin-left:8px;vertical-align:2px;font-size:10.5px;color:var(--accent,#8a6d1f)}
 .yrAcoes{display:flex;flex-wrap:wrap;gap:6px;padding:10px 16px}.yrAcoes .mini{min-height:36px;display:inline-flex;align-items:center}
 .yrRec{margin:0 16px 10px;padding:10px 12px;border:1px solid var(--line,#e5dfd2);border-radius:12px;background:var(--surface,#fff);font-size:14px}
