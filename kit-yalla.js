@@ -18,7 +18,8 @@
    O formato é o v1 do contrato (KIT-CONTRATO.md, igual em todos os apps e no
    servidor). Campos a mais, opcionais (o desenho tolera a falta):
    servico.voo/origem/destino/veiculo, servico.mapa, servico.encontroObs,
-   servico.moeda; kit.blocos [{titulo, texto}], kit.moeda, kit.base (a cidade que ela
+   servico.moeda, servico.links [{nome, url}] (os vouchers e documentos que ela guarda no
+   serviço); kit.blocos [{titulo, texto}], kit.moeda, kit.base (a cidade que ela
    escreveu no kit; sem ela, o desenho descobre pelo hotel e pelo ponto de encontro).
    Nunca vai o e-mail nem o telefone DO CLIENTE (a página é pública).
 
@@ -152,6 +153,13 @@ function kitPagamento(b, x, s) {
   const u = kitLinkPagar(b, x), m = u.match(/([A-Z]{3})\s*(\d+(?:\.\d+)?)\/?$/);
   if (m && Math.abs(+m[2] - s.restante) < 0.01 && (!s.moeda || m[1] === s.moeda)) { s.pagarUrl = u; s.pagarValor = s.restante; }
 }
+/* os links que ela guarda no serviço ("Ingressos, QR codes e links": o voucher do hotel, o PDF do
+   ingresso…). Pergunta da Milla (27/11/2026): "onde o cliente acessa o voucher que foi salvo? Não vi
+   quando abre o kit viagem" — o voucher de um serviço só já mostrava; o kit não levava. Só http(s). */
+function kitLinks(b) {
+  return ((b && b.links) || []).filter(l => l && /^https?:\/\//i.test(String(l.url || '').trim()))
+    .map(l => ({ nome: String(l.nome || '').trim().slice(0, 80) || 'Documento', url: String(l.url).trim() })).slice(0, 12);
+}
 function kitServico(b, hotel) {
   const x = Tours.get(b.tourId) || {};
   const trf = typeof ehTransfer === 'function' && ehTransfer(b);
@@ -171,6 +179,7 @@ function kitServico(b, hotel) {
   };
   const moeda = b.moeda || x.moeda || ''; if (moeda) s.moeda = moeda;
   kitPagamento(b, x, s);
+  const lk = kitLinks(b); if (lk.length) s.links = lk;
   if (trf) { for (const k of ['voo', 'origem', 'destino', 'veiculo']) if (String(b[k] || '').trim()) s[k] = String(b[k]).trim(); }
   if (pt) { const m = typeof linkMapa === 'function' ? linkMapa(pt) : ''; if (m) s.mapa = m; if (String(pt.instrucoes || '').trim()) s.encontroObs = String(pt.instrucoes).trim(); }
   else if (trf && voucherTipoTransfer(b) === 'partida' && s.origem && !KIT_NAO_HOTEL.test(s.origem)) s.mapa = mapLink(s.origem);
@@ -418,6 +427,7 @@ function kitDocHtml(d) {
         ${lista(s.paradas).length ? `<div class="kt-bl"><h3>O programa</h3><ol class="kt-par">${s.paradas.map(p => `<li><b>${esc(p.n)}</b>${p.d ? `<span>${esc(p.d)}</span>` : ''}</li>`).join('')}</ol></div>` : ''}
         ${lista(s.inclui).length || lista(s.naoInclui).length ? `<div class="kt-duas kt-bl">${lista(s.inclui).length ? `<div><h3>Incluso</h3><ul class="kt-ok">${s.inclui.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}${lista(s.naoInclui).length ? `<div><h3>Não incluso</h3><ul class="kt-no">${s.naoInclui.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}</div>` : ''}
         ${lista(s.levar).length ? `<div class="kt-bl"><h3>Para o dia</h3><ul class="kt-levar">${s.levar.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
+        ${lista(s.links).length ? `<div class="kt-bl"><h3>Vouchers e documentos</h3><div class="kt-acs">${s.links.map(l => `<a class="kt-lk" href="${esc(l.url)}" target="_blank" rel="noopener">📎 ${esc(l.nome)}</a>`).join('')}</div></div>` : ''}
         ${pagamento(s)}
         <div class="kt-acs kt-tela"><a class="kt-lk" href="${esc(kitGoogle(s, d))}" target="_blank" rel="noopener">${ic.cal}Pôr no Google Agenda</a></div>
         ${s.cancel ? `<p class="kt-fino">${esc(s.cancel)}</p>` : ''}

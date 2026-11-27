@@ -120,6 +120,7 @@ function rtDocHtml(d) {
     return `<span class="rt-ancora" id="kt-sv-${(d.servicos || []).indexOf(s)}"></span>${varios ? `<h3 class="rt-tit2">${esc(s.nome)}</h3>${rtFaixa(s) ? `<p class="rt-sub">${esc(rtFaixa(s))}</p>` : ''}${s.foto ? `<div class="rt-foto rt-foto2" role="img" aria-label="${esc(s.nome)}" style="background-image:url('${esc(s.foto)}')"></div>` : ''}` : ''}
       ${bloco(t ? (k === 'saida' ? 'Traslado ao aeroporto' : 'Recepção e traslado') : 'O programa', (s.resumo ? `<p>${rtP(s.resumo)}</p>` : '') + (par.length ? `<ol class="rt-par">${par.map(p => `<li><b>${esc(p.n)}</b>${p.d ? ` — ${esc(p.d)}` : ''}</li>`).join('')}</ol>` : ''))}
       ${bloco(t ? 'Seu encontro com a equipe' : 'Incluso e encontro', `${rtJunta(inclui)}<p>${encontro}</p>${mapa ? `<a class="rt-lk kt-tela" href="${esc(mapa)}" target="_blank" rel="noopener">Abrir o ponto de encontro no mapa</a>` : ''}`)}
+      ${rtLista(s.links).length ? bloco('Vouchers e documentos', `<div class="rt-docs kt-tela">${s.links.map(l => `<a class="rt-bt rt-doc" href="${esc(l.url)}" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg><span>${esc(l.nome)}</span></a>`).join('')}</div><p class="rt-soPdf">${s.links.map(l => `<b>${esc(l.nome)}</b>`).join(' · ')}: abra pelo link da sua viagem.</p>`) : ''}
       ${rtLista(s.naoInclui).length ? bloco('Não incluso', rtJunta(s.naoInclui)) : ''}
       ${levar.length ? bloco('Para o dia', rtJunta(levar)) : ''}
       ${s.obs ? `<div class="rt-obs kt-bl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8.5 8.5 0 0 1-12.6 7.4L3 21l1.6-5.2A8.5 8.5 0 1 1 21 12Z"/></svg><p>${rtP(s.obs)}</p></div>` : ''}
@@ -189,6 +190,12 @@ function rtCss() {
   .rt-lk{color:var(--rt-o);font-weight:600;font-size:13px;letter-spacing:.03em;text-transform:uppercase;text-decoration:none}
   .rt-lk:hover{text-decoration:underline}
   .rt-ag{margin:-4px 0 12px}
+  .rt-docs{display:flex;flex-wrap:wrap;gap:8px;margin:2px 0 4px}
+  .rt-doc{max-width:100%;min-width:0}
+  .rt-doc span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rt-doc svg{flex:none;color:var(--rt-o)}
+  .rt-soPdf{display:none}
+  .em-pdf .rt-soPdf{display:block}
   .rt-acs{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 14px}
   .rt-bt{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:46px;padding:0 18px;border-radius:999px;border:1px solid var(--rt-l);background:#fff;color:var(--rt-n);font:600 14px/1 var(--f-ui,Montserrat,system-ui,sans-serif);text-decoration:none;cursor:pointer}
   .rt-bt svg{width:18px;height:18px}
@@ -205,7 +212,7 @@ function rtCss() {
   .em-pdf .rt-miolo{flex:1}
   .em-pdf .rt-pe{margin-top:auto}
   @media(max-width:620px){.rt-faixa img{height:34px}.rt-faixa span{font-size:10.5px}.rt-miolo{padding:20px 18px 6px}.rt-pe{margin:6px 18px 0}}
-  @media print{.kt-tela{display:none!important}}`;
+  @media print{.kt-tela{display:none!important}.rt-soPdf{display:block}}`;
   document.head.appendChild(s);
 }
 
